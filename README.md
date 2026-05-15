@@ -10,6 +10,10 @@ SPDX-License-Identifier: CC0-1.0
 
 It is built for developers, scripts, demos, and AI agents that need stable command behavior instead of scraping web UI pages. It wraps known Open Data Hub API entrypoints, fetches OpenAPI specs, and provides small curated commands for common Tourism and Mobility API calls.
 
+## Disclaimer
+
+This is an unofficial community project. It is not affiliated with, endorsed by, or maintained by NOI Techpark or Open Data Hub unless ownership is explicitly transferred or adopted by those organizations.
+
 ## Status
 
 This is an early v0.1 project. It intentionally focuses on a small working core:
