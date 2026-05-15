@@ -96,7 +96,76 @@ Flags:
 - `--representation value` - default `flat,node`.
 - `--limit n` - default `5`.
 - `--offset n` - default `0`.
+- `--where expr` - Open Data Hub where filter.
 - `--param key=value` - additional query parameter. Repeatable.
+
+## `odh mobility types`
+
+Lists Mobility API station, event, or edge types.
+
+```bash
+odh mobility types --kind station
+odh mobility types --kind event
+odh mobility types --kind edge
+```
+
+Flags:
+
+- `--kind station|event|edge` - default `station`.
+- `--limit n` - maximum records to request; default `200`.
+
+The output wraps the upstream list with `kind`, `count`, and `types` fields so agents can check whether discovery returned data before using it.
+
+## `odh mobility datatypes`
+
+Summarizes available data types for a Mobility station type.
+
+```bash
+odh mobility datatypes \
+  --station-type TrafficSensor \
+  --origin A22 \
+  --limit 100
+```
+
+Flags:
+
+- `--station-type value` - required.
+- `--origin value` - optional `sorigin` filter, for example `A22`.
+- `--representation value` - default `flat`.
+- `--limit n` - maximum station/data-type records to inspect; default `1000`.
+- `--param key=value` - additional query parameter. Repeatable.
+
+The output groups records by data type name and includes station counts, units, descriptions, and origins.
+
+## `odh mobility events`
+
+Fetches Mobility events for an origin.
+
+```bash
+odh mobility events --origin A22 --latest --limit 20
+```
+
+Flags:
+
+- `--origin value` - required event origin.
+- `--latest` - request latest events; default `true`.
+- `--representation value` - default `flat`.
+- `--limit n` - maximum events to request; default `20`.
+- `--param key=value` - additional query parameter. Repeatable.
+
+## `odh a22 status`
+
+Diagnostic wrapper for A22 traffic-related Mobility feeds.
+
+```bash
+odh a22 status --limit 10
+```
+
+It checks current A22 events and the `TrafficForecast/forecast/latest` feed. The command returns JSON with `events`, `forecast`, and `warnings`. Warnings are part of the contract: for example, the command explicitly reports when Open Data Hub returns no current A22 events or when forecast timestamps are future-dated.
+
+Flags:
+
+- `--limit n` - maximum records to request from each feed; default `20`.
 
 ## Exit Codes
 

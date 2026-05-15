@@ -11,4 +11,4 @@ else
   ODH_BIN="${ODH_BIN:-odh}"
 fi
 
-"$ODH_BIN" tourism poi --limit 1 --seed 42 --fields Detail.en.Title,GpsInfo
+"$ODH_BIN" a22 status --limit 10

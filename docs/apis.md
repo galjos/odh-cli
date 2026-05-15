@@ -19,6 +19,12 @@ The registry is intentionally explicit. It gives scripts and agents stable names
 
 Only Tourism and Mobility have curated commands in v0.1 because those are the public endpoints verified by the current smoke tests.
 
+The Mobility commands include a narrow A22 diagnostic path:
+
+- `odh mobility events --origin A22 --latest` checks current A22 events.
+- `odh mobility datatypes --station-type TrafficSensor --origin A22` discovers A22 traffic-sensor data types.
+- `odh a22 status` combines current events with the traffic forecast feed and emits warnings when Open Data Hub data should not be treated as current incident data.
+
 Useful references:
 
 - https://opendatahub.com/api/

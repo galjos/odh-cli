@@ -28,7 +28,11 @@ Usage:
   odh openapi <api>
   odh call <api> <path> [--param key=value ...]
   odh tourism poi [--limit n] [--seed value] [--fields fields]
-  odh mobility latest --station-type type --data-type type [--limit n]
+  odh mobility types [--kind station|event|edge]
+  odh mobility datatypes --station-type type [--origin origin]
+  odh mobility events --origin origin [--latest]
+  odh mobility latest --station-type type --data-type type [--limit n] [--where expr]
+  odh a22 status
 
 Run "odh help" for examples.
 `
@@ -80,6 +84,8 @@ func (r *Runner) Run(ctx context.Context, args []string, stdout, stderr io.Write
 		return r.runTourism(ctx, args[1:], stdout, stderr)
 	case "mobility":
 		return r.runMobility(ctx, args[1:], stdout, stderr)
+	case "a22":
+		return r.runA22(ctx, args[1:], stdout, stderr)
 	default:
 		fmt.Fprintf(stderr, "unknown command %q\n\n%s", args[0], usageText)
 		return 2
@@ -262,6 +268,12 @@ func (r *Runner) runMobility(ctx context.Context, args []string, stdout, stderr 
 		return 2
 	}
 	switch args[0] {
+	case "types":
+		return r.runMobilityTypes(ctx, args[1:], stdout, stderr)
+	case "datatypes":
+		return r.runMobilityDatatypes(ctx, args[1:], stdout, stderr)
+	case "events":
+		return r.runMobilityEvents(ctx, args[1:], stdout, stderr)
 	case "latest":
 		return r.runMobilityLatest(ctx, args[1:], stdout, stderr)
 	default:
@@ -277,6 +289,7 @@ func (r *Runner) runMobilityLatest(ctx context.Context, args []string, stdout, s
 	representation := fs.String("representation", "flat,node", "API representation")
 	limit := fs.Int("limit", 5, "number of measurements to request")
 	offset := fs.Int("offset", 0, "pagination offset")
+	where := fs.String("where", "", "Open Data Hub where filter")
 	params := paramValues{}
 	fs.Var(&params, "param", "additional query parameter as key=value; repeatable")
 	if err := fs.Parse(args); err != nil {
@@ -308,6 +321,9 @@ func (r *Runner) runMobilityLatest(ctx context.Context, args []string, stdout, s
 	values := params.Values()
 	values.Set("limit", strconv.Itoa(*limit))
 	values.Set("offset", strconv.Itoa(*offset))
+	if strings.TrimSpace(*where) != "" {
+		values.Set("where", *where)
+	}
 	requestURL, err := BuildURL(api.BaseURL, path, values)
 	if err != nil {
 		fmt.Fprintln(stderr, err)
@@ -407,6 +423,10 @@ Examples:
   odh openapi mobility
   odh call tourism /v1/ODHActivityPoi --param pagenumber=1 --param pagesize=1 --param seed=42
   odh tourism poi --limit 1 --seed 42 --fields Detail.en.Title,GpsInfo
+  odh mobility types --kind event
+  odh mobility datatypes --station-type TrafficSensor --origin A22
+  odh mobility events --origin A22 --latest
   odh mobility latest --station-type EChargingStation --data-type number-available --limit 5
+  odh a22 status
 `
 }

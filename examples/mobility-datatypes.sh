@@ -11,4 +11,7 @@ else
   ODH_BIN="${ODH_BIN:-odh}"
 fi
 
-"$ODH_BIN" tourism poi --limit 1 --seed 42 --fields Detail.en.Title,GpsInfo
+"$ODH_BIN" mobility datatypes \
+  --station-type TrafficSensor \
+  --origin A22 \
+  --limit 100

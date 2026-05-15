@@ -5,7 +5,13 @@
 
 set -euo pipefail
 
-odh mobility latest \
+if [[ -z "${ODH_BIN:-}" && -x ./odh ]]; then
+  ODH_BIN="./odh"
+else
+  ODH_BIN="${ODH_BIN:-odh}"
+fi
+
+"$ODH_BIN" mobility latest \
   --station-type EChargingStation \
   --data-type number-available \
   --limit 5

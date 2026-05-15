@@ -44,9 +44,11 @@ The live tests call public unauthenticated Tourism and Mobility endpoints.
 
 ## Release Notes
 
-v0.1 intentionally avoids generated clients and packaging. The next useful milestones are:
+v0.1 intentionally avoids generated clients and packaging. It includes a small audited core plus focused discovery and diagnostic commands for the public Tourism and Mobility APIs.
+
+The next useful milestones are:
 
 - more curated commands for common endpoints,
-- stable discovery/dataset search once a suitable public metadata endpoint is selected,
+- broader dataset search once a suitable public metadata endpoint is selected,
 - MCP server mode reusing the same internal packages,
 - binary release workflow and package-manager distribution.

@@ -126,6 +126,127 @@ func TestRunMobilityLatestRequiresFlags(t *testing.T) {
 	}
 }
 
+func TestRunMobilityLatestSupportsWhere(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v2/flat,node/EChargingStation/number-available/latest" {
+			t.Fatalf("unexpected path %q", r.URL.Path)
+		}
+		if got := r.URL.Query().Get("where"); got != "sactive.eq.true" {
+			t.Fatalf("unexpected where %q", got)
+		}
+		_, _ = w.Write([]byte(`{"data":[]}`))
+	}))
+	defer server.Close()
+
+	runner := newTestRunner(t, []apis.API{{Name: "mobility", BaseURL: server.URL, Public: true}})
+	var stdout, stderr bytes.Buffer
+	code := runner.Run(context.Background(), []string{
+		"mobility", "latest",
+		"--station-type", "EChargingStation",
+		"--data-type", "number-available",
+		"--where", "sactive.eq.true",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("Run exit = %d, stderr = %s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), `"data"`) {
+		t.Fatalf("unexpected stdout: %s", stdout.String())
+	}
+}
+
+func TestRunMobilityTypesBuildsEventPath(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v2/flat,event" {
+			t.Fatalf("unexpected path %q", r.URL.Path)
+		}
+		_, _ = w.Write([]byte(`[{"id":"A22"},{"id":"PROVINCE_BZ"}]`))
+	}))
+	defer server.Close()
+
+	runner := newTestRunner(t, []apis.API{{Name: "mobility", BaseURL: server.URL, Public: true}})
+	var stdout, stderr bytes.Buffer
+	code := runner.Run(context.Background(), []string{"mobility", "types", "--kind", "event"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("Run exit = %d, stderr = %s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), `"kind": "event"`) || !strings.Contains(stdout.String(), `"count": 2`) {
+		t.Fatalf("unexpected stdout: %s", stdout.String())
+	}
+}
+
+func TestRunMobilityDatatypesSummarizesByName(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v2/flat/TrafficSensor/*" {
+			t.Fatalf("unexpected path %q", r.URL.Path)
+		}
+		_, _ = w.Write([]byte(`{"data":[
+			{"scode":"A22:1","sorigin":"A22","tname":"Average Flow","tdescription":"Flow","tunit":"vehicles / hour"},
+			{"scode":"A22:2","sorigin":"A22","tname":"Average Flow","tdescription":"Flow","tunit":"vehicles / hour"},
+			{"scode":"OTHER:1","sorigin":"OTHER","tname":"Average Flow","tdescription":"Flow","tunit":"vehicles / hour"},
+			{"scode":"A22:1","sorigin":"A22","tname":"Average Density","tdescription":"Density","tunit":"vehicles / km"}
+		]}`))
+	}))
+	defer server.Close()
+
+	runner := newTestRunner(t, []apis.API{{Name: "mobility", BaseURL: server.URL, Public: true}})
+	var stdout, stderr bytes.Buffer
+	code := runner.Run(context.Background(), []string{"mobility", "datatypes", "--station-type", "TrafficSensor", "--origin", "A22"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("Run exit = %d, stderr = %s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), `"name": "Average Flow"`) || !strings.Contains(stdout.String(), `"station_count": 2`) {
+		t.Fatalf("unexpected stdout: %s", stdout.String())
+	}
+	if strings.Contains(stdout.String(), "OTHER") {
+		t.Fatalf("origin filter leaked OTHER origin: %s", stdout.String())
+	}
+}
+
+func TestRunMobilityEventsWrapsEmptyA22Events(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v2/flat,event/A22/latest" {
+			t.Fatalf("unexpected path %q", r.URL.Path)
+		}
+		_, _ = w.Write([]byte(`{"data":[]}`))
+	}))
+	defer server.Close()
+
+	runner := newTestRunner(t, []apis.API{{Name: "mobility", BaseURL: server.URL, Public: true}})
+	var stdout, stderr bytes.Buffer
+	code := runner.Run(context.Background(), []string{"mobility", "events", "--origin", "A22"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("Run exit = %d, stderr = %s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), `"origin": "A22"`) || !strings.Contains(stdout.String(), `"count": 0`) {
+		t.Fatalf("unexpected stdout: %s", stdout.String())
+	}
+}
+
+func TestRunA22StatusWarnsOnEmptyEventsAndFutureForecast(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v2/flat,event/A22/latest":
+			_, _ = w.Write([]byte(`{"data":[]}`))
+		case "/v2/flat/TrafficForecast/forecast/latest":
+			_, _ = w.Write([]byte(`{"data":[{"sname":"Bolzano Nord","mvalue":"regular","mvalidtime":"2999-01-01 00:00:00.000+0000"}]}`))
+		default:
+			t.Fatalf("unexpected path %q", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	runner := newTestRunner(t, []apis.API{{Name: "mobility", BaseURL: server.URL, Public: true}})
+	var stdout, stderr bytes.Buffer
+	code := runner.Run(context.Background(), []string{"a22", "status"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("Run exit = %d, stderr = %s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "Open Data Hub returned no current A22 events") ||
+		!strings.Contains(stdout.String(), "future valid_time") {
+		t.Fatalf("expected warnings, got: %s", stdout.String())
+	}
+}
+
 func newTestRunner(t *testing.T, entries []apis.API) *Runner {
 	t.Helper()
 	if entries == nil {

@@ -41,3 +41,33 @@ func TestLiveMobilityLatest(t *testing.T) {
 		t.Fatalf("unexpected stdout: %s", stdout.String())
 	}
 }
+
+func TestLiveMobilityDiscovery(t *testing.T) {
+	if os.Getenv("ODH_LIVE_TESTS") != "1" {
+		t.Skip("set ODH_LIVE_TESTS=1 to run live Open Data Hub smoke tests")
+	}
+	runner := NewDefaultRunner()
+	var stdout, stderr bytes.Buffer
+	code := runner.Run(context.Background(), []string{"mobility", "datatypes", "--station-type", "TrafficSensor", "--origin", "A22", "--limit", "100"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("Run exit = %d, stderr = %s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), `"datatypes"`) {
+		t.Fatalf("unexpected stdout: %s", stdout.String())
+	}
+}
+
+func TestLiveA22Status(t *testing.T) {
+	if os.Getenv("ODH_LIVE_TESTS") != "1" {
+		t.Skip("set ODH_LIVE_TESTS=1 to run live Open Data Hub smoke tests")
+	}
+	runner := NewDefaultRunner()
+	var stdout, stderr bytes.Buffer
+	code := runner.Run(context.Background(), []string{"a22", "status", "--limit", "10"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("Run exit = %d, stderr = %s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), `"warnings"`) {
+		t.Fatalf("unexpected stdout: %s", stdout.String())
+	}
+}

@@ -18,7 +18,10 @@ This is an early v0.1 project. It intentionally focuses on a small working core:
 - fetch OpenAPI specs as JSON,
 - call any registered API path with query parameters,
 - query a random Tourism POI,
-- query latest Mobility time-series measurements.
+- discover Mobility station, event, and edge types,
+- summarize Mobility data types for a station type and origin,
+- query latest Mobility time-series measurements,
+- inspect A22 Mobility event and forecast feeds with explicit warnings when the data does not look like current traffic incidents.
 
 It does not yet include MCP, generated clients, Homebrew packaging, Docker images, or authenticated write flows.
 
@@ -73,6 +76,27 @@ Use the curated Mobility latest-measurements command:
   --station-type EChargingStation \
   --data-type number-available \
   --limit 5
+```
+
+Discover Mobility event origins:
+
+```bash
+./odh mobility types --kind event
+```
+
+Find A22 traffic-sensor data types:
+
+```bash
+./odh mobility datatypes \
+  --station-type TrafficSensor \
+  --origin A22 \
+  --limit 100
+```
+
+Check the A22-specific diagnostic output:
+
+```bash
+./odh a22 status --limit 10
 ```
 
 ## Automation Contract
