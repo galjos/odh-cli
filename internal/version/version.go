@@ -4,11 +4,15 @@
 
 package version
 
-import "runtime"
+import (
+	"runtime"
+	"runtime/debug"
+	"strings"
+)
 
 // These variables can be overridden at build time with -ldflags.
 var (
-	Version = "0.1.0-dev"
+	Version = "0.1.1-dev"
 	Commit  = "unknown"
 	Date    = "unknown"
 )
@@ -24,11 +28,37 @@ type Info struct {
 
 // Current returns the current build metadata.
 func Current() Info {
+	resolvedVersion, resolvedCommit, resolvedDate := Version, Commit, Date
+	if buildInfo, ok := debug.ReadBuildInfo(); ok {
+		if strings.HasSuffix(resolvedVersion, "-dev") && buildInfo.Main.Version != "" && buildInfo.Main.Version != "(devel)" {
+			resolvedVersion = buildInfo.Main.Version
+		}
+		for _, setting := range buildInfo.Settings {
+			switch setting.Key {
+			case "vcs.revision":
+				if resolvedCommit == "unknown" && setting.Value != "" {
+					resolvedCommit = shortenCommit(setting.Value)
+				}
+			case "vcs.time":
+				if resolvedDate == "unknown" && setting.Value != "" {
+					resolvedDate = setting.Value
+				}
+			}
+		}
+	}
+
 	return Info{
-		Version: Version,
-		Commit:  Commit,
-		Date:    Date,
+		Version: resolvedVersion,
+		Commit:  resolvedCommit,
+		Date:    resolvedDate,
 		GoOS:    runtime.GOOS,
 		GoArch:  runtime.GOARCH,
 	}
+}
+
+func shortenCommit(commit string) string {
+	if len(commit) <= 12 {
+		return commit
+	}
+	return commit[:12]
 }

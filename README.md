@@ -41,7 +41,21 @@ It does not yet include MCP, generated clients, Homebrew packaging, Docker image
 
 ## Install
 
-Build from source:
+Install the latest GitHub release:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/galjos/odh-cli/main/scripts/install.sh | sh
+```
+
+The installer detects macOS/Linux and `amd64`/`arm64`, downloads the matching release archive, verifies the published SHA-256 checksum, and installs `odh` to `~/.local/bin` by default.
+
+Install a specific version or directory:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/galjos/odh-cli/main/scripts/install.sh | sh -s -- --version v0.1.1 --dir "$HOME/bin"
+```
+
+Build from source instead:
 
 ```bash
 go build -o odh ./cmd/odh
@@ -57,46 +71,40 @@ Build with release metadata:
 
 ```bash
 go build \
-  -ldflags "-X github.com/galjos/odh-cli/internal/version.Version=0.1.0 -X github.com/galjos/odh-cli/internal/version.Commit=$(git rev-parse --short HEAD) -X github.com/galjos/odh-cli/internal/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  -ldflags "-X github.com/galjos/odh-cli/internal/version.Version=0.1.1 -X github.com/galjos/odh-cli/internal/version.Commit=$(git rev-parse --short HEAD) -X github.com/galjos/odh-cli/internal/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   -o odh ./cmd/odh
 ```
 
 ## Quickstart
 
-Download a release archive from [GitHub Releases](https://github.com/galjos/odh-cli/releases) or build locally:
-
-```bash
-go build -o odh ./cmd/odh
-```
-
 Print version metadata:
 
 ```bash
-./odh version
+odh version
 ```
 
 Check the local CLI and upstream API reachability:
 
 ```bash
-./odh doctor
+odh doctor
 ```
 
 List known API surfaces:
 
 ```bash
-./odh apis
+odh apis
 ```
 
 Fetch the Mobility OpenAPI spec as JSON:
 
 ```bash
-./odh openapi mobility
+odh openapi mobility
 ```
 
 Call a Tourism API endpoint:
 
 ```bash
-./odh call tourism /v1/ODHActivityPoi \
+odh call tourism /v1/ODHActivityPoi \
   --param pagenumber=1 \
   --param pagesize=1 \
   --param seed=42 \
@@ -106,13 +114,13 @@ Call a Tourism API endpoint:
 Use the curated Tourism POI command:
 
 ```bash
-./odh tourism poi --limit 1 --seed 42 --fields Detail.en.Title,GpsInfo
+odh tourism poi --limit 1 --seed 42 --fields Detail.en.Title,GpsInfo
 ```
 
 Use the curated Mobility latest-measurements command:
 
 ```bash
-./odh mobility latest \
+odh mobility latest \
   --station-type EChargingStation \
   --data-type number-available \
   --limit 5
@@ -121,13 +129,13 @@ Use the curated Mobility latest-measurements command:
 Discover Mobility event origins:
 
 ```bash
-./odh mobility types --kind event
+odh mobility types --kind event
 ```
 
 Find A22 traffic-sensor data types:
 
 ```bash
-./odh mobility datatypes \
+odh mobility datatypes \
   --station-type TrafficSensor \
   --origin A22 \
   --limit 100
@@ -136,7 +144,7 @@ Find A22 traffic-sensor data types:
 Check the A22-specific diagnostic output:
 
 ```bash
-./odh a22 status --limit 10
+odh a22 status --limit 10
 ```
 
 ## Automation Contract
@@ -180,6 +188,8 @@ ODH_LIVE_TESTS=1 go test ./internal/commands -run Live
 ```
 
 More details are in [docs/development.md](docs/development.md).
+
+Installation details are in [docs/install.md](docs/install.md).
 
 Release builds are documented in [docs/release.md](docs/release.md).
 

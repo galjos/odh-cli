@@ -13,7 +13,7 @@ metadata:
             {
               "id": "go",
               "kind": "go",
-              "module": "github.com/galjos/odh-cli/cmd/odh@v0.1.0",
+              "module": "github.com/galjos/odh-cli/cmd/odh@v0.1.1",
               "bins": ["odh"],
               "label": "Install odh CLI (go)",
             },
@@ -37,7 +37,13 @@ odh version
 odh doctor --timeout 10s
 ```
 
-If `odh` is not installed, use the latest release from `galjos/odh-cli` or build it from source:
+If `odh` is not installed in a normal shell, install the latest release:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/galjos/odh-cli/main/scripts/install.sh | sh
+```
+
+Or build it from source:
 
 ```bash
 go build -o odh ./cmd/odh
