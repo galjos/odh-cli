@@ -1,0 +1,13 @@
+# SPDX-FileCopyrightText: 2026 Josef Gallmetzer
+#
+# SPDX-License-Identifier: CC0-1.0
+
+version: "2"
+
+linters:
+  default: standard
+  disable:
+    - errcheck
+
+run:
+  timeout: 5m
