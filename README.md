@@ -6,13 +6,21 @@ SPDX-License-Identifier: CC0-1.0
 
 # odh-cli
 
-`odh` is a JSON-first command-line interface for public Open Data Hub APIs.
+`odh` is an unofficial JSON-first command-line interface for public Open Data Hub APIs.
 
 It is built for developers, scripts, demos, and AI agents that need stable command behavior instead of scraping web UI pages. It wraps known Open Data Hub API entrypoints, fetches OpenAPI specs, and provides small curated commands for common Tourism and Mobility API calls.
 
 ## Disclaimer
 
 This is an unofficial community project. It is not affiliated with, endorsed by, or maintained by NOI Techpark or Open Data Hub unless ownership is explicitly transferred or adopted by those organizations.
+
+## Data Scope
+
+Open Data Hub is maintained by NOI Techpark and provides a machine-readable access point for datasets in domains such as mobility, tourism, environment, and more. In practical use, many of the public Tourism and Mobility datasets are centered on South Tyrol, also known as the Autonomous Province of Bolzano.
+
+The official documentation also describes Open Data Hub as an international and European data platform that is expanding beyond its original regional scope. For that reason, `odh` does not hardcode a "South Tyrol only" assumption. When geographic precision matters, inspect the returned fields, coordinates, origins, provider metadata, and upstream API docs.
+
+See [docs/data-scope.md](docs/data-scope.md) for the official-source summary used by this project.
 
 ## Status
 
@@ -29,7 +37,7 @@ This is an early v0.1 project. It intentionally focuses on a small working core:
 - query latest Mobility time-series measurements,
 - inspect A22 Mobility event and forecast feeds with explicit warnings when the data does not look like current traffic incidents.
 
-It does not yet include MCP, generated clients, Homebrew packaging, Docker images, or authenticated write flows.
+It does not yet include MCP, generated clients, Homebrew packaging, Docker images, general dataset catalog search, or authenticated write flows.
 
 ## Install
 
@@ -54,6 +62,12 @@ go build \
 ```
 
 ## Quickstart
+
+Download a release archive from [GitHub Releases](https://github.com/galjos/odh-cli/releases) or build locally:
+
+```bash
+go build -o odh ./cmd/odh
+```
 
 Print version metadata:
 
@@ -134,7 +148,8 @@ Check the A22-specific diagnostic output:
 - stderr is for diagnostics,
 - failures return nonzero exit codes,
 - commands are non-interactive,
-- examples use public unauthenticated endpoints only.
+- examples use public endpoints only,
+- commands avoid hidden browser state and web scraping.
 
 See [docs/agent-usage.md](docs/agent-usage.md) for details.
 
@@ -142,7 +157,10 @@ See [docs/agent-usage.md](docs/agent-usage.md) for details.
 
 - Open Data Hub APIs: https://opendatahub.com/api/
 - Data access overview: https://opendatahub.com/services/data-access/
+- About Open Data Hub: https://opendatahub.com/about-us/
+- Domains and datasets: https://docs.opendatahub.com/en/latest/datasets.html
 - Mobility getting started: https://docs.opendatahub.com/en/latest/howto/mobility/getstarted.html
+- Tourism data browser: https://tourism.databrowser.opendatahub.com/
 - Tourism Swagger UI: https://tourism.opendatahub.com/swagger/index.html
 - Mobility OpenAPI spec: https://mobility.api.opendatahub.com/v2/apispec
 

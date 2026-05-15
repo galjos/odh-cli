@@ -7,6 +7,8 @@ description: Use this skill when working with Open Data Hub, NOI Techpark data, 
 
 Use `odh` for public Open Data Hub API work. It is JSON-first, non-interactive, and suitable for scripts and agents.
 
+Open Data Hub is maintained by NOI Techpark. Most practical Tourism and Mobility tasks are about South Tyrol / the Autonomous Province of Bolzano, but do not claim every returned record is located there unless coordinates, location fields, origin metadata, or official docs support it.
+
 ## First Checks
 
 Run these before relying on the CLI:
@@ -48,6 +50,11 @@ odh call tourism /v1/ODHActivityPoi \
   --param seed=42
 ```
 
+For geographic claims, inspect returned fields. Useful examples:
+
+- Tourism: `GpsInfo`, `LocationInfo`, `RegionInfo`, `MunicipalityInfo`, `LicenseInfo`.
+- Mobility: `sorigin`, `scode`, `stype`, `scoordinate`, `smetadata`.
+
 ## Curated Commands
 
 Tourism point of interest:
@@ -84,6 +91,17 @@ odh a22 status --limit 10
 - Parse stdout as JSON.
 - Treat nonzero exit codes as failures.
 - Treat stderr as diagnostics, not data.
+- Prefer `odh` and official OpenAPI specs over scraping Open Data Hub web pages.
+- Treat South Tyrol as the common regional context, not as a universal record-level guarantee.
+- Verify location-sensitive answers from coordinates, origins, and metadata in the JSON.
 - Do not infer live A22 traffic from `TrafficForecast` rows alone.
 - Prefer `odh a22 status` for A22 because it reports current-event availability and warns when forecast rows are not current incident data.
 - Use `--where` and `--param key=value` instead of manually constructing query strings when a curated command supports them.
+
+## Official References
+
+- https://opendatahub.com/api/
+- https://opendatahub.com/services/data-access/
+- https://opendatahub.com/about-us/
+- https://docs.opendatahub.com/en/latest/datasets.html
+- https://docs.opendatahub.com/en/latest/howto/mobility/getstarted.html

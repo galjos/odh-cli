@@ -34,6 +34,17 @@ odh mobility latest --station-type EChargingStation --data-type number-available
 odh a22 status --limit 10
 ```
 
+## Data Scope Rule
+
+Open Data Hub is maintained by NOI Techpark and many of the current public Tourism and Mobility datasets are centered on South Tyrol / the Autonomous Province of Bolzano. Do not claim that every record is in South Tyrol unless the returned data supports that.
+
+When geography matters, agents should inspect fields such as:
+
+- Tourism: `GpsInfo`, `LocationInfo`, `RegionInfo`, `MunicipalityInfo`, `LicenseInfo`.
+- Mobility: `sorigin`, `scode`, `stype`, `scoordinate`, `smetadata`.
+
+Use [data-scope.md](data-scope.md) as the project-level source note.
+
 ## Generic Calls
 
 When an endpoint is known from OpenAPI docs, use `odh call` instead of scraping a UI:
@@ -54,6 +65,8 @@ Agents should treat exit code `2` as a usage bug in the invocation and exit code
 ## Traffic Data Caveat
 
 Open Data Hub Mobility feeds can expose different traffic concepts as station measurements, events, and forecasts. Agents should not infer live A22 traffic solely from `TrafficForecast` rows. Prefer `odh a22 status` when checking A22 because it reports current-event availability and warns when forecast timestamps indicate non-current data.
+
+If the user asks for current traffic conditions, report the timestamp and feed type used. If Open Data Hub has no current A22 event rows, say that directly instead of converting forecast rows into live incidents.
 
 ## Why No MCP Yet
 
