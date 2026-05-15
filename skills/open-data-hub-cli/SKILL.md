@@ -1,6 +1,25 @@
 ---
 name: open-data-hub-cli
 description: Use this skill when working with Open Data Hub, NOI Techpark data, ODH APIs, Tourism API, Mobility API, A22 traffic data, or when an agent should query Open Data Hub through the odh command-line tool instead of scraping websites.
+homepage: https://github.com/galjos/odh-cli
+metadata:
+  {
+    "openclaw":
+      {
+        "os": ["darwin", "linux"],
+        "requires": { "bins": ["odh"] },
+        "install":
+          [
+            {
+              "id": "go",
+              "kind": "go",
+              "module": "github.com/galjos/odh-cli/cmd/odh@v0.1.0",
+              "bins": ["odh"],
+              "label": "Install odh CLI (go)",
+            },
+          ],
+      },
+  }
 ---
 
 # Open Data Hub CLI
@@ -23,6 +42,8 @@ If `odh` is not installed, use the latest release from `galjos/odh-cli` or build
 ```bash
 go build -o odh ./cmd/odh
 ```
+
+In OpenClaw, this skill declares `odh` as a required binary. If OpenClaw marks the skill as needing setup, use the offered installer before trying to answer with Open Data Hub data.
 
 When running from a source checkout, use `./odh` instead of `odh`.
 
