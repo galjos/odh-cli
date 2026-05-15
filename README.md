@@ -15,6 +15,8 @@ It is built for developers, scripts, demos, and AI agents that need stable comma
 This is an early v0.1 project. It intentionally focuses on a small working core:
 
 - list known Open Data Hub APIs,
+- report machine-readable build/version metadata,
+- run a non-interactive doctor check for registry and upstream reachability,
 - fetch OpenAPI specs as JSON,
 - call any registered API path with query parameters,
 - query a random Tourism POI,
@@ -39,7 +41,27 @@ Run directly during development:
 go run ./cmd/odh --help
 ```
 
+Build with release metadata:
+
+```bash
+go build \
+  -ldflags "-X github.com/galjos/odh-cli/internal/version.Version=0.1.0 -X github.com/galjos/odh-cli/internal/version.Commit=$(git rev-parse --short HEAD) -X github.com/galjos/odh-cli/internal/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  -o odh ./cmd/odh
+```
+
 ## Quickstart
+
+Print version metadata:
+
+```bash
+./odh version
+```
+
+Check the local CLI and upstream API reachability:
+
+```bash
+./odh doctor
+```
 
 List known API surfaces:
 
@@ -136,3 +158,5 @@ ODH_LIVE_TESTS=1 go test ./internal/commands -run Live
 ```
 
 More details are in [docs/development.md](docs/development.md).
+
+Release builds are documented in [docs/release.md](docs/release.md).

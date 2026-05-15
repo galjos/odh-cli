@@ -6,6 +6,64 @@ SPDX-License-Identifier: CC0-1.0
 
 # Commands
 
+## `odh version`
+
+Prints build metadata. JSON is the default so scripts can capture exact binary provenance.
+
+```bash
+odh version
+odh version --format text
+```
+
+Flags:
+
+- `--format json` - default, machine-readable JSON.
+- `--format text` - compact human-readable line.
+
+## `odh doctor`
+
+Runs non-interactive health checks for the CLI and selected public Open Data Hub endpoints.
+
+```bash
+odh doctor
+odh doctor --network=false
+odh doctor --timeout 5s
+```
+
+Example output with `--network=false`:
+
+```json
+{
+  "ok": true,
+  "version": {
+    "version": "0.1.0-dev",
+    "commit": "unknown",
+    "date": "unknown",
+    "goos": "darwin",
+    "goarch": "arm64"
+  },
+  "checks": [
+    {
+      "name": "version",
+      "ok": true,
+      "message": "0.1.0-dev"
+    },
+    {
+      "name": "api_registry",
+      "ok": true,
+      "message": "6 APIs configured"
+    }
+  ]
+}
+```
+
+Flags:
+
+- `--network` - run network reachability checks; default `true`.
+- `--timeout duration` - overall timeout for doctor checks; default `10s`.
+
+The command returns exit code `1` if any required check fails.
+
 ## `odh apis`
 
 Lists the known API registry.

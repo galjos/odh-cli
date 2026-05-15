@@ -71,3 +71,18 @@ func TestLiveA22Status(t *testing.T) {
 		t.Fatalf("unexpected stdout: %s", stdout.String())
 	}
 }
+
+func TestLiveDoctor(t *testing.T) {
+	if os.Getenv("ODH_LIVE_TESTS") != "1" {
+		t.Skip("set ODH_LIVE_TESTS=1 to run live Open Data Hub smoke tests")
+	}
+	runner := NewDefaultRunner()
+	var stdout, stderr bytes.Buffer
+	code := runner.Run(context.Background(), []string{"doctor", "--timeout", "10s"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("Run exit = %d, stderr = %s, stdout = %s", code, stderr.String(), stdout.String())
+	}
+	if !strings.Contains(stdout.String(), `"ok": true`) {
+		t.Fatalf("unexpected stdout: %s", stdout.String())
+	}
+}

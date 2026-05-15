@@ -22,6 +22,8 @@ This means agents can call `odh`, parse stdout as JSON, and treat stderr plus ex
 ## Safe Starter Commands
 
 ```bash
+odh version
+odh doctor --timeout 5s
 odh apis
 odh openapi mobility
 odh tourism poi --limit 1 --seed 42 --fields Detail.en.Title,GpsInfo
@@ -46,6 +48,8 @@ odh call tourism /v1/ODHActivityPoi \
 ## Handling Failures
 
 Agents should treat exit code `2` as a usage bug in the invocation and exit code `1` as a runtime problem such as HTTP failure, invalid JSON, or unavailable upstream service.
+
+`odh doctor` is the preferred first command when an agent needs to distinguish a bad invocation from a local install problem or an upstream Open Data Hub reachability problem.
 
 ## Traffic Data Caveat
 

@@ -24,6 +24,8 @@ import (
 const usageText = `odh is a JSON-first CLI for Open Data Hub APIs.
 
 Usage:
+  odh version [--format json|text]
+  odh doctor [--network=false]
   odh apis
   odh openapi <api>
   odh call <api> <path> [--param key=value ...]
@@ -74,6 +76,10 @@ func (r *Runner) Run(ctx context.Context, args []string, stdout, stderr io.Write
 	case "help", "-h", "--help":
 		fmt.Fprint(stdout, helpText())
 		return 0
+	case "version", "--version":
+		return r.runVersion(args[1:], stdout, stderr)
+	case "doctor":
+		return r.runDoctor(ctx, args[1:], stdout, stderr)
 	case "apis":
 		return r.runAPIs(args[1:], stdout, stderr)
 	case "openapi":
@@ -419,6 +425,8 @@ func (p *paramValues) Values() url.Values {
 func helpText() string {
 	return usageText + `
 Examples:
+  odh version
+  odh doctor
   odh apis
   odh openapi mobility
   odh call tourism /v1/ODHActivityPoi --param pagenumber=1 --param pagesize=1 --param seed=42

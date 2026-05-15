@@ -49,6 +49,34 @@ func TestRunAPIsOutputsJSON(t *testing.T) {
 	}
 }
 
+func TestRunVersionOutputsJSON(t *testing.T) {
+	runner := newTestRunner(t, nil)
+	var stdout, stderr bytes.Buffer
+	code := runner.Run(context.Background(), []string{"version"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("Run exit = %d, stderr = %s", code, stderr.String())
+	}
+	var decoded map[string]any
+	if err := json.Unmarshal(stdout.Bytes(), &decoded); err != nil {
+		t.Fatalf("invalid JSON: %v\n%s", err, stdout.String())
+	}
+	if decoded["version"] == "" || decoded["goos"] == "" || decoded["goarch"] == "" {
+		t.Fatalf("missing version fields: %s", stdout.String())
+	}
+}
+
+func TestRunDoctorWithoutNetwork(t *testing.T) {
+	runner := newTestRunner(t, nil)
+	var stdout, stderr bytes.Buffer
+	code := runner.Run(context.Background(), []string{"doctor", "--network=false"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("Run exit = %d, stderr = %s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), `"ok": true`) || !strings.Contains(stdout.String(), `"api_registry"`) {
+		t.Fatalf("unexpected stdout: %s", stdout.String())
+	}
+}
+
 func TestRunCallUsesRegistryAndParams(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/items" {
@@ -68,6 +96,57 @@ func TestRunCallUsesRegistryAndParams(t *testing.T) {
 		t.Fatalf("Run exit = %d, stderr = %s", code, stderr.String())
 	}
 	if !strings.Contains(stdout.String(), `"items"`) {
+		t.Fatalf("unexpected stdout: %s", stdout.String())
+	}
+}
+
+func TestRunDoctorChecksNetworkTargets(t *testing.T) {
+	seen := map[string]bool{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen[r.URL.Path] = true
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer server.Close()
+
+	runner := newTestRunner(t, []apis.API{
+		{Name: "tourism", BaseURL: server.URL, Public: true},
+		{Name: "mobility", BaseURL: server.URL, Public: true},
+	})
+	var stdout, stderr bytes.Buffer
+	code := runner.Run(context.Background(), []string{"doctor"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("Run exit = %d, stderr = %s", code, stderr.String())
+	}
+	for _, path := range []string{"/swagger/v1/swagger.json", "/v2/apispec", "/v2/flat", "/v2/flat,event/A22/latest"} {
+		if !seen[path] {
+			t.Fatalf("doctor did not request %s; seen %#v", path, seen)
+		}
+	}
+	if !strings.Contains(stdout.String(), `"ok": true`) || !strings.Contains(stdout.String(), `"a22_events"`) {
+		t.Fatalf("unexpected stdout: %s", stdout.String())
+	}
+}
+
+func TestRunDoctorReturnsFailureForNetworkError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/v2/apispec" {
+			http.Error(w, "broken", http.StatusBadGateway)
+			return
+		}
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer server.Close()
+
+	runner := newTestRunner(t, []apis.API{
+		{Name: "tourism", BaseURL: server.URL, Public: true},
+		{Name: "mobility", BaseURL: server.URL, Public: true},
+	})
+	var stdout, stderr bytes.Buffer
+	code := runner.Run(context.Background(), []string{"doctor"}, &stdout, &stderr)
+	if code != 1 {
+		t.Fatalf("Run exit = %d, want 1; stderr = %s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), `"ok": false`) || !strings.Contains(stdout.String(), `"status_code": 502`) {
 		t.Fatalf("unexpected stdout: %s", stdout.String())
 	}
 }
