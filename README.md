@@ -160,3 +160,5 @@ ODH_LIVE_TESTS=1 go test ./internal/commands -run Live
 More details are in [docs/development.md](docs/development.md).
 
 Release builds are documented in [docs/release.md](docs/release.md).
+
+The agent skill bundle is in [skills/open-data-hub-cli/SKILL.md](skills/open-data-hub-cli/SKILL.md).
