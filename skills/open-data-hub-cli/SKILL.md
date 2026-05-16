@@ -37,6 +37,12 @@ odh version
 odh doctor --timeout 10s
 ```
 
+The GTFS and transit commands require `odh` `v0.1.5` or newer. If `odh version` reports an older release, install the current release into a directory that is already on PATH:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/galjos/odh-cli/main/scripts/install.sh | sh -s -- --version v0.1.5 --dir "$HOME/bin"
+```
+
 If `odh` is not installed in a normal shell, install the latest release:
 
 ```bash
@@ -50,6 +56,8 @@ go build -o odh ./cmd/odh
 ```
 
 In OpenClaw, this skill declares `odh` as a required binary. If OpenClaw marks the skill as needing setup, use the offered installer before trying to answer with Open Data Hub data.
+
+If OpenClaw's Go installer reports success but `odh version` is still old, a previous binary is probably earlier on PATH than `~/go/bin/odh`. Use the release installer above with `--dir "$HOME/bin"` or update PATH so the newer binary is resolved first.
 
 When running from a source checkout, use `./odh` instead of `odh`.
 
