@@ -13,7 +13,7 @@ metadata:
             {
               "id": "go",
               "kind": "go",
-              "module": "github.com/galjos/odh-cli/cmd/odh@v0.1.1",
+              "module": "github.com/galjos/odh-cli/cmd/odh@v0.1.2",
               "bins": ["odh"],
               "label": "Install odh CLI (go)",
             },
@@ -59,6 +59,7 @@ List known API surfaces:
 
 ```bash
 odh apis
+odh datasets search parking
 ```
 
 Fetch OpenAPI specs as JSON:
@@ -88,6 +89,7 @@ Tourism point of interest:
 
 ```bash
 odh tourism poi --limit 1 --seed 42 --fields Detail.en.Title,GpsInfo
+odh tourism types --dataset event --limit 10
 ```
 
 Mobility latest measurements:
@@ -103,6 +105,7 @@ Mobility type and data-type discovery:
 
 ```bash
 odh mobility types --kind event
+odh mobility stations --station-type ParkingStation --limit 5
 odh mobility datatypes --station-type TrafficSensor --origin A22 --limit 100
 ```
 

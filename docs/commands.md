@@ -36,7 +36,7 @@ Example output with `--network=false`:
 {
   "ok": true,
   "version": {
-    "version": "0.1.1-dev",
+    "version": "0.1.2-dev",
     "commit": "unknown",
     "date": "unknown",
     "goos": "darwin",
@@ -46,7 +46,7 @@ Example output with `--network=false`:
     {
       "name": "version",
       "ok": true,
-      "message": "0.1.1-dev"
+      "message": "0.1.2-dev"
     },
     {
       "name": "api_registry",
@@ -88,6 +88,36 @@ Default output:
 
 Flags:
 
+- `--format json` - default, machine-readable JSON.
+- `--format table` - simple human-readable table.
+
+## `odh datasets list`
+
+Lists a small curated catalog of useful Open Data Hub entry points.
+
+```bash
+odh datasets list
+odh datasets list --domain mobility --format table
+```
+
+Flags:
+
+- `--domain tourism|mobility` - optional domain filter.
+- `--format json` - default, machine-readable JSON.
+- `--format table` - simple human-readable table.
+
+## `odh datasets search <query>`
+
+Searches the curated dataset catalog by title, description, keywords, endpoint, and suggested command.
+
+```bash
+odh datasets search parking
+odh datasets search weather --domain tourism
+```
+
+Flags:
+
+- `--domain tourism|mobility` - optional domain filter.
 - `--format json` - default, machine-readable JSON.
 - `--format table` - simple human-readable table.
 
@@ -136,6 +166,35 @@ Flags:
 - `--fields value` - comma-separated fields.
 - `--param key=value` - additional query parameter. Repeatable.
 
+## `odh tourism types`
+
+Fetches common Tourism taxonomy/type datasets and wraps the upstream `Items` list with `dataset`, `endpoint`, and `count` fields.
+
+```bash
+odh tourism types --dataset poi --limit 20
+odh tourism types --dataset event --limit 20
+odh tourism types --dataset event-topic --limit 20
+odh tourism types --dataset accommodation --limit 20
+```
+
+Supported datasets:
+
+- `poi`
+- `event`
+- `event-topic`
+- `accommodation`
+- `article`
+- `venue`
+- `tag`
+
+Flags:
+
+- `--dataset value` - taxonomy dataset; default `poi`.
+- `--limit n` - maps to `pagesize`; default `100`.
+- `--page n` - maps to `pagenumber`; default `1`.
+- `--seed value` - stable randomization seed.
+- `--param key=value` - additional query parameter. Repeatable.
+
 ## `odh mobility latest`
 
 Curated wrapper for Mobility API latest measurements.
@@ -173,6 +232,28 @@ Flags:
 - `--limit n` - maximum records to request; default `200`.
 
 The output wraps the upstream list with `kind`, `count`, and `types` fields so agents can check whether discovery returned data before using it.
+
+## `odh mobility stations`
+
+Lists Mobility stations for a station type.
+
+```bash
+odh mobility stations --station-type ParkingStation --limit 5
+odh mobility stations --station-type EChargingStation --limit 5
+odh mobility stations --station-type TrafficSensor --origin A22 --limit 10
+```
+
+Flags:
+
+- `--station-type value` - required.
+- `--origin value` - optional `sorigin` filter, for example `A22`.
+- `--representation value` - default `flat`.
+- `--limit n` - maximum stations to request; default `20`.
+- `--offset n` - pagination offset; default `0`.
+- `--where expr` - Open Data Hub where filter.
+- `--param key=value` - additional query parameter. Repeatable.
+
+The output wraps matching records with `station_type`, `origin`, `record_count`, `count`, and `stations`.
 
 ## `odh mobility datatypes`
 

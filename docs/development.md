@@ -45,11 +45,11 @@ The live tests call public unauthenticated Tourism and Mobility endpoints.
 
 ## Build Metadata
 
-Development builds default to `0.1.1-dev` with best-effort VCS metadata. Release builds can stamp metadata through Go linker flags:
+Development builds default to `0.1.2-dev` with best-effort VCS metadata. Release builds can stamp metadata through Go linker flags:
 
 ```bash
 go build \
-  -ldflags "-X github.com/galjos/odh-cli/internal/version.Version=0.1.1 -X github.com/galjos/odh-cli/internal/version.Commit=$(git rev-parse --short HEAD) -X github.com/galjos/odh-cli/internal/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  -ldflags "-X github.com/galjos/odh-cli/internal/version.Version=0.1.2 -X github.com/galjos/odh-cli/internal/version.Commit=$(git rev-parse --short HEAD) -X github.com/galjos/odh-cli/internal/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   -o odh ./cmd/odh
 ```
 
@@ -67,6 +67,6 @@ v0.1 intentionally avoids generated clients and packaging. It includes a small a
 The next useful milestones are:
 
 - more curated commands for common endpoints,
-- broader dataset search once a suitable public metadata endpoint is selected,
+- richer dataset metadata once a suitable public upstream catalog endpoint is selected,
 - MCP server mode reusing the same internal packages,
 - package-manager distribution.

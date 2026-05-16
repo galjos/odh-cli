@@ -61,6 +61,9 @@ When location matters:
 
 - Tourism content through `tourism.opendatahub.com`.
 - Mobility time-series data through `mobility.api.opendatahub.com`.
+- A small curated dataset catalog for common Tourism and Mobility entry points.
+- Tourism taxonomy/type discovery for common public endpoints.
+- Mobility station metadata discovery by station type.
 - API discovery and OpenAPI retrieval for the registered public surfaces.
 - A narrow A22 diagnostic command that separates current events from forecast rows.
 

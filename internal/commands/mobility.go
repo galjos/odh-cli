@@ -131,6 +131,70 @@ func (r *Runner) runMobilityDatatypes(ctx context.Context, args []string, stdout
 	return 0
 }
 
+func (r *Runner) runMobilityStations(ctx context.Context, args []string, stdout, stderr io.Writer) int {
+	fs := newFlagSet("mobility stations", stderr)
+	stationType := fs.String("station-type", "", "station type, for example ParkingStation")
+	representation := fs.String("representation", "flat", "API representation")
+	origin := fs.String("origin", "", "optional sorigin filter, for example A22")
+	limit := fs.Int("limit", 20, "maximum stations to request")
+	offset := fs.Int("offset", 0, "pagination offset")
+	where := fs.String("where", "", "Open Data Hub where filter")
+	params := paramValues{}
+	fs.Var(&params, "param", "additional query parameter as key=value; repeatable")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	if fs.NArg() != 0 {
+		fmt.Fprintln(stderr, "mobility stations does not accept positional arguments")
+		return 2
+	}
+	if strings.TrimSpace(*stationType) == "" {
+		fmt.Fprintln(stderr, "--station-type is required")
+		return 2
+	}
+	if *limit < 1 {
+		fmt.Fprintln(stderr, "--limit must be greater than zero")
+		return 2
+	}
+	if *offset < 0 {
+		fmt.Fprintln(stderr, "--offset must not be negative")
+		return 2
+	}
+
+	api, _ := r.Registry.Find("mobility")
+	path := fmt.Sprintf("/v2/%s/%s", url.PathEscape(*representation), url.PathEscape(*stationType))
+	path = strings.ReplaceAll(path, "%2C", ",")
+	values := params.Values()
+	values.Set("limit", strconv.Itoa(*limit))
+	values.Set("offset", strconv.Itoa(*offset))
+	if strings.TrimSpace(*where) != "" {
+		values.Set("where", *where)
+	}
+	requestURL, err := BuildURL(api.BaseURL, path, values)
+	if err != nil {
+		fmt.Fprintln(stderr, err)
+		return 2
+	}
+	value, err := r.fetchJSONValue(ctx, requestURL)
+	if err != nil {
+		fmt.Fprintln(stderr, err)
+		return 1
+	}
+	records := extractDataList(value)
+	stations := filterStationsByOrigin(records, *origin)
+	if err := output.WriteJSON(stdout, map[string]any{
+		"station_type": *stationType,
+		"origin":       strings.TrimSpace(*origin),
+		"record_count": len(records),
+		"count":        len(stations),
+		"stations":     stations,
+	}); err != nil {
+		fmt.Fprintln(stderr, err)
+		return 1
+	}
+	return 0
+}
+
 func (r *Runner) runMobilityEvents(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	fs := newFlagSet("mobility events", stderr)
 	origin := fs.String("origin", "", "event origin, for example A22")
@@ -352,6 +416,35 @@ func extractDataList(value any) []map[string]any {
 		}
 	}
 	return nil
+}
+
+func extractItemsList(value any) []any {
+	switch typed := value.(type) {
+	case []any:
+		return typed
+	case map[string]any:
+		if data, ok := typed["Items"].([]any); ok {
+			return data
+		}
+		if data, ok := typed["data"].([]any); ok {
+			return data
+		}
+	}
+	return nil
+}
+
+func filterStationsByOrigin(records []map[string]any, originFilter string) []map[string]any {
+	filter := strings.TrimSpace(originFilter)
+	if filter == "" {
+		return records
+	}
+	filtered := make([]map[string]any, 0, len(records))
+	for _, record := range records {
+		if asString(record["sorigin"]) == filter {
+			filtered = append(filtered, record)
+		}
+	}
+	return filtered
 }
 
 func mapsFromList(items []any) []map[string]any {

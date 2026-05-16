@@ -27,10 +27,14 @@ Usage:
   odh version [--format json|text]
   odh doctor [--network=false]
   odh apis
+  odh datasets list [--domain tourism|mobility]
+  odh datasets search <query>
   odh openapi <api>
   odh call <api> <path> [--param key=value ...]
   odh tourism poi [--limit n] [--seed value] [--fields fields]
+  odh tourism types [--dataset poi|event|event-topic|accommodation|article|venue|tag]
   odh mobility types [--kind station|event|edge]
+  odh mobility stations --station-type type [--origin origin]
   odh mobility datatypes --station-type type [--origin origin]
   odh mobility events --origin origin [--latest]
   odh mobility latest --station-type type --data-type type [--limit n] [--where expr]
@@ -82,6 +86,8 @@ func (r *Runner) Run(ctx context.Context, args []string, stdout, stderr io.Write
 		return r.runDoctor(ctx, args[1:], stdout, stderr)
 	case "apis":
 		return r.runAPIs(args[1:], stdout, stderr)
+	case "datasets":
+		return r.runDatasets(args[1:], stdout, stderr)
 	case "openapi":
 		return r.runOpenAPI(ctx, args[1:], stdout, stderr)
 	case "call":
@@ -221,6 +227,8 @@ func (r *Runner) runTourism(ctx context.Context, args []string, stdout, stderr i
 	switch args[0] {
 	case "poi":
 		return r.runTourismPOI(ctx, args[1:], stdout, stderr)
+	case "types":
+		return r.runTourismTypes(ctx, args[1:], stdout, stderr)
 	default:
 		fmt.Fprintf(stderr, "unknown tourism subcommand %q\n", args[0])
 		return 2
@@ -268,6 +276,86 @@ func (r *Runner) runTourismPOI(ctx context.Context, args []string, stdout, stder
 	return r.fetchJSON(ctx, requestURL, stdout, stderr)
 }
 
+func (r *Runner) runTourismTypes(ctx context.Context, args []string, stdout, stderr io.Writer) int {
+	fs := newFlagSet("tourism types", stderr)
+	dataset := fs.String("dataset", "poi", "taxonomy dataset: poi, event, event-topic, accommodation, article, venue, or tag")
+	limit := fs.Int("limit", 100, "number of type records to request")
+	page := fs.Int("page", 1, "page number")
+	seed := fs.String("seed", "", "stable randomization seed")
+	params := paramValues{}
+	fs.Var(&params, "param", "additional query parameter as key=value; repeatable")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	if fs.NArg() != 0 {
+		fmt.Fprintln(stderr, "tourism types does not accept positional arguments")
+		return 2
+	}
+	if *limit < 1 {
+		fmt.Fprintln(stderr, "--limit must be greater than zero")
+		return 2
+	}
+	if *page < 1 {
+		fmt.Fprintln(stderr, "--page must be greater than zero")
+		return 2
+	}
+	endpoint, normalizedDataset, err := tourismTypesEndpoint(*dataset)
+	if err != nil {
+		fmt.Fprintln(stderr, err)
+		return 2
+	}
+
+	api, _ := r.Registry.Find("tourism")
+	values := params.Values()
+	values.Set("pagenumber", strconv.Itoa(*page))
+	values.Set("pagesize", strconv.Itoa(*limit))
+	if strings.TrimSpace(*seed) != "" {
+		values.Set("seed", *seed)
+	}
+	requestURL, err := BuildURL(api.BaseURL, endpoint, values)
+	if err != nil {
+		fmt.Fprintln(stderr, err)
+		return 2
+	}
+	value, err := r.fetchJSONValue(ctx, requestURL)
+	if err != nil {
+		fmt.Fprintln(stderr, err)
+		return 1
+	}
+	items := extractItemsList(value)
+	if err := output.WriteJSON(stdout, map[string]any{
+		"dataset":  normalizedDataset,
+		"endpoint": requestURL,
+		"count":    len(items),
+		"items":    items,
+	}); err != nil {
+		fmt.Fprintln(stderr, err)
+		return 1
+	}
+	return 0
+}
+
+func tourismTypesEndpoint(dataset string) (string, string, error) {
+	switch strings.ToLower(strings.TrimSpace(dataset)) {
+	case "", "poi", "pois", "activity", "activity-poi", "activity-pois":
+		return "/v1/ODHActivityPoiTypes", "poi", nil
+	case "event", "events", "event-type", "event-types":
+		return "/v1/EventShortTypes", "event", nil
+	case "event-topic", "event-topics", "topic", "topics":
+		return "/v1/EventTopics", "event-topic", nil
+	case "accommodation", "accommodations", "accommodation-type", "accommodation-types":
+		return "/v1/AccommodationTypes", "accommodation", nil
+	case "article", "articles", "article-type", "article-types":
+		return "/v1/ArticleTypes", "article", nil
+	case "venue", "venues", "venue-type", "venue-types":
+		return "/v1/VenueTypes", "venue", nil
+	case "tag", "tags", "odh-tag", "odh-tags":
+		return "/v1/ODHTag", "tag", nil
+	default:
+		return "", "", fmt.Errorf("unsupported tourism types dataset %q", dataset)
+	}
+}
+
 func (r *Runner) runMobility(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
 		fmt.Fprintln(stderr, "usage: odh mobility <subcommand>")
@@ -276,6 +364,8 @@ func (r *Runner) runMobility(ctx context.Context, args []string, stdout, stderr 
 	switch args[0] {
 	case "types":
 		return r.runMobilityTypes(ctx, args[1:], stdout, stderr)
+	case "stations":
+		return r.runMobilityStations(ctx, args[1:], stdout, stderr)
 	case "datatypes":
 		return r.runMobilityDatatypes(ctx, args[1:], stdout, stderr)
 	case "events":
@@ -428,10 +518,13 @@ Examples:
   odh version
   odh doctor
   odh apis
+  odh datasets search parking
   odh openapi mobility
   odh call tourism /v1/ODHActivityPoi --param pagenumber=1 --param pagesize=1 --param seed=42
+  odh tourism types --dataset event --limit 10
   odh tourism poi --limit 1 --seed 42 --fields Detail.en.Title,GpsInfo
   odh mobility types --kind event
+  odh mobility stations --station-type ParkingStation --limit 5
   odh mobility datatypes --station-type TrafficSensor --origin A22
   odh mobility events --origin A22 --latest
   odh mobility latest --station-type EChargingStation --data-type number-available --limit 5

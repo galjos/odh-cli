@@ -49,6 +49,31 @@ func TestRunAPIsOutputsJSON(t *testing.T) {
 	}
 }
 
+func TestRunDatasetsSearchFindsParking(t *testing.T) {
+	runner := newTestRunner(t, nil)
+	var stdout, stderr bytes.Buffer
+	code := runner.Run(context.Background(), []string{"datasets", "search", "parking"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("Run exit = %d, stderr = %s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), `"id": "mobility.parking"`) ||
+		!strings.Contains(stdout.String(), "odh mobility stations --station-type ParkingStation") {
+		t.Fatalf("unexpected stdout: %s", stdout.String())
+	}
+}
+
+func TestRunDatasetsListSupportsDomainAndTable(t *testing.T) {
+	runner := newTestRunner(t, nil)
+	var stdout, stderr bytes.Buffer
+	code := runner.Run(context.Background(), []string{"datasets", "list", "--domain", "tourism", "--format", "table"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("Run exit = %d, stderr = %s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "tourism.poi") || strings.Contains(stdout.String(), "mobility.parking") {
+		t.Fatalf("unexpected stdout: %s", stdout.String())
+	}
+}
+
 func TestRunVersionOutputsJSON(t *testing.T) {
 	runner := newTestRunner(t, nil)
 	var stdout, stderr bytes.Buffer
@@ -193,6 +218,36 @@ func TestRunTourismPOIBuildsExpectedQuery(t *testing.T) {
 	}
 }
 
+func TestRunTourismTypesBuildsExpectedQuery(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		query := r.URL.Query()
+		if r.URL.Path != "/v1/EventShortTypes" {
+			t.Fatalf("unexpected path %q", r.URL.Path)
+		}
+		if query.Get("pagesize") != "2" || query.Get("pagenumber") != "3" || query.Get("seed") != "42" {
+			t.Fatalf("unexpected query %q", r.URL.RawQuery)
+		}
+		_, _ = w.Write([]byte(`{"Items":[{"Id":"sport"},{"Id":"music"}]}`))
+	}))
+	defer server.Close()
+
+	runner := newTestRunner(t, []apis.API{{Name: "tourism", BaseURL: server.URL, Public: true}})
+	var stdout, stderr bytes.Buffer
+	code := runner.Run(context.Background(), []string{
+		"tourism", "types",
+		"--dataset", "event",
+		"--limit", "2",
+		"--page", "3",
+		"--seed", "42",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("Run exit = %d, stderr = %s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), `"dataset": "event"`) || !strings.Contains(stdout.String(), `"count": 2`) {
+		t.Fatalf("unexpected stdout: %s", stdout.String())
+	}
+}
+
 func TestRunMobilityLatestRequiresFlags(t *testing.T) {
 	runner := newTestRunner(t, nil)
 	var stdout, stderr bytes.Buffer
@@ -278,6 +333,33 @@ func TestRunMobilityDatatypesSummarizesByName(t *testing.T) {
 	}
 	if strings.Contains(stdout.String(), "OTHER") {
 		t.Fatalf("origin filter leaked OTHER origin: %s", stdout.String())
+	}
+}
+
+func TestRunMobilityStationsFiltersByOrigin(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v2/flat/ParkingStation" {
+			t.Fatalf("unexpected path %q", r.URL.Path)
+		}
+		if got := r.URL.Query().Get("limit"); got != "3" {
+			t.Fatalf("unexpected limit %q", got)
+		}
+		_, _ = w.Write([]byte(`{"data":[
+			{"scode":"1","sorigin":"skidata","sname":"P1"},
+			{"scode":"2","sorigin":"other","sname":"P2"},
+			{"scode":"3","sorigin":"skidata","sname":"P3"}
+		]}`))
+	}))
+	defer server.Close()
+
+	runner := newTestRunner(t, []apis.API{{Name: "mobility", BaseURL: server.URL, Public: true}})
+	var stdout, stderr bytes.Buffer
+	code := runner.Run(context.Background(), []string{"mobility", "stations", "--station-type", "ParkingStation", "--origin", "skidata", "--limit", "3"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("Run exit = %d, stderr = %s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), `"count": 2`) || strings.Contains(stdout.String(), `"sname": "P2"`) {
+		t.Fatalf("unexpected stdout: %s", stdout.String())
 	}
 }
 

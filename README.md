@@ -29,15 +29,18 @@ This is an early v0.1 project. It intentionally focuses on a small working core:
 - list known Open Data Hub APIs,
 - report machine-readable build/version metadata,
 - run a non-interactive doctor check for registry and upstream reachability,
+- search a small curated dataset catalog for common entry points,
 - fetch OpenAPI specs as JSON,
 - call any registered API path with query parameters,
 - query a random Tourism POI,
+- discover Tourism taxonomies such as POI, event, accommodation, venue, article, and tag types,
 - discover Mobility station, event, and edge types,
+- list Mobility stations for a station type,
 - summarize Mobility data types for a station type and origin,
 - query latest Mobility time-series measurements,
 - inspect A22 Mobility event and forecast feeds with explicit warnings when the data does not look like current traffic incidents.
 
-It does not yet include MCP, generated clients, Homebrew packaging, Docker images, general dataset catalog search, or authenticated write flows.
+It does not yet include MCP, generated clients, Homebrew packaging, Docker images, a full upstream metadata catalog, or authenticated write flows.
 
 ## Install
 
@@ -52,7 +55,7 @@ The installer detects macOS/Linux and `amd64`/`arm64`, downloads the matching re
 Install a specific version or directory:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/galjos/odh-cli/main/scripts/install.sh | sh -s -- --version v0.1.1 --dir "$HOME/bin"
+curl -fsSL https://raw.githubusercontent.com/galjos/odh-cli/main/scripts/install.sh | sh -s -- --version v0.1.2 --dir "$HOME/bin"
 ```
 
 Build from source instead:
@@ -71,7 +74,7 @@ Build with release metadata:
 
 ```bash
 go build \
-  -ldflags "-X github.com/galjos/odh-cli/internal/version.Version=0.1.1 -X github.com/galjos/odh-cli/internal/version.Commit=$(git rev-parse --short HEAD) -X github.com/galjos/odh-cli/internal/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  -ldflags "-X github.com/galjos/odh-cli/internal/version.Version=0.1.2 -X github.com/galjos/odh-cli/internal/version.Commit=$(git rev-parse --short HEAD) -X github.com/galjos/odh-cli/internal/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   -o odh ./cmd/odh
 ```
 
@@ -93,6 +96,12 @@ List known API surfaces:
 
 ```bash
 odh apis
+```
+
+Search the curated dataset catalog:
+
+```bash
+odh datasets search parking
 ```
 
 Fetch the Mobility OpenAPI spec as JSON:
@@ -117,6 +126,12 @@ Use the curated Tourism POI command:
 odh tourism poi --limit 1 --seed 42 --fields Detail.en.Title,GpsInfo
 ```
 
+Discover Tourism event taxonomy values:
+
+```bash
+odh tourism types --dataset event --limit 10
+```
+
 Use the curated Mobility latest-measurements command:
 
 ```bash
@@ -130,6 +145,12 @@ Discover Mobility event origins:
 
 ```bash
 odh mobility types --kind event
+```
+
+List Mobility parking stations:
+
+```bash
+odh mobility stations --station-type ParkingStation --limit 5
 ```
 
 Find A22 traffic-sensor data types:

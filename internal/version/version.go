@@ -12,7 +12,7 @@ import (
 
 // These variables can be overridden at build time with -ldflags.
 var (
-	Version = "0.1.1-dev"
+	Version = "0.1.2-dev"
 	Commit  = "unknown"
 	Date    = "unknown"
 )
@@ -30,12 +30,11 @@ type Info struct {
 func Current() Info {
 	resolvedVersion, resolvedCommit, resolvedDate := Version, Commit, Date
 	if buildInfo, ok := debug.ReadBuildInfo(); ok {
-		if strings.HasSuffix(resolvedVersion, "-dev") && buildInfo.Main.Version != "" && buildInfo.Main.Version != "(devel)" {
-			resolvedVersion = buildInfo.Main.Version
-		}
+		hasVCSRevision := false
 		for _, setting := range buildInfo.Settings {
 			switch setting.Key {
 			case "vcs.revision":
+				hasVCSRevision = setting.Value != ""
 				if resolvedCommit == "unknown" && setting.Value != "" {
 					resolvedCommit = shortenCommit(setting.Value)
 				}
@@ -44,6 +43,9 @@ func Current() Info {
 					resolvedDate = setting.Value
 				}
 			}
+		}
+		if strings.HasSuffix(resolvedVersion, "-dev") && !hasVCSRevision && buildInfo.Main.Version != "" && buildInfo.Main.Version != "(devel)" {
+			resolvedVersion = buildInfo.Main.Version
 		}
 	}
 

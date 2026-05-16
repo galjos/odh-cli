@@ -25,9 +25,12 @@ This means agents can call `odh`, parse stdout as JSON, and treat stderr plus ex
 odh version
 odh doctor --timeout 5s
 odh apis
+odh datasets search parking
 odh openapi mobility
+odh tourism types --dataset event --limit 10
 odh tourism poi --limit 1 --seed 42 --fields Detail.en.Title,GpsInfo
 odh mobility types --kind event
+odh mobility stations --station-type ParkingStation --limit 5
 odh mobility datatypes --station-type TrafficSensor --origin A22 --limit 100
 odh mobility events --origin A22 --latest --limit 20
 odh mobility latest --station-type EChargingStation --data-type number-available --limit 5
@@ -54,6 +57,15 @@ odh call tourism /v1/ODHActivityPoi \
   --param pagenumber=1 \
   --param pagesize=1 \
   --param seed=42
+```
+
+When the endpoint is not known yet, start with catalog and type discovery:
+
+```bash
+odh datasets search <topic>
+odh tourism types --dataset event
+odh mobility types --kind station
+odh mobility stations --station-type ParkingStation --limit 5
 ```
 
 ## Handling Failures
