@@ -591,8 +591,15 @@ func resolveTrafficArea(value string) (trafficArea, error) {
 		return trafficArea{}, nil
 	}
 	areas := map[string]trafficArea{
-		"bozen-unterland":      {Name: "bozen-unterland", ZoneIDs: []string{"3"}},
-		"ueberetsch-unterland": {Name: "ueberetsch-unterland", ZoneIDs: []string{"3"}},
+		"bozen-unterland": {Name: "bozen-unterland", ZoneIDs: []string{"3"}},
+		"ueberetsch-unterland": {
+			Name:    "ueberetsch-unterland",
+			ZoneIDs: []string{"3"},
+			Keywords: []string{
+				"Salurn", "Neumarkt", "Auer", "Montan", "Tramin", "Kurtatsch", "Margreid", "Laag", "Buchholz", "Gfrill",
+				"Eppan", "Kaltern", "St. Pauls", "Unterrain", "Girlan", "Missian", "Montiggl", "Laimburg", "Mendel", "Sigmundskron", "Frangart",
+			},
+		},
 		"unterland":            {Name: "unterland", ZoneIDs: []string{"3"}, Keywords: []string{"Salurn", "Neumarkt", "Auer", "Montan", "Tramin", "Kurtatsch", "Margreid", "Laag", "Buchholz", "Gfrill"}},
 		"ueberetsch":           {Name: "ueberetsch", ZoneIDs: []string{"3"}, Keywords: []string{"Eppan", "Kaltern", "St. Pauls", "Unterrain", "Girlan", "Missian", "Montiggl", "Laimburg", "Mendel", "Sigmundskron", "Frangart"}},
 		"bozen":                {Name: "bozen", ZoneIDs: []string{"3"}, Keywords: []string{"Bozen", "Bolzano", "Stadtgemeinde Bozen"}},

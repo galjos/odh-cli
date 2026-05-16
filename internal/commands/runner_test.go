@@ -512,6 +512,67 @@ func TestRunTrafficEventsFiltersAreaTypeRoadAndDedupes(t *testing.T) {
 	}
 }
 
+func TestRunTrafficEventsUeberetschUnterlandExcludesBozenCity(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v2/flat,event/PROVINCE_BZ/2026-05-16/2026-05-16" {
+			t.Fatalf("unexpected path %q", r.URL.Path)
+		}
+		_, _ = w.Write([]byte(`{"data":[
+			{
+				"evuuid":"bozen-city",
+				"evstart":"2026-05-16 00:00:00.000+0200",
+				"evend":"2026-05-16 23:59:00.000+0200",
+				"evmetadata":{
+					"messageZoneId":"3",
+					"messageZoneDescDe":"Bozen-Unterland",
+					"messageStreetInternetDescDe":"Stadtgemeinde Bozen",
+					"subTycodeValue":"SPERRE",
+					"placeDe":"Die Straße Untervirgl ist wegen Bauarbeiten gesperrt."
+				}
+			},
+			{
+				"evuuid":"ueberetsch",
+				"evstart":"2026-05-16 00:00:00.000+0200",
+				"evend":"2026-05-16 23:59:00.000+0200",
+				"evmetadata":{
+					"messageZoneId":"3",
+					"messageZoneDescDe":"Bozen-Unterland",
+					"messageStreetNr":"LS/SP 13",
+					"messageStreetInternetDescDe":"St. Pauls-Unterrain",
+					"subTycodeValue":"BAUSTELLE",
+					"placeDe":"zwischen St. Pauls und Unterrain"
+				}
+			}
+		]}`))
+	}))
+	defer server.Close()
+
+	runner := newTestRunner(t, []apis.API{{Name: "mobility", BaseURL: server.URL, Public: true}})
+	var stdout, stderr bytes.Buffer
+	code := runner.Run(context.Background(), []string{
+		"traffic", "events",
+		"--from", "2026-05-16",
+		"--to", "2026-05-16",
+		"--area", "ueberetsch-unterland",
+		"--json",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("Run exit = %d, stderr = %s", code, stderr.String())
+	}
+	var decoded struct {
+		Count  int `json:"count"`
+		Events []struct {
+			ID string `json:"id"`
+		} `json:"events"`
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &decoded); err != nil {
+		t.Fatalf("invalid JSON: %v\n%s", err, stdout.String())
+	}
+	if decoded.Count != 1 || len(decoded.Events) != 1 || decoded.Events[0].ID != "ueberetsch" {
+		t.Fatalf("unexpected decoded output: %#v", decoded)
+	}
+}
+
 func TestRunTrafficEventsHidesStaleOpenEndedRows(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v2/flat,event/PROVINCE_BZ/2026-05-16/2026-05-16" {

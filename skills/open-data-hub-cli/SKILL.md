@@ -13,7 +13,7 @@ metadata:
             {
               "id": "go",
               "kind": "go",
-              "module": "github.com/galjos/odh-cli/cmd/odh@v0.1.3",
+              "module": "github.com/galjos/odh-cli/cmd/odh@v0.1.4",
               "bins": ["odh"],
               "label": "Install odh CLI (go)",
             },
