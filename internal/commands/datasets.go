@@ -237,6 +237,20 @@ func datasetCatalog() []datasetEntry {
 			Endpoints: []string{"/v2/flat,event/A22/latest", "/v2/flat/TrafficForecast/forecast/latest"},
 			Keywords:  []string{"traffic", "a22", "autobrennero", "forecast", "incident", "sensor"},
 		},
+		{
+			ID:          "mobility.traffic-events",
+			Domain:      "mobility",
+			API:         "mobility",
+			Title:       "Traffic events and roadworks",
+			Description: "Opinionated Open Data Hub PROVINCE_BZ traffic-event view with area aliases, type filters, date filtering, deduplication, and stale-record warnings.",
+			Commands: []string{
+				"odh traffic today --area ueberetsch-unterland --type roadworks --format table",
+				"odh traffic events --area bozen-unterland --from 2026-05-16 --to 2026-05-16 --format json",
+				"odh traffic today --near 46.42,11.25 --radius 15km --json",
+			},
+			Endpoints: []string{"/v2/flat,event/PROVINCE_BZ/{from}/{to}"},
+			Keywords:  []string{"traffic", "roadworks", "closure", "roadblock", "unterland", "ueberetsch", "province_bz"},
+		},
 	}
 	sort.Slice(entries, func(i, j int) bool {
 		return entries[i].ID < entries[j].ID

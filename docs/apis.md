@@ -35,6 +35,7 @@ Mobility / Time Series API:
 - API v2 uses station concepts such as station type, data type, origin, metadata, and measurements.
 - Use `odh mobility types` and `odh mobility datatypes` for discovery before assuming a station type or origin exists.
 - Use `odh mobility stations --station-type <type>` after station-type discovery to inspect concrete station metadata, coordinates, origins, and provider fields.
+- Use `odh traffic today` or `odh traffic events` for South Tyrol roadworks, closures, road events, and traffic restrictions from Open Data Hub `PROVINCE_BZ`.
 
 Standards APIs:
 
@@ -43,6 +44,9 @@ Standards APIs:
 
 The Mobility commands include a narrow A22 diagnostic path:
 
+- `odh traffic today --area ueberetsch-unterland --type roadworks` summarizes current Open Data Hub `PROVINCE_BZ` roadwork events.
+- `odh traffic events --area bozen-unterland --from YYYY-MM-DD --to YYYY-MM-DD` queries a specific traffic-event date range.
+- `odh traffic today --near 46.42,11.25 --radius 15km --json` filters Open Data Hub `PROVINCE_BZ` events by coordinates.
 - `odh mobility events --origin A22 --latest` checks current A22 events.
 - `odh mobility stations --station-type TrafficSensor --origin A22` lists A22 traffic-sensor station records.
 - `odh mobility datatypes --station-type TrafficSensor --origin A22` discovers A22 traffic-sensor data types.

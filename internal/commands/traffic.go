@@ -1,0 +1,831 @@
+// SPDX-FileCopyrightText: 2026 Josef Gallmetzer
+//
+// SPDX-License-Identifier: MPL-2.0
+
+package commands
+
+import (
+	"context"
+	"fmt"
+	"io"
+	"math"
+	"net/url"
+	"sort"
+	"strconv"
+	"strings"
+	"text/tabwriter"
+	"time"
+
+	"github.com/galjos/odh-cli/internal/output"
+)
+
+type trafficQuery struct {
+	Source         string
+	Area           string
+	Type           string
+	Road           string
+	Near           string
+	Radius         string
+	From           string
+	To             string
+	Format         string
+	JSON           bool
+	Limit          int
+	Raw            bool
+	IncludeExpired bool
+	IncludeStale   bool
+}
+
+type trafficEvent struct {
+	ID              string         `json:"id"`
+	SeriesID        string         `json:"series_id,omitempty"`
+	MessageID       string         `json:"message_id,omitempty"`
+	Source          string         `json:"source"`
+	Type            string         `json:"type"`
+	Subtype         string         `json:"subtype,omitempty"`
+	Severity        string         `json:"severity,omitempty"`
+	ZoneID          string         `json:"zone_id,omitempty"`
+	Zone            string         `json:"zone,omitempty"`
+	ZoneIT          string         `json:"zone_it,omitempty"`
+	Road            string         `json:"road,omitempty"`
+	RoadName        string         `json:"road_name,omitempty"`
+	Place           string         `json:"place,omitempty"`
+	PlaceIT         string         `json:"place_it,omitempty"`
+	Start           string         `json:"start,omitempty"`
+	End             string         `json:"end,omitempty"`
+	PublishedAt     string         `json:"published_at,omitempty"`
+	TransactionTime string         `json:"transaction_time,omitempty"`
+	Coordinates     []float64      `json:"coordinates,omitempty"`
+	Active          bool           `json:"active"`
+	Stale           bool           `json:"stale"`
+	Raw             map[string]any `json:"raw,omitempty"`
+}
+
+type trafficArea struct {
+	Name     string
+	ZoneIDs  []string
+	Keywords []string
+}
+
+func (r *Runner) runTraffic(ctx context.Context, args []string, stdout, stderr io.Writer) int {
+	if len(args) == 0 {
+		fmt.Fprintln(stderr, "usage: odh traffic <today|events>")
+		return 2
+	}
+	switch args[0] {
+	case "today":
+		return r.runTrafficToday(ctx, args[1:], stdout, stderr)
+	case "events":
+		return r.runTrafficEvents(ctx, args[1:], stdout, stderr)
+	default:
+		fmt.Fprintf(stderr, "unknown traffic subcommand %q\n", args[0])
+		return 2
+	}
+}
+
+func (r *Runner) runTrafficToday(ctx context.Context, args []string, stdout, stderr io.Writer) int {
+	query, err := parseTrafficFlags("traffic today", args, stderr)
+	if err != nil {
+		fmt.Fprintln(stderr, err)
+		return 2
+	}
+	today := time.Now().Format("2006-01-02")
+	query.From = today
+	query.To = today
+	return r.runTrafficQuery(ctx, query, stdout, stderr)
+}
+
+func (r *Runner) runTrafficEvents(ctx context.Context, args []string, stdout, stderr io.Writer) int {
+	query, err := parseTrafficFlags("traffic events", args, stderr)
+	if err != nil {
+		fmt.Fprintln(stderr, err)
+		return 2
+	}
+	if strings.TrimSpace(query.From) == "" && strings.TrimSpace(query.To) == "" {
+		today := time.Now().Format("2006-01-02")
+		query.From = today
+		query.To = today
+	}
+	if strings.TrimSpace(query.From) == "" {
+		query.From = query.To
+	}
+	if strings.TrimSpace(query.To) == "" {
+		query.To = query.From
+	}
+	return r.runTrafficQuery(ctx, query, stdout, stderr)
+}
+
+func parseTrafficFlags(name string, args []string, stderr io.Writer) (trafficQuery, error) {
+	fs := newFlagSet(name, stderr)
+	query := trafficQuery{}
+	fs.StringVar(&query.Source, "source", "odh", "traffic source: odh")
+	fs.StringVar(&query.Area, "area", "", "area alias, for example ueberetsch-unterland")
+	fs.StringVar(&query.Type, "type", "all", "type filter: all, roadworks, closure, event, traffic, mountain-pass, bike, or radar")
+	fs.StringVar(&query.Road, "road", "", "road filter, for example SP13 or SS42")
+	fs.StringVar(&query.Near, "near", "", "coordinate filter as lat,lon")
+	fs.StringVar(&query.Radius, "radius", "15km", "radius for --near, for example 15km")
+	fs.StringVar(&query.From, "from", "", "start date YYYY-MM-DD")
+	fs.StringVar(&query.To, "to", "", "end date YYYY-MM-DD")
+	fs.StringVar(&query.Format, "format", "table", "output format: json, table, or markdown")
+	fs.BoolVar(&query.JSON, "json", false, "shortcut for --format json")
+	fs.IntVar(&query.Limit, "limit", 1000, "maximum raw events to request")
+	fs.BoolVar(&query.Raw, "raw", false, "include raw upstream event objects in JSON output")
+	fs.BoolVar(&query.IncludeExpired, "include-expired", false, "include expired events after local date filtering")
+	fs.BoolVar(&query.IncludeStale, "include-stale", false, "include stale open-ended events that are hidden by default")
+	if err := fs.Parse(args); err != nil {
+		return trafficQuery{}, err
+	}
+	if fs.NArg() != 0 {
+		return trafficQuery{}, fmt.Errorf("%s does not accept positional arguments", name)
+	}
+	if query.Limit < 1 {
+		return trafficQuery{}, fmt.Errorf("--limit must be greater than zero")
+	}
+	if query.JSON {
+		query.Format = "json"
+	}
+	format, err := normalizeTrafficFormat(query.Format)
+	if err != nil {
+		return trafficQuery{}, err
+	}
+	query.Format = format
+	return query, nil
+}
+
+func (r *Runner) runTrafficQuery(ctx context.Context, query trafficQuery, stdout, stderr io.Writer) int {
+	if source := strings.ToLower(strings.TrimSpace(query.Source)); source != "" && source != "odh" {
+		fmt.Fprintf(stderr, "unsupported traffic source %q; supported source: odh\n", query.Source)
+		return 2
+	}
+	if strings.TrimSpace(query.Near) != "" {
+		if _, _, _, err := parseNearRadius(query.Near, query.Radius); err != nil {
+			fmt.Fprintln(stderr, err)
+			return 2
+		}
+	}
+	fromDay, toDay, err := parseTrafficDateRange(query.From, query.To)
+	if err != nil {
+		fmt.Fprintln(stderr, err)
+		return 2
+	}
+	area, err := resolveTrafficArea(query.Area)
+	if err != nil {
+		fmt.Fprintln(stderr, err)
+		return 2
+	}
+	if _, err := normalizeTrafficTypeFilter(query.Type); err != nil {
+		fmt.Fprintln(stderr, err)
+		return 2
+	}
+	return r.runODHTrafficQuery(ctx, query, area, fromDay, toDay, stdout, stderr)
+}
+
+func (r *Runner) runODHTrafficQuery(ctx context.Context, query trafficQuery, area trafficArea, fromDay, toDay time.Time, stdout, stderr io.Writer) int {
+	api, _ := r.Registry.Find("mobility")
+	path := fmt.Sprintf("/v2/flat,event/PROVINCE_BZ/%s/%s", fromDay.Format("2006-01-02"), toDay.Format("2006-01-02"))
+	values := url.Values{}
+	values.Set("limit", strconv.Itoa(query.Limit))
+	requestURL, err := BuildURL(api.BaseURL, path, values)
+	if err != nil {
+		fmt.Fprintln(stderr, err)
+		return 2
+	}
+	value, err := r.fetchJSONValue(ctx, requestURL)
+	if err != nil {
+		fmt.Fprintln(stderr, err)
+		return 1
+	}
+	rawEvents := extractDataList(value)
+	events, warnings := normalizeTrafficEvents(rawEvents, query, area, fromDay, toDay)
+	if err := writeTrafficOutput(stdout, trafficResult{
+		Source:       "odh",
+		SourceDetail: "Open Data Hub Mobility API PROVINCE_BZ traffic events",
+		Endpoint:     requestURL,
+		From:         fromDay.Format("2006-01-02"),
+		To:           toDay.Format("2006-01-02"),
+		Area:         area.Name,
+		Type:         normalizeTrafficTypeName(query.Type),
+		RawCount:     len(rawEvents),
+		Count:        len(events),
+		Events:       events,
+		Warnings:     warnings,
+		OutputFormat: query.Format,
+		IncludeRaw:   query.Raw,
+	}); err != nil {
+		fmt.Fprintln(stderr, err)
+		return 1
+	}
+	return 0
+}
+
+type trafficResult struct {
+	Source       string         `json:"source"`
+	SourceDetail string         `json:"source_detail"`
+	Endpoint     string         `json:"endpoint"`
+	From         string         `json:"from"`
+	To           string         `json:"to"`
+	Area         string         `json:"area,omitempty"`
+	Type         string         `json:"type,omitempty"`
+	RawCount     int            `json:"raw_count"`
+	Count        int            `json:"count"`
+	Events       []trafficEvent `json:"events"`
+	Warnings     []string       `json:"warnings,omitempty"`
+	OutputFormat string         `json:"-"`
+	IncludeRaw   bool           `json:"-"`
+}
+
+func normalizeTrafficEvents(raw []map[string]any, query trafficQuery, area trafficArea, fromDay, toDay time.Time) ([]trafficEvent, []string) {
+	events := make([]trafficEvent, 0, len(raw))
+	now := time.Now()
+	staleCount := 0
+	hiddenStaleOpenEndedCount := 0
+	expiredCount := 0
+	futureCount := 0
+	for _, record := range raw {
+		event := normalizeTrafficEvent(record, query.Raw, now)
+		if !trafficAreaMatches(event, area) {
+			continue
+		}
+		if !trafficTypeMatches(event, query.Type) {
+			continue
+		}
+		if !trafficRoadMatches(event, query.Road) {
+			continue
+		}
+		if !trafficNearMatches(event, query.Near, query.Radius) {
+			continue
+		}
+		active := eventActiveInRange(event, fromDay, toDay)
+		event.Active = active
+		if !active && !query.IncludeExpired {
+			if eventEndBefore(event, fromDay) {
+				expiredCount++
+			} else {
+				futureCount++
+			}
+			continue
+		}
+		if event.Stale && !eventHasEnd(event) && !query.IncludeStale {
+			hiddenStaleOpenEndedCount++
+			continue
+		}
+		if event.Stale {
+			staleCount++
+		}
+		events = append(events, event)
+	}
+	deduped := dedupeTrafficEvents(events)
+	sort.SliceStable(deduped, func(i, j int) bool {
+		if deduped[i].Start != deduped[j].Start {
+			return deduped[i].Start < deduped[j].Start
+		}
+		if deduped[i].Road != deduped[j].Road {
+			return deduped[i].Road < deduped[j].Road
+		}
+		return deduped[i].Place < deduped[j].Place
+	})
+
+	warnings := make([]string, 0)
+	if len(events) != len(deduped) {
+		warnings = append(warnings, fmt.Sprintf("deduplicated %d raw matching rows to %d events", len(events), len(deduped)))
+	}
+	if staleCount > 0 {
+		warnings = append(warnings, fmt.Sprintf("%d matching events have transaction or publish timestamps older than 30 days", staleCount))
+	}
+	if hiddenStaleOpenEndedCount > 0 {
+		warnings = append(warnings, fmt.Sprintf("%d stale open-ended matching events were hidden; pass --include-stale to inspect them", hiddenStaleOpenEndedCount))
+	}
+	if expiredCount > 0 {
+		warnings = append(warnings, fmt.Sprintf("%d expired matching events were hidden", expiredCount))
+	}
+	if futureCount > 0 {
+		warnings = append(warnings, fmt.Sprintf("%d future matching events were hidden", futureCount))
+	}
+	warnings = append(warnings, "source is Open Data Hub PROVINCE_BZ; compare with the official traffic service before presenting this as a complete live road bulletin")
+	return deduped, warnings
+}
+
+func normalizeTrafficEvent(record map[string]any, includeRaw bool, now time.Time) trafficEvent {
+	metadata, _ := record["evmetadata"].(map[string]any)
+	event := trafficEvent{
+		ID:              firstNonEmpty(asString(record["evuuid"]), asString(record["evname"])),
+		SeriesID:        asString(record["evseriesuuid"]),
+		MessageID:       asString(metadata["messageId"]),
+		Source:          "odh",
+		Subtype:         strings.TrimSpace(asString(metadata["subTycodeValue"])),
+		Severity:        firstNonEmpty(asString(metadata["messageGradDescDe"]), asString(metadata["messageGradDescIt"])),
+		ZoneID:          asString(metadata["messageZoneId"]),
+		Zone:            strings.TrimSpace(asString(metadata["messageZoneDescDe"])),
+		ZoneIT:          strings.TrimSpace(asString(metadata["messageZoneDescIt"])),
+		Road:            normalizeRoad(asString(metadata["messageStreetNr"])),
+		RoadName:        strings.TrimSpace(asString(metadata["messageStreetInternetDescDe"])),
+		Place:           cleanTrafficText(asString(metadata["placeDe"])),
+		PlaceIT:         cleanTrafficText(asString(metadata["placeIt"])),
+		Start:           asString(record["evstart"]),
+		End:             asString(record["evend"]),
+		PublishedAt:     firstNonEmpty(asString(metadata["publishDateTime"]), asString(metadata["publisherDateTime"])),
+		TransactionTime: asString(record["evtransactiontime"]),
+		Coordinates:     extractCoordinates(record["evlgeometry"]),
+	}
+	event.Type = classifyTrafficType(event)
+	if includeRaw {
+		event.Raw = record
+	}
+	event.Stale = trafficEventStale(event, now)
+	return event
+}
+
+func writeTrafficOutput(stdout io.Writer, result trafficResult) error {
+	switch result.OutputFormat {
+	case "", "json":
+		return output.WriteJSON(stdout, result)
+	case "table":
+		return writeTrafficTable(stdout, result)
+	case "markdown", "md":
+		return writeTrafficMarkdown(stdout, result)
+	default:
+		return fmt.Errorf("unsupported format %q", result.OutputFormat)
+	}
+}
+
+func normalizeTrafficFormat(value string) (string, error) {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "", "json":
+		return "json", nil
+	case "table":
+		return "table", nil
+	case "markdown", "md":
+		return "markdown", nil
+	default:
+		return "", fmt.Errorf("unsupported format %q", value)
+	}
+}
+
+func writeTrafficTable(stdout io.Writer, result trafficResult) error {
+	tw := tabwriter.NewWriter(stdout, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(tw, "TYPE\tROAD\tPLACE\tTIME\tACTIVE\tSTALE")
+	for _, event := range result.Events {
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%t\t%t\n",
+			event.Type,
+			firstNonEmpty(event.Road, event.RoadName),
+			compactText(firstNonEmpty(event.Place, event.PlaceIT), 90),
+			compactRange(event.Start, event.End),
+			event.Active,
+			event.Stale,
+		)
+	}
+	if err := tw.Flush(); err != nil {
+		return err
+	}
+	for _, warning := range result.Warnings {
+		fmt.Fprintf(stdout, "warning: %s\n", warning)
+	}
+	return nil
+}
+
+func writeTrafficMarkdown(stdout io.Writer, result trafficResult) error {
+	fmt.Fprintln(stdout, "| type | road | place | time | active | stale |")
+	fmt.Fprintln(stdout, "| --- | --- | --- | --- | --- | --- |")
+	for _, event := range result.Events {
+		fmt.Fprintf(stdout, "| %s | %s | %s | %s | %t | %t |\n",
+			escapeMarkdown(event.Type),
+			escapeMarkdown(firstNonEmpty(event.Road, event.RoadName)),
+			escapeMarkdown(compactText(firstNonEmpty(event.Place, event.PlaceIT), 90)),
+			escapeMarkdown(compactRange(event.Start, event.End)),
+			event.Active,
+			event.Stale,
+		)
+	}
+	for _, warning := range result.Warnings {
+		fmt.Fprintf(stdout, "\n> warning: %s\n", warning)
+	}
+	return nil
+}
+
+func trafficAreaMatches(event trafficEvent, area trafficArea) bool {
+	if area.Name == "" {
+		return true
+	}
+	if len(area.ZoneIDs) > 0 && !containsString(area.ZoneIDs, event.ZoneID) {
+		return false
+	}
+	if len(area.Keywords) == 0 {
+		return true
+	}
+	haystack := strings.ToLower(strings.Join([]string{event.Zone, event.ZoneIT, event.Road, event.RoadName, event.Place, event.PlaceIT}, " "))
+	for _, keyword := range area.Keywords {
+		if strings.Contains(haystack, strings.ToLower(keyword)) {
+			return true
+		}
+	}
+	return false
+}
+
+func trafficTypeMatches(event trafficEvent, filter string) bool {
+	filter = normalizeTrafficTypeName(filter)
+	if filter == "" || filter == "all" {
+		return true
+	}
+	if event.Type == filter {
+		return true
+	}
+	if filter == "closure" && strings.Contains(strings.ToLower(event.Place), "sperre") {
+		return true
+	}
+	if filter == "bike" && strings.Contains(strings.ToLower(event.RoadName), "rad") {
+		return true
+	}
+	if filter == "mountain-pass" && textContainsPass(event.RoadName+" "+event.Place) {
+		return true
+	}
+	return false
+}
+
+func trafficRoadMatches(event trafficEvent, road string) bool {
+	road = normalizeRoad(road)
+	if road == "" {
+		return true
+	}
+	filter := compactRoadToken(road)
+	eventRoad := compactRoadToken(event.Road)
+	return strings.EqualFold(event.Road, road) ||
+		(filter != "" && strings.Contains(eventRoad, filter)) ||
+		strings.Contains(strings.ToLower(event.RoadName), strings.ToLower(road))
+}
+
+func trafficNearMatches(event trafficEvent, near, radius string) bool {
+	if strings.TrimSpace(near) == "" {
+		return true
+	}
+	lat, lon, radiusKM, err := parseNearRadius(near, radius)
+	if err != nil || len(event.Coordinates) < 2 {
+		return false
+	}
+	eventLon, eventLat := event.Coordinates[0], event.Coordinates[1]
+	return haversineKM(lat, lon, eventLat, eventLon) <= radiusKM
+}
+
+func eventActiveInRange(event trafficEvent, fromDay, toDay time.Time) bool {
+	start := parseODHTime(event.Start)
+	end := parseODHTime(event.End)
+	rangeStart := startOfDay(fromDay)
+	rangeEnd := endOfDay(toDay)
+	if start != nil && start.After(rangeEnd) {
+		return false
+	}
+	if end != nil && end.Before(rangeStart) {
+		return false
+	}
+	return true
+}
+
+func eventEndBefore(event trafficEvent, fromDay time.Time) bool {
+	end := parseODHTime(event.End)
+	return end != nil && end.Before(startOfDay(fromDay))
+}
+
+func eventHasEnd(event trafficEvent) bool {
+	return parseODHTime(event.End) != nil
+}
+
+func trafficEventStale(event trafficEvent, now time.Time) bool {
+	for _, value := range []string{event.TransactionTime, event.PublishedAt} {
+		parsed := parseODHTime(value)
+		if parsed != nil {
+			return parsed.Before(now.AddDate(0, 0, -30))
+		}
+	}
+	return false
+}
+
+func dedupeTrafficEvents(events []trafficEvent) []trafficEvent {
+	seen := map[string]struct{}{}
+	result := make([]trafficEvent, 0, len(events))
+	for _, event := range events {
+		key := strings.Join([]string{
+			event.ZoneID,
+			event.Road,
+			event.RoadName,
+			normalizeDedupText(event.Place),
+			event.Start,
+			event.End,
+		}, "|")
+		if _, exists := seen[key]; exists {
+			continue
+		}
+		seen[key] = struct{}{}
+		result = append(result, event)
+	}
+	return result
+}
+
+func classifyTrafficType(event trafficEvent) string {
+	subtype := strings.ToUpper(strings.TrimSpace(event.Subtype))
+	combined := strings.ToLower(event.RoadName + " " + event.Place)
+	switch subtype {
+	case "BAUSTELLE":
+		return "roadworks"
+	case "SPERRE":
+		if textContainsPass(combined) {
+			return "mountain-pass"
+		}
+		return "closure"
+	case "RADWEG_SPERRE":
+		return "bike"
+	case "VERANSTALTUNG":
+		return "event"
+	case "RADARKONTROLLE":
+		return "radar"
+	case "STAU", "UNFALL", "SCHNEEFALL", "AMPELREGELUNG", "VORSICHT", "FREI BEFAHRBAR":
+		if textContainsPass(combined) {
+			return "mountain-pass"
+		}
+		return "traffic"
+	default:
+		if strings.Contains(combined, "radroute") || strings.Contains(combined, "radweg") {
+			return "bike"
+		}
+		if textContainsPass(combined) {
+			return "mountain-pass"
+		}
+		return "traffic"
+	}
+}
+
+func normalizeTrafficTypeFilter(value string) (string, error) {
+	normalized := normalizeTrafficTypeName(value)
+	switch normalized {
+	case "", "all", "roadworks", "closure", "event", "traffic", "mountain-pass", "bike", "radar":
+		return normalized, nil
+	default:
+		return "", fmt.Errorf("unsupported traffic type %q", value)
+	}
+}
+
+func normalizeTrafficTypeName(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "", "all", "any":
+		return "all"
+	case "roadwork", "roadworks", "works", "baustelle", "baustellen":
+		return "roadworks"
+	case "closure", "closures", "closed", "sperre", "sperren":
+		return "closure"
+	case "events", "event", "veranstaltung", "veranstaltungen":
+		return "event"
+	case "traffic", "incident", "incidents", "stau", "unfall", "warning":
+		return "traffic"
+	case "mountain-pass", "mountain-pass-closure", "pass", "passes":
+		return "mountain-pass"
+	case "bike", "cycle", "cycling", "radweg":
+		return "bike"
+	case "radar", "speed", "speed-control":
+		return "radar"
+	default:
+		return strings.ToLower(strings.TrimSpace(value))
+	}
+}
+
+func resolveTrafficArea(value string) (trafficArea, error) {
+	normalized := normalizeAreaAlias(value)
+	if normalized == "" || normalized == "all" {
+		return trafficArea{}, nil
+	}
+	areas := map[string]trafficArea{
+		"bozen-unterland":      {Name: "bozen-unterland", ZoneIDs: []string{"3"}},
+		"ueberetsch-unterland": {Name: "ueberetsch-unterland", ZoneIDs: []string{"3"}},
+		"unterland":            {Name: "unterland", ZoneIDs: []string{"3"}, Keywords: []string{"Salurn", "Neumarkt", "Auer", "Montan", "Tramin", "Kurtatsch", "Margreid", "Laag", "Buchholz", "Gfrill"}},
+		"ueberetsch":           {Name: "ueberetsch", ZoneIDs: []string{"3"}, Keywords: []string{"Eppan", "Kaltern", "St. Pauls", "Unterrain", "Girlan", "Missian", "Montiggl", "Laimburg", "Mendel", "Sigmundskron", "Frangart"}},
+		"bozen":                {Name: "bozen", ZoneIDs: []string{"3"}, Keywords: []string{"Bozen", "Bolzano", "Stadtgemeinde Bozen"}},
+		"salurn":               {Name: "salurn", ZoneIDs: []string{"3"}, Keywords: []string{"Salurn"}},
+		"kaltern":              {Name: "kaltern", ZoneIDs: []string{"3"}, Keywords: []string{"Kaltern"}},
+		"tramin":               {Name: "tramin", ZoneIDs: []string{"3"}, Keywords: []string{"Tramin"}},
+		"eppan":                {Name: "eppan", ZoneIDs: []string{"3"}, Keywords: []string{"Eppan", "St. Pauls", "Girlan", "Missian", "Unterrain", "Montiggl", "Frangart"}},
+		"auer":                 {Name: "auer", ZoneIDs: []string{"3"}, Keywords: []string{"Auer"}},
+		"neumarkt":             {Name: "neumarkt", ZoneIDs: []string{"3"}, Keywords: []string{"Neumarkt"}},
+		"kurtatsch":            {Name: "kurtatsch", ZoneIDs: []string{"3"}, Keywords: []string{"Kurtatsch"}},
+		"margreid":             {Name: "margreid", ZoneIDs: []string{"3"}, Keywords: []string{"Margreid"}},
+		"montan":               {Name: "montan", ZoneIDs: []string{"3"}, Keywords: []string{"Montan"}},
+		"burggrafenamt":        {Name: "burggrafenamt", ZoneIDs: []string{"2"}},
+		"eisacktal-wipptal":    {Name: "eisacktal-wipptal", ZoneIDs: []string{"5"}},
+		"pustertal":            {Name: "pustertal", ZoneIDs: []string{"6"}},
+		"vinschgau":            {Name: "vinschgau", ZoneIDs: []string{"1"}},
+		"salten-schlern":       {Name: "salten-schlern", ZoneIDs: []string{"4"}},
+		"ausserhalb-suedtirol": {Name: "ausserhalb-suedtirol", ZoneIDs: []string{"7"}},
+	}
+	area, ok := areas[normalized]
+	if !ok {
+		return trafficArea{}, fmt.Errorf("unknown traffic area %q", value)
+	}
+	return area, nil
+}
+
+func parseTrafficDateRange(from, to string) (time.Time, time.Time, error) {
+	fromDay, err := parseTrafficDate(from)
+	if err != nil {
+		return time.Time{}, time.Time{}, err
+	}
+	toDay, err := parseTrafficDate(to)
+	if err != nil {
+		return time.Time{}, time.Time{}, err
+	}
+	if toDay.Before(fromDay) {
+		return time.Time{}, time.Time{}, fmt.Errorf("--to must not be before --from")
+	}
+	return fromDay, toDay, nil
+}
+
+func parseTrafficDate(value string) (time.Time, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return time.Time{}, fmt.Errorf("date is required")
+	}
+	parsed, err := time.ParseInLocation("2006-01-02", value, time.Local)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("invalid date %q; use YYYY-MM-DD", value)
+	}
+	return parsed, nil
+}
+
+func parseNearRadius(near, radius string) (float64, float64, float64, error) {
+	latText, lonText, ok := strings.Cut(strings.TrimSpace(near), ",")
+	if !ok {
+		return 0, 0, 0, fmt.Errorf("--near must use lat,lon")
+	}
+	lat, err := strconv.ParseFloat(strings.TrimSpace(latText), 64)
+	if err != nil {
+		return 0, 0, 0, fmt.Errorf("invalid latitude in --near: %w", err)
+	}
+	lon, err := strconv.ParseFloat(strings.TrimSpace(lonText), 64)
+	if err != nil {
+		return 0, 0, 0, fmt.Errorf("invalid longitude in --near: %w", err)
+	}
+	radiusKM, err := parseRadiusKM(radius)
+	if err != nil {
+		return 0, 0, 0, err
+	}
+	return lat, lon, radiusKM, nil
+}
+
+func parseRadiusKM(value string) (float64, error) {
+	value = strings.TrimSpace(strings.ToLower(value))
+	value = strings.TrimSuffix(value, "km")
+	parsed, err := strconv.ParseFloat(strings.TrimSpace(value), 64)
+	if err != nil {
+		return 0, fmt.Errorf("invalid radius %q", value)
+	}
+	if parsed <= 0 {
+		return 0, fmt.Errorf("radius must be greater than zero")
+	}
+	return parsed, nil
+}
+
+func extractCoordinates(value any) []float64 {
+	geometry, _ := value.(map[string]any)
+	coordinates, _ := geometry["coordinates"].([]any)
+	if len(coordinates) < 2 {
+		return nil
+	}
+	lon, lonOK := numberValue(coordinates[0])
+	lat, latOK := numberValue(coordinates[1])
+	if !lonOK || !latOK {
+		return nil
+	}
+	return []float64{lon, lat}
+}
+
+func numberValue(value any) (float64, bool) {
+	switch typed := value.(type) {
+	case float64:
+		return typed, true
+	case int:
+		return float64(typed), true
+	case string:
+		parsed, err := strconv.ParseFloat(typed, 64)
+		return parsed, err == nil
+	default:
+		return 0, false
+	}
+}
+
+func haversineKM(lat1, lon1, lat2, lon2 float64) float64 {
+	const earthRadiusKM = 6371.0
+	toRad := func(deg float64) float64 { return deg * math.Pi / 180 }
+	dLat := toRad(lat2 - lat1)
+	dLon := toRad(lon2 - lon1)
+	a := math.Sin(dLat/2)*math.Sin(dLat/2) +
+		math.Cos(toRad(lat1))*math.Cos(toRad(lat2))*math.Sin(dLon/2)*math.Sin(dLon/2)
+	return earthRadiusKM * 2 * math.Atan2(math.Sqrt(a), math.Sqrt(1-a))
+}
+
+func startOfDay(value time.Time) time.Time {
+	year, month, day := value.Date()
+	return time.Date(year, month, day, 0, 0, 0, 0, value.Location())
+}
+
+func endOfDay(value time.Time) time.Time {
+	return startOfDay(value).Add(24*time.Hour - time.Nanosecond)
+}
+
+func normalizeRoad(value string) string {
+	value = strings.ToUpper(strings.TrimSpace(value))
+	value = strings.Join(strings.Fields(value), " ")
+	value = strings.ReplaceAll(value, "LS / SP", "LS/SP")
+	value = strings.ReplaceAll(value, "LS/ SP", "LS/SP")
+	value = strings.ReplaceAll(value, "LS /SP", "LS/SP")
+	return value
+}
+
+func compactRoadToken(value string) string {
+	value = normalizeRoad(value)
+	replacer := strings.NewReplacer(" ", "", "/", "", "-", "")
+	return replacer.Replace(value)
+}
+
+func normalizeAreaAlias(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	replacements := map[string]string{
+		"ü": "ue",
+		"ö": "oe",
+		"ä": "ae",
+		"ß": "ss",
+		"_": "-",
+		" ": "-",
+	}
+	for old, newValue := range replacements {
+		value = strings.ReplaceAll(value, old, newValue)
+	}
+	value = strings.Trim(value, "-")
+	return value
+}
+
+func cleanTrafficText(value string) string {
+	value = strings.ReplaceAll(value, "\\n", "\n")
+	value = strings.ReplaceAll(value, "\r", "\n")
+	value = strings.Join(strings.Fields(value), " ")
+	return strings.TrimSpace(value)
+}
+
+func compactText(value string, max int) string {
+	value = cleanTrafficText(value)
+	if max <= 0 || len(value) <= max {
+		return value
+	}
+	if max <= 3 {
+		return value[:max]
+	}
+	return value[:max-3] + "..."
+}
+
+func compactRange(start, end string) string {
+	start = compactDate(start)
+	end = compactDate(end)
+	if start == "" {
+		return end
+	}
+	if end == "" || end == start {
+		return start
+	}
+	return start + " - " + end
+}
+
+func compactDate(value string) string {
+	parsed := parseODHTime(value)
+	if parsed == nil {
+		return strings.TrimSpace(value)
+	}
+	return parsed.Format("2006-01-02")
+}
+
+func normalizeDedupText(value string) string {
+	value = strings.ToLower(cleanTrafficText(value))
+	return strings.Join(strings.Fields(value), " ")
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
+}
+
+func containsString(values []string, needle string) bool {
+	for _, value := range values {
+		if value == needle {
+			return true
+		}
+	}
+	return false
+}
+
+func textContainsPass(value string) bool {
+	value = strings.ToLower(value)
+	return strings.Contains(value, "pass") || strings.Contains(value, "joch")
+}
+
+func escapeMarkdown(value string) string {
+	value = strings.ReplaceAll(value, "|", "\\|")
+	value = strings.ReplaceAll(value, "\n", " ")
+	return value
+}

@@ -8,7 +8,7 @@ SPDX-License-Identifier: CC0-1.0
 
 `odh` is an unofficial JSON-first command-line interface for public Open Data Hub APIs.
 
-It is built for developers, scripts, demos, and AI agents that need stable command behavior instead of scraping web UI pages. It wraps known Open Data Hub API entrypoints, fetches OpenAPI specs, and provides small curated commands for common Tourism and Mobility API calls.
+It is built for developers, scripts, demos, and AI agents that need stable command behavior instead of scraping web UI pages. It wraps known Open Data Hub API entrypoints, fetches OpenAPI specs, and provides small curated commands for common Tourism and Mobility API calls, including an opinionated traffic layer over Open Data Hub `PROVINCE_BZ` events.
 
 ## Disclaimer
 
@@ -38,6 +38,7 @@ This is an early v0.1 project. It intentionally focuses on a small working core:
 - list Mobility stations for a station type,
 - summarize Mobility data types for a station type and origin,
 - query latest Mobility time-series measurements,
+- summarize South Tyrol roadworks, closures, events, and traffic notices from Open Data Hub `PROVINCE_BZ` with area aliases, date filtering, deduplication, and stale-record warnings,
 - inspect A22 Mobility event and forecast feeds with explicit warnings when the data does not look like current traffic incidents.
 
 It does not yet include MCP, generated clients, Homebrew packaging, Docker images, a full upstream metadata catalog, or authenticated write flows.
@@ -55,7 +56,7 @@ The installer detects macOS/Linux and `amd64`/`arm64`, downloads the matching re
 Install a specific version or directory:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/galjos/odh-cli/main/scripts/install.sh | sh -s -- --version v0.1.2 --dir "$HOME/bin"
+curl -fsSL https://raw.githubusercontent.com/galjos/odh-cli/main/scripts/install.sh | sh -s -- --version v0.1.3 --dir "$HOME/bin"
 ```
 
 Build from source instead:
@@ -74,7 +75,7 @@ Build with release metadata:
 
 ```bash
 go build \
-  -ldflags "-X github.com/galjos/odh-cli/internal/version.Version=0.1.2 -X github.com/galjos/odh-cli/internal/version.Commit=$(git rev-parse --short HEAD) -X github.com/galjos/odh-cli/internal/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  -ldflags "-X github.com/galjos/odh-cli/internal/version.Version=0.1.3 -X github.com/galjos/odh-cli/internal/version.Commit=$(git rev-parse --short HEAD) -X github.com/galjos/odh-cli/internal/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   -o odh ./cmd/odh
 ```
 
@@ -147,6 +148,13 @@ Discover Mobility event origins:
 odh mobility types --kind event
 ```
 
+Summarize roadworks and closures for a South Tyrol traffic area:
+
+```bash
+odh traffic today --area ueberetsch-unterland --type roadworks --format table
+odh traffic events --area bozen-unterland --from 2026-05-16 --to 2026-05-16 --format json
+```
+
 List Mobility parking stations:
 
 ```bash
@@ -174,6 +182,7 @@ odh a22 status --limit 10
 
 - stdout is machine-readable output,
 - JSON is the default output for data commands,
+- `odh traffic` defaults to table output for human road-event summaries; pass `--json` for agent parsing,
 - stderr is for diagnostics,
 - failures return nonzero exit codes,
 - commands are non-interactive,

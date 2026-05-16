@@ -36,7 +36,7 @@ Example output with `--network=false`:
 {
   "ok": true,
   "version": {
-    "version": "0.1.2-dev",
+    "version": "0.1.3-dev",
     "commit": "unknown",
     "date": "unknown",
     "goos": "darwin",
@@ -46,7 +46,7 @@ Example output with `--network=false`:
     {
       "name": "version",
       "ok": true,
-      "message": "0.1.2-dev"
+      "message": "0.1.3-dev"
     },
     {
       "name": "api_registry",
@@ -291,6 +291,50 @@ Flags:
 - `--representation value` - default `flat`.
 - `--limit n` - maximum events to request; default `20`.
 - `--param key=value` - additional query parameter. Repeatable.
+
+## `odh traffic today`
+
+Opinionated wrapper for current South Tyrol traffic events from Open Data Hub Mobility `PROVINCE_BZ`.
+
+```bash
+odh traffic today --area ueberetsch-unterland --type roadworks --format table
+odh traffic today --area unterland --type closure --format markdown
+odh traffic today --near 46.42,11.25 --radius 15km
+odh traffic today --area bozen-unterland --json
+```
+
+The command filters to today, collapses duplicate event rows, hides expired and future items by default, and emits warnings when upstream timestamps look stale. Table output is the default for direct answers; use `--json` or `--format json` when an agent needs structured output. `odh traffic` intentionally stays on Open Data Hub data; if a human-facing traffic bulletin is required, compare the result with the official traffic service outside this CLI and mention the source used.
+
+Flags:
+
+- `--source odh` - traffic source; `odh` is the only supported source.
+- `--area value` - area alias such as `ueberetsch-unterland`, `bozen-unterland`, `unterland`, `ueberetsch`, `salurn`, `kaltern`, `tramin`, `eppan`, `auer`, `neumarkt`, `kurtatsch`, `margreid`, or `montan`.
+- `--type all|roadworks|closure|event|traffic|mountain-pass|bike|radar` - category filter; default `all`.
+- `--road value` - road filter, for example `SP13`, `LS/SP 13`, or `SS42`.
+- `--near lat,lon` - coordinate filter.
+- `--radius value` - radius for `--near`; default `15km`.
+- `--format json|table|markdown` - output format; default `table`.
+- `--json` - shortcut for `--format json`.
+- `--limit n` - maximum raw rows requested from Open Data Hub before local filtering; default `1000`.
+- `--raw` - include raw upstream event objects in JSON output.
+- `--include-expired` - include events outside the selected date range.
+- `--include-stale` - include stale open-ended events hidden by default.
+
+## `odh traffic events`
+
+Date-range variant of the traffic wrapper.
+
+```bash
+odh traffic events --area bozen-unterland --from 2026-05-16 --to 2026-05-16
+odh traffic events --area ueberetsch --from 2026-05-16 --to 2026-05-17 --type roadworks --road SP13
+```
+
+If both `--from` and `--to` are omitted, the command uses today's date. If only one side is supplied, it uses the same date for both sides.
+
+Additional flags:
+
+- `--from YYYY-MM-DD` - start date.
+- `--to YYYY-MM-DD` - end date.
 
 ## `odh a22 status`
 

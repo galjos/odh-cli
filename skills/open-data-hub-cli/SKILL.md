@@ -13,7 +13,7 @@ metadata:
             {
               "id": "go",
               "kind": "go",
-              "module": "github.com/galjos/odh-cli/cmd/odh@v0.1.2",
+              "module": "github.com/galjos/odh-cli/cmd/odh@v0.1.3",
               "bins": ["odh"],
               "label": "Install odh CLI (go)",
             },
@@ -109,6 +109,17 @@ odh mobility stations --station-type ParkingStation --limit 5
 odh mobility datatypes --station-type TrafficSensor --origin A22 --limit 100
 ```
 
+South Tyrol traffic events, roadworks, closures, and road events:
+
+```bash
+odh traffic today --area ueberetsch-unterland --type roadworks --format table
+odh traffic events --area unterland --from 2026-05-16 --to 2026-05-16 --type closure --json
+odh traffic today --near 46.42,11.25 --radius 15km --format json
+odh traffic today --area bozen-unterland --json
+```
+
+Prefer these commands over raw `odh mobility events --origin PROVINCE_BZ` when a user asks for roadworks, roadblocks, closures, or traffic events in areas such as Unterland, Ueberetsch, Bozen-Unterland, Salurn, Kaltern, Tramin, Eppan, Auer, Neumarkt, Kurtatsch, Margreid, or Montan. Traffic commands query Open Data Hub `PROVINCE_BZ`, default to table output, and support `--json` for structured parsing. The traffic layer filters by date, maps upstream categories to stable names, deduplicates repeated event rows, hides stale open-ended records by default, and warns about stale or date-mismatched records. If the user needs an exact official public traffic bulletin, compare with the official traffic service outside this CLI and state the source used.
+
 A22 traffic diagnostics:
 
 ```bash
@@ -118,12 +129,13 @@ odh a22 status --limit 10
 
 ## Interpretation Rules
 
-- Parse stdout as JSON.
+- Parse stdout as JSON for data commands; add `--json` before parsing `odh traffic` output.
 - Treat nonzero exit codes as failures.
 - Treat stderr as diagnostics, not data.
 - Prefer `odh` and official OpenAPI specs over scraping Open Data Hub web pages.
 - Treat South Tyrol as the common regional context, not as a universal record-level guarantee.
 - Verify location-sensitive answers from coordinates, origins, and metadata in the JSON.
+- For roadworks and closures, prefer `odh traffic today` or `odh traffic events` before falling back to raw Mobility events.
 - Do not infer live A22 traffic from `TrafficForecast` rows alone.
 - Prefer `odh a22 status` for A22 because it reports current-event availability and warns when forecast rows are not current incident data.
 - Use `--where` and `--param key=value` instead of manually constructing query strings when a curated command supports them.

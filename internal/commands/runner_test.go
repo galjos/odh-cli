@@ -62,6 +62,19 @@ func TestRunDatasetsSearchFindsParking(t *testing.T) {
 	}
 }
 
+func TestRunDatasetsSearchFindsTrafficEvents(t *testing.T) {
+	runner := newTestRunner(t, nil)
+	var stdout, stderr bytes.Buffer
+	code := runner.Run(context.Background(), []string{"datasets", "search", "roadworks"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("Run exit = %d, stderr = %s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), `"id": "mobility.traffic-events"`) ||
+		!strings.Contains(stdout.String(), "odh traffic today --area ueberetsch-unterland") {
+		t.Fatalf("unexpected stdout: %s", stdout.String())
+	}
+}
+
 func TestRunDatasetsListSupportsDomainAndTable(t *testing.T) {
 	runner := newTestRunner(t, nil)
 	var stdout, stderr bytes.Buffer
@@ -383,6 +396,275 @@ func TestRunMobilityEventsWrapsEmptyA22Events(t *testing.T) {
 	}
 }
 
+func TestRunTrafficEventsFiltersAreaTypeRoadAndDedupes(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v2/flat,event/PROVINCE_BZ/2026-05-16/2026-05-16" {
+			t.Fatalf("unexpected path %q", r.URL.Path)
+		}
+		if got := r.URL.Query().Get("limit"); got != "5" {
+			t.Fatalf("unexpected limit %q", got)
+		}
+		_, _ = w.Write([]byte(`{"data":[
+			{
+				"evuuid":"sp13-1",
+				"evseriesuuid":"series-sp13",
+				"evstart":"2026-05-16 00:00:00.000+0200",
+				"evend":"2026-05-16 23:59:00.000+0200",
+				"evtransactiontime":"2026-05-16 08:00:00.000+0200",
+				"evmetadata":{
+					"messageId":"m-sp13-1",
+					"messageZoneId":"3",
+					"messageZoneDescDe":"Bozen-Unterland",
+					"messageZoneDescIt":"Bolzano-Bassa Atesina",
+					"messageStreetNr":"LS/SP 13",
+					"messageStreetInternetDescDe":"St. Pauls-Unterrain",
+					"subTycodeValue":"BAUSTELLE",
+					"messageGradDescDe":"Behinderung",
+					"placeDe":"zwischen St. Pauls und Unterrain",
+					"placeIt":"tra San Paolo e Riva di Sotto"
+				},
+				"evlgeometry":{"coordinates":[11.25,46.42]}
+			},
+			{
+				"evuuid":"sp13-duplicate",
+				"evseriesuuid":"series-sp13-duplicate",
+				"evstart":"2026-05-16 00:00:00.000+0200",
+				"evend":"2026-05-16 23:59:00.000+0200",
+				"evtransactiontime":"2026-05-16 08:01:00.000+0200",
+				"evmetadata":{
+					"messageId":"m-sp13-2",
+					"messageZoneId":"3",
+					"messageZoneDescDe":"Bozen-Unterland",
+					"messageStreetNr":"LS/SP 13",
+					"messageStreetInternetDescDe":"St. Pauls-Unterrain",
+					"subTycodeValue":"BAUSTELLE",
+					"placeDe":"zwischen St. Pauls und Unterrain"
+				},
+				"evlgeometry":{"coordinates":[11.25,46.42]}
+			},
+			{
+				"evuuid":"sp16",
+				"evstart":"2026-05-16 00:00:00.000+0200",
+				"evend":"2026-05-16 23:59:00.000+0200",
+				"evmetadata":{
+					"messageZoneId":"3",
+					"messageZoneDescDe":"Bozen-Unterland",
+					"messageStreetNr":"LS/SP 16",
+					"messageStreetInternetDescDe":"Autobahn-Tramin",
+					"subTycodeValue":"SPERRE",
+					"placeDe":"bei Tramin"
+				}
+			},
+			{
+				"evuuid":"zone4",
+				"evstart":"2026-05-16 00:00:00.000+0200",
+				"evend":"2026-05-16 23:59:00.000+0200",
+				"evmetadata":{
+					"messageZoneId":"4",
+					"messageZoneDescDe":"Salten-Schlern",
+					"messageStreetNr":"LS/SP 13",
+					"subTycodeValue":"BAUSTELLE",
+					"placeDe":"anderer Bezirk"
+				}
+			}
+		]}`))
+	}))
+	defer server.Close()
+
+	runner := newTestRunner(t, []apis.API{{Name: "mobility", BaseURL: server.URL, Public: true}})
+	var stdout, stderr bytes.Buffer
+	code := runner.Run(context.Background(), []string{
+		"traffic", "events",
+		"--source", "odh",
+		"--from", "2026-05-16",
+		"--to", "2026-05-16",
+		"--area", "ueberetsch-unterland",
+		"--type", "roadworks",
+		"--road", "SP13",
+		"--limit", "5",
+		"--json",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("Run exit = %d, stderr = %s", code, stderr.String())
+	}
+	var decoded struct {
+		Count    int `json:"count"`
+		RawCount int `json:"raw_count"`
+		Events   []struct {
+			Type   string `json:"type"`
+			Road   string `json:"road"`
+			Place  string `json:"place"`
+			Active bool   `json:"active"`
+		} `json:"events"`
+		Warnings []string `json:"warnings"`
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &decoded); err != nil {
+		t.Fatalf("invalid JSON: %v\n%s", err, stdout.String())
+	}
+	if decoded.RawCount != 4 || decoded.Count != 1 || len(decoded.Events) != 1 {
+		t.Fatalf("unexpected decoded output: %#v", decoded)
+	}
+	if got := decoded.Events[0]; got.Type != "roadworks" || got.Road != "LS/SP 13" || !got.Active || !strings.Contains(got.Place, "St. Pauls") {
+		t.Fatalf("unexpected event: %#v", got)
+	}
+	if !containsWarning(decoded.Warnings, "deduplicated 2 raw matching rows to 1 events") {
+		t.Fatalf("expected dedupe warning, got %#v", decoded.Warnings)
+	}
+}
+
+func TestRunTrafficEventsHidesStaleOpenEndedRows(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v2/flat,event/PROVINCE_BZ/2026-05-16/2026-05-16" {
+			t.Fatalf("unexpected path %q", r.URL.Path)
+		}
+		_, _ = w.Write([]byte(`{"data":[
+			{
+				"evuuid":"stale-open-ended",
+				"evstart":"2025-01-01 00:00:00.000+0100",
+				"evtransactiontime":"2025-01-01 08:00:00.000+0100",
+				"evmetadata":{
+					"messageZoneId":"3",
+					"messageZoneDescDe":"Bozen-Unterland",
+					"messageStreetNr":"LS/SP 13",
+					"subTycodeValue":"BAUSTELLE",
+					"placeDe":"old open-ended event"
+				}
+			},
+			{
+				"evuuid":"long-running",
+				"evstart":"2025-10-13 00:00:00.000+0200",
+				"evend":"2026-05-30 23:59:00.000+0200",
+				"evtransactiontime":"2025-10-13 08:00:00.000+0200",
+				"evmetadata":{
+					"messageZoneId":"3",
+					"messageZoneDescDe":"Bozen-Unterland",
+					"messageStreetNr":"LS/SP 13",
+					"subTycodeValue":"BAUSTELLE",
+					"placeDe":"long-running event with an explicit end"
+				}
+			}
+		]}`))
+	}))
+	defer server.Close()
+
+	runner := newTestRunner(t, []apis.API{{Name: "mobility", BaseURL: server.URL, Public: true}})
+	var stdout, stderr bytes.Buffer
+	code := runner.Run(context.Background(), []string{
+		"traffic", "events",
+		"--source", "odh",
+		"--from", "2026-05-16",
+		"--to", "2026-05-16",
+		"--area", "bozen-unterland",
+		"--type", "roadworks",
+		"--json",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("Run exit = %d, stderr = %s", code, stderr.String())
+	}
+	var decoded struct {
+		Count  int `json:"count"`
+		Events []struct {
+			ID    string `json:"id"`
+			Stale bool   `json:"stale"`
+		} `json:"events"`
+		Warnings []string `json:"warnings"`
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &decoded); err != nil {
+		t.Fatalf("invalid JSON: %v\n%s", err, stdout.String())
+	}
+	if decoded.Count != 1 || len(decoded.Events) != 1 || decoded.Events[0].ID != "long-running" || !decoded.Events[0].Stale {
+		t.Fatalf("unexpected decoded output: %#v", decoded)
+	}
+	if !containsWarning(decoded.Warnings, "1 stale open-ended matching events were hidden") {
+		t.Fatalf("expected hidden stale warning, got %#v", decoded.Warnings)
+	}
+}
+
+func TestRunTrafficEventsSupportsNearFilterAndTableOutput(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v2/flat,event/PROVINCE_BZ/2026-05-16/2026-05-16" {
+			t.Fatalf("unexpected path %q", r.URL.Path)
+		}
+		_, _ = w.Write([]byte(`{"data":[
+			{
+				"evuuid":"near",
+				"evstart":"2026-05-16 00:00:00.000+0200",
+				"evend":"2026-05-16 23:59:00.000+0200",
+				"evmetadata":{
+					"messageZoneId":"3",
+					"messageZoneDescDe":"Bozen-Unterland",
+					"messageStreetNr":"LS/SP 13",
+					"messageStreetInternetDescDe":"St. Pauls-Unterrain",
+					"subTycodeValue":"BAUSTELLE",
+					"placeDe":"bei St. Pauls"
+				},
+				"evlgeometry":{"coordinates":[11.25,46.42]}
+			},
+			{
+				"evuuid":"far",
+				"evstart":"2026-05-16 00:00:00.000+0200",
+				"evend":"2026-05-16 23:59:00.000+0200",
+				"evmetadata":{
+					"messageZoneId":"3",
+					"messageZoneDescDe":"Bozen-Unterland",
+					"messageStreetNr":"LS/SP 13",
+					"messageStreetInternetDescDe":"St. Pauls-Unterrain",
+					"subTycodeValue":"BAUSTELLE",
+					"placeDe":"far away"
+				},
+				"evlgeometry":{"coordinates":[12.00,47.00]}
+			}
+		]}`))
+	}))
+	defer server.Close()
+
+	runner := newTestRunner(t, []apis.API{{Name: "mobility", BaseURL: server.URL, Public: true}})
+	var stdout, stderr bytes.Buffer
+	code := runner.Run(context.Background(), []string{
+		"traffic", "events",
+		"--source", "odh",
+		"--from", "2026-05-16",
+		"--to", "2026-05-16",
+		"--near", "46.42,11.25",
+		"--radius", "2km",
+		"--format", "table",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("Run exit = %d, stderr = %s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "TYPE") ||
+		!strings.Contains(stdout.String(), "ROAD") ||
+		!strings.Contains(stdout.String(), "roadworks") ||
+		!strings.Contains(stdout.String(), "LS/SP 13") ||
+		strings.Contains(stdout.String(), "far away") {
+		t.Fatalf("unexpected stdout: %s", stdout.String())
+	}
+}
+
+func TestRunTrafficEventsRejectsUnknownSource(t *testing.T) {
+	runner := newTestRunner(t, []apis.API{{Name: "mobility", BaseURL: "https://example.com", Public: true}})
+	var stdout, stderr bytes.Buffer
+	code := runner.Run(context.Background(), []string{"traffic", "events", "--source", "unknown"}, &stdout, &stderr)
+	if code != 2 {
+		t.Fatalf("Run exit = %d, want 2", code)
+	}
+	if !strings.Contains(stderr.String(), "unsupported traffic source") {
+		t.Fatalf("unexpected stderr: %s", stderr.String())
+	}
+}
+
+func TestRunTrafficEventsRejectsUnknownFormat(t *testing.T) {
+	runner := newTestRunner(t, []apis.API{{Name: "mobility", BaseURL: "https://example.com", Public: true}})
+	var stdout, stderr bytes.Buffer
+	code := runner.Run(context.Background(), []string{"traffic", "events", "--format", "csv"}, &stdout, &stderr)
+	if code != 2 {
+		t.Fatalf("Run exit = %d, want 2", code)
+	}
+	if !strings.Contains(stderr.String(), "unsupported format") {
+		t.Fatalf("unexpected stderr: %s", stderr.String())
+	}
+}
+
 func TestRunA22StatusWarnsOnEmptyEventsAndFutureForecast(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -406,6 +688,15 @@ func TestRunA22StatusWarnsOnEmptyEventsAndFutureForecast(t *testing.T) {
 		!strings.Contains(stdout.String(), "future valid_time") {
 		t.Fatalf("expected warnings, got: %s", stdout.String())
 	}
+}
+
+func containsWarning(warnings []string, needle string) bool {
+	for _, warning := range warnings {
+		if strings.Contains(warning, needle) {
+			return true
+		}
+	}
+	return false
 }
 
 func newTestRunner(t *testing.T, entries []apis.API) *Runner {

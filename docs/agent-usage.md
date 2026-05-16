@@ -14,7 +14,7 @@ SPDX-License-Identifier: CC0-1.0
 - Use stderr for diagnostics.
 - Return nonzero exit codes on errors.
 - Do not prompt interactively.
-- Emit JSON by default.
+- Emit JSON by default, except `odh traffic` which defaults to table output and supports `--json`.
 - Keep examples public and unauthenticated.
 
 This means agents can call `odh`, parse stdout as JSON, and treat stderr plus exit code as failure context.
@@ -33,6 +33,9 @@ odh mobility types --kind event
 odh mobility stations --station-type ParkingStation --limit 5
 odh mobility datatypes --station-type TrafficSensor --origin A22 --limit 100
 odh mobility events --origin A22 --latest --limit 20
+odh traffic today --area ueberetsch-unterland --type roadworks --format table
+odh traffic events --area bozen-unterland --from 2026-05-16 --to 2026-05-16 --json
+odh traffic today --near 46.42,11.25 --radius 15km --json
 odh mobility latest --station-type EChargingStation --data-type number-available --limit 5
 odh a22 status --limit 10
 ```
@@ -76,7 +79,19 @@ Agents should treat exit code `2` as a usage bug in the invocation and exit code
 
 ## Traffic Data Caveat
 
-Open Data Hub Mobility feeds can expose different traffic concepts as station measurements, events, and forecasts. Agents should not infer live A22 traffic solely from `TrafficForecast` rows. Prefer `odh a22 status` when checking A22 because it reports current-event availability and warns when forecast timestamps indicate non-current data.
+Open Data Hub Mobility feeds can expose different traffic concepts as station measurements, events, and forecasts. For South Tyrol roadworks, closures, road events, and traffic restrictions, prefer the opinionated traffic layer:
+
+```bash
+odh traffic today --area ueberetsch-unterland --type roadworks --format table
+odh traffic events --area unterland --from 2026-05-16 --to 2026-05-16 --type closure --json
+odh traffic today --near 46.42,11.25 --radius 15km
+```
+
+Traffic commands query Open Data Hub `PROVINCE_BZ` events and default to table output. Use `--json` or `--format json` for downstream parsing and `--format table` or `--format markdown` for direct human answers. The traffic layer deduplicates rows, maps German/Italian event categories to stable English category names, filters expired/future rows by date, hides stale open-ended records by default, and warns when timestamps look stale.
+
+If a user needs an exact public traffic bulletin, compare the Open Data Hub result with the official traffic service outside this CLI and state both the source and timestamp used. Do not imply that `odh traffic` silently switched to another upstream feed.
+
+Agents should not infer live A22 traffic solely from `TrafficForecast` rows. Prefer `odh a22 status` when checking A22 because it reports current-event availability and warns when forecast timestamps indicate non-current data.
 
 If the user asks for current traffic conditions, report the timestamp and feed type used. If Open Data Hub has no current A22 event rows, say that directly instead of converting forecast rows into live incidents.
 

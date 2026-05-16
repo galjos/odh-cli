@@ -16,7 +16,7 @@ usage() {
 Install odh from GitHub Releases.
 
 Usage:
-  scripts/install.sh [--version v0.1.2] [--dir ~/.local/bin] [--repo owner/repo]
+  scripts/install.sh [--version v0.1.3] [--dir ~/.local/bin] [--repo owner/repo]
 
 Environment:
   ODH_VERSION      Release tag to install, or "latest" (default: latest)
