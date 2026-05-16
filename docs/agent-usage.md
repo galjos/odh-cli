@@ -33,6 +33,12 @@ odh mobility types --kind event
 odh mobility stations --station-type ParkingStation --limit 5
 odh mobility datatypes --station-type TrafficSensor --origin A22 --limit 100
 odh mobility events --origin A22 --latest --limit 20
+odh gtfs datasets
+odh gtfs realtime --dataset sta-time-tables --feed trip-updates --limit 5
+odh transit stops search auer
+odh transit departures --stop "Ora, Stazione di Ora" --date 2026-05-16 --around 14:05
+odh transit trip --from auer --to brenner --date 2026-05-16 --time 14:05 --mode train
+odh transit delay-stats --from auer --to brenner --time 14:05 --weekday saturday
 odh traffic today --area ueberetsch-unterland --type roadworks --format table
 odh traffic events --area bozen-unterland --from 2026-05-16 --to 2026-05-16 --json
 odh traffic today --near 46.42,11.25 --radius 15km --json
@@ -70,6 +76,31 @@ odh tourism types --dataset event
 odh mobility types --kind station
 odh mobility stations --station-type ParkingStation --limit 5
 ```
+
+## Public Transport And Delay Questions
+
+For public-transport timetable or live-feed questions, prefer the GTFS and transit commands before raw API calls:
+
+```bash
+odh datasets search train
+odh gtfs datasets
+odh gtfs realtime --dataset sta-time-tables --feed trip-updates --limit 5
+odh transit stops search auer
+odh transit departures --stop "Ora, Stazione di Ora" --date 2026-05-16 --around 14:05 --mode train
+odh transit trip --from auer --to brenner --date 2026-05-16 --time 14:05 --mode train
+```
+
+The transit layer reads the static STA GTFS archive and caches it locally for 24 hours. Stop search supports common German/Italian aliases such as `auer` / `ora`, `brenner` / `brennero`, and `bozen` / `bolzano`.
+
+`odh transit trip` only finds direct static GTFS trip matches. It does not perform full connection planning or transfer routing. If the user asks for a multi-leg journey, report that limitation and use the returned stop matches plus GTFS-RT feed as supporting data, not as a full journey planner.
+
+For historical delay probability or "usual delay minutes", use:
+
+```bash
+odh transit delay-stats --from auer --to brenner --time 14:05 --weekday saturday
+```
+
+This currently returns `supported: false`. That is intentional: the public live GTFS-RT feed can describe current trip updates, but probability needs archived snapshots over time. Do not infer historical probabilities from a single live feed response.
 
 ## Handling Failures
 

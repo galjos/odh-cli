@@ -199,6 +199,22 @@ func datasetCatalog() []datasetEntry {
 			Keywords:  []string{"station", "stations", "types", "origins"},
 		},
 		{
+			ID:          "gtfs.transit",
+			Domain:      "mobility",
+			API:         "gtfs",
+			Title:       "Public transport GTFS and realtime feeds",
+			Description: "Static GTFS datasets, STA train and bus timetables, GTFS-RT trip updates, vehicle positions, and service alerts.",
+			Commands: []string{
+				"odh gtfs datasets",
+				"odh gtfs realtime --dataset sta-time-tables --feed trip-updates --limit 5",
+				"odh transit stops search auer",
+				"odh transit departures --stop \"Ora, Stazione di Ora\" --date 2026-05-16 --around 14:05",
+				"odh transit trip --from auer --to brenner --date 2026-05-16 --time 14:05 --mode train",
+			},
+			Endpoints: []string{"/v1/dataset", "/v1/dataset/{datasetId}/raw", "/v1/realtime/{datasetId}/{feedType}"},
+			Keywords:  []string{"gtfs", "gtfs-rt", "transit", "public transport", "train", "trains", "bus", "delay", "delays", "trip updates", "sta", "timetable", "schedule", "connection"},
+		},
+		{
 			ID:          "mobility.parking",
 			Domain:      "mobility",
 			API:         "mobility",

@@ -78,8 +78,9 @@ func DefaultRegistry() *Registry {
 		{
 			Name:        "gtfs",
 			Title:       "Open Data Hub GTFS API",
-			Description: "Public transport GTFS access surface.",
+			Description: "Public transport GTFS static datasets and GTFS-RT realtime feeds.",
 			BaseURL:     "https://gtfs.api.opendatahub.com",
+			OpenAPIURL:  "https://gtfs.api.opendatahub.com/v1/apispec",
 			DocsURL:     "https://opendatahub.com/api/",
 			Public:      true,
 		},
@@ -96,6 +97,7 @@ func DefaultRegistry() *Registry {
 			Title:       "Open Data Hub Transmodel API",
 			Description: "Transmodel wrapper APIs for NeTEx and SIRI related data.",
 			BaseURL:     "https://transmodel.api.opendatahub.com",
+			OpenAPIURL:  "https://transmodel.api.opendatahub.com/apispec",
 			DocsURL:     "https://opendatahub.com/api/",
 			Public:      true,
 		},

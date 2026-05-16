@@ -33,6 +33,11 @@ Usage:
   odh call <api> <path> [--param key=value ...]
   odh tourism poi [--limit n] [--seed value] [--fields fields]
   odh tourism types [--dataset poi|event|event-topic|accommodation|article|venue|tag]
+  odh gtfs datasets
+  odh gtfs realtime --dataset sta-time-tables --feed trip-updates
+  odh transit stops search <query>
+  odh transit departures --stop query --date YYYY-MM-DD --around HH:MM
+  odh transit trip --from query --to query --date YYYY-MM-DD --time HH:MM
   odh traffic today [--area area] [--type type] [--format json|table|markdown]
   odh traffic events [--area area] [--from date] [--to date]
   odh mobility types [--kind station|event|edge]
@@ -96,6 +101,10 @@ func (r *Runner) Run(ctx context.Context, args []string, stdout, stderr io.Write
 		return r.runCall(ctx, args[1:], stdout, stderr)
 	case "tourism":
 		return r.runTourism(ctx, args[1:], stdout, stderr)
+	case "gtfs":
+		return r.runGTFS(ctx, args[1:], stdout, stderr)
+	case "transit":
+		return r.runTransit(ctx, args[1:], stdout, stderr)
 	case "traffic":
 		return r.runTraffic(ctx, args[1:], stdout, stderr)
 	case "mobility":
@@ -527,6 +536,12 @@ Examples:
   odh call tourism /v1/ODHActivityPoi --param pagenumber=1 --param pagesize=1 --param seed=42
   odh tourism types --dataset event --limit 10
   odh tourism poi --limit 1 --seed 42 --fields Detail.en.Title,GpsInfo
+  odh gtfs datasets
+  odh gtfs realtime --dataset sta-time-tables --feed trip-updates --limit 5
+  odh transit stops search auer
+  odh transit departures --stop "Ora, Stazione di Ora" --date 2026-05-16 --around 14:05
+  odh transit trip --from auer --to brenner --date 2026-05-16 --time 14:05 --mode train
+  odh transit delay-stats --from auer --to brenner --time 14:05 --weekday saturday
   odh traffic today --area ueberetsch-unterland --type roadworks --format table
   odh mobility types --kind event
   odh mobility stations --station-type ParkingStation --limit 5

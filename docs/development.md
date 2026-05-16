@@ -45,11 +45,11 @@ The live tests call public unauthenticated Tourism and Mobility endpoints.
 
 ## Build Metadata
 
-Development builds default to `0.1.4-dev` with best-effort VCS metadata. Release builds can stamp metadata through Go linker flags:
+Development builds default to `0.1.5-dev` with best-effort VCS metadata. Release builds can stamp metadata through Go linker flags:
 
 ```bash
 go build \
-  -ldflags "-X github.com/galjos/odh-cli/internal/version.Version=0.1.4 -X github.com/galjos/odh-cli/internal/version.Commit=$(git rev-parse --short HEAD) -X github.com/galjos/odh-cli/internal/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  -ldflags "-X github.com/galjos/odh-cli/internal/version.Version=0.1.5 -X github.com/galjos/odh-cli/internal/version.Commit=$(git rev-parse --short HEAD) -X github.com/galjos/odh-cli/internal/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   -o odh ./cmd/odh
 ```
 
@@ -62,7 +62,7 @@ Check the result with:
 
 ## Release Notes
 
-v0.1 intentionally avoids generated clients and packaging. It includes a small audited core plus focused discovery and diagnostic commands for the public Tourism and Mobility APIs.
+v0.1 intentionally avoids generated clients and package-manager publishing. It includes a small audited core plus focused discovery and diagnostic commands for the public Tourism, Mobility, and GTFS APIs.
 
 The next useful milestones are:
 

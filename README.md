@@ -38,6 +38,8 @@ This is an early v0.1 project. It intentionally focuses on a small working core:
 - list Mobility stations for a station type,
 - summarize Mobility data types for a station type and origin,
 - query latest Mobility time-series measurements,
+- list GTFS datasets and inspect GTFS-RT trip updates, vehicle positions, and service alerts,
+- search STA timetable stops and inspect static GTFS departures and direct trip matches,
 - summarize South Tyrol roadworks, closures, events, and traffic notices from Open Data Hub `PROVINCE_BZ` with area aliases, date filtering, deduplication, and stale-record warnings,
 - inspect A22 Mobility event and forecast feeds with explicit warnings when the data does not look like current traffic incidents.
 
@@ -56,7 +58,7 @@ The installer detects macOS/Linux and `amd64`/`arm64`, downloads the matching re
 Install a specific version or directory:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/galjos/odh-cli/main/scripts/install.sh | sh -s -- --version v0.1.4 --dir "$HOME/bin"
+curl -fsSL https://raw.githubusercontent.com/galjos/odh-cli/main/scripts/install.sh | sh -s -- --version v0.1.5 --dir "$HOME/bin"
 ```
 
 Build from source instead:
@@ -75,7 +77,7 @@ Build with release metadata:
 
 ```bash
 go build \
-  -ldflags "-X github.com/galjos/odh-cli/internal/version.Version=0.1.4 -X github.com/galjos/odh-cli/internal/version.Commit=$(git rev-parse --short HEAD) -X github.com/galjos/odh-cli/internal/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  -ldflags "-X github.com/galjos/odh-cli/internal/version.Version=0.1.5 -X github.com/galjos/odh-cli/internal/version.Commit=$(git rev-parse --short HEAD) -X github.com/galjos/odh-cli/internal/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   -o odh ./cmd/odh
 ```
 
@@ -148,6 +150,24 @@ Discover Mobility event origins:
 odh mobility types --kind event
 ```
 
+List Open Data Hub GTFS datasets and inspect live GTFS-RT trip updates:
+
+```bash
+odh gtfs datasets --format table
+odh gtfs realtime --dataset sta-time-tables --feed trip-updates --limit 5
+```
+
+Search public-transport stops and check timetable data:
+
+```bash
+odh transit stops search auer
+odh transit departures --stop "Ora, Stazione di Ora" --date 2026-05-16 --around 14:05
+odh transit trip --from auer --to brenner --date 2026-05-16 --time 14:05 --mode train
+odh transit delay-stats --from auer --to brenner --time 14:05 --weekday saturday
+```
+
+`odh transit delay-stats` is intentionally explicit: it reports that historical delay probability is unsupported until a GTFS-RT archive collector exists. It does not guess probabilities from the live feed.
+
 Summarize roadworks and closures for a South Tyrol traffic area:
 
 ```bash
@@ -198,6 +218,7 @@ See [docs/agent-usage.md](docs/agent-usage.md) for details.
 - About Open Data Hub: https://opendatahub.com/about-us/
 - Domains and datasets: https://docs.opendatahub.com/en/latest/datasets.html
 - Mobility getting started: https://docs.opendatahub.com/en/latest/howto/mobility/getstarted.html
+- GTFS API base: https://gtfs.api.opendatahub.com
 - Tourism data browser: https://tourism.databrowser.opendatahub.com/
 - Tourism Swagger UI: https://tourism.opendatahub.com/swagger/index.html
 - Mobility OpenAPI spec: https://mobility.api.opendatahub.com/v2/apispec

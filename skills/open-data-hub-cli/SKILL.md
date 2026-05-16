@@ -13,7 +13,7 @@ metadata:
             {
               "id": "go",
               "kind": "go",
-              "module": "github.com/galjos/odh-cli/cmd/odh@v0.1.4",
+              "module": "github.com/galjos/odh-cli/cmd/odh@v0.1.5",
               "bins": ["odh"],
               "label": "Install odh CLI (go)",
             },
@@ -109,6 +109,19 @@ odh mobility stations --station-type ParkingStation --limit 5
 odh mobility datatypes --station-type TrafficSensor --origin A22 --limit 100
 ```
 
+Public transport GTFS and STA timetable data:
+
+```bash
+odh gtfs datasets
+odh gtfs realtime --dataset sta-time-tables --feed trip-updates --limit 5
+odh transit stops search auer
+odh transit departures --stop "Ora, Stazione di Ora" --date 2026-05-16 --around 14:05 --mode train
+odh transit trip --from auer --to brenner --date 2026-05-16 --time 14:05 --mode train
+odh transit delay-stats --from auer --to brenner --time 14:05 --weekday saturday
+```
+
+Use these commands when the user asks about trains, buses, public-transport stops, STA timetables, GTFS, GTFS-RT, live trip updates, or whether delay probability can be computed. `odh transit trip` only finds direct static GTFS trip matches; it does not do transfer routing. `odh transit delay-stats` currently returns `supported: false` because delay probability requires historical GTFS-RT snapshots, not just the current live feed. Do not infer historical delay probability from one realtime response.
+
 South Tyrol traffic events, roadworks, closures, and road events:
 
 ```bash
@@ -136,6 +149,8 @@ odh a22 status --limit 10
 - Treat South Tyrol as the common regional context, not as a universal record-level guarantee.
 - Verify location-sensitive answers from coordinates, origins, and metadata in the JSON.
 - For roadworks and closures, prefer `odh traffic today` or `odh traffic events` before falling back to raw Mobility events.
+- For public transport, prefer `odh gtfs` and `odh transit` before falling back to raw API calls.
+- For historical delay probability, report the `odh transit delay-stats` caveat instead of guessing.
 - Do not infer live A22 traffic from `TrafficForecast` rows alone.
 - Prefer `odh a22 status` for A22 because it reports current-event availability and warns when forecast rows are not current incident data.
 - Use `--where` and `--param key=value` instead of manually constructing query strings when a curated command supports them.

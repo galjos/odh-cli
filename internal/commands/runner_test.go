@@ -5,6 +5,7 @@
 package commands
 
 import (
+	"archive/zip"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -71,6 +72,19 @@ func TestRunDatasetsSearchFindsTrafficEvents(t *testing.T) {
 	}
 	if !strings.Contains(stdout.String(), `"id": "mobility.traffic-events"`) ||
 		!strings.Contains(stdout.String(), "odh traffic today --area ueberetsch-unterland") {
+		t.Fatalf("unexpected stdout: %s", stdout.String())
+	}
+}
+
+func TestRunDatasetsSearchFindsGTFS(t *testing.T) {
+	runner := newTestRunner(t, nil)
+	var stdout, stderr bytes.Buffer
+	code := runner.Run(context.Background(), []string{"datasets", "search", "train delay"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("Run exit = %d, stderr = %s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), `"id": "gtfs.transit"`) ||
+		!strings.Contains(stdout.String(), "odh transit departures") {
 		t.Fatalf("unexpected stdout: %s", stdout.String())
 	}
 }
@@ -203,6 +217,169 @@ func TestRunOpenAPIConvertsYAMLToJSON(t *testing.T) {
 		t.Fatalf("Run exit = %d, stderr = %s", code, stderr.String())
 	}
 	if !strings.Contains(stdout.String(), `"openapi": "3.0.1"`) {
+		t.Fatalf("unexpected stdout: %s", stdout.String())
+	}
+}
+
+func TestRunGTFSDatasetsListsRealtimeFeeds(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/dataset" {
+			t.Fatalf("unexpected path %q", r.URL.Path)
+		}
+		_, _ = w.Write([]byte(`{
+			"sta-time-tables":{
+				"description":"Public transportation data provided by STA",
+				"origin":"sta.bz.it",
+				"license":"CC0",
+				"endpoint":"https://example.test/raw.zip",
+				"metadata":{"modes":["bus","train"]},
+				"realtime":{"trip_updates":"https://example.test/trip-updates"}
+			}
+		}`))
+	}))
+	defer server.Close()
+
+	runner := newTestRunner(t, []apis.API{{Name: "gtfs", BaseURL: server.URL, Public: true}})
+	var stdout, stderr bytes.Buffer
+	code := runner.Run(context.Background(), []string{"gtfs", "datasets"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("Run exit = %d, stderr = %s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), `"id": "sta-time-tables"`) ||
+		!strings.Contains(stdout.String(), `"trip_updates"`) {
+		t.Fatalf("unexpected stdout: %s", stdout.String())
+	}
+}
+
+func TestRunGTFSRealtimeFiltersTripUpdates(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/realtime/sta-time-tables/trip-updates" {
+			t.Fatalf("unexpected path %q", r.URL.Path)
+		}
+		_, _ = w.Write([]byte(`{
+			"header":{"timestamp":1778924144},
+			"entity":[
+				{"id":"one","trip_update":{"trip":{"trip_id":"match","route_id":"REG"},"stop_time_update":[{"arrival":{"delay":60}}]}},
+				{"id":"two","trip_update":{"trip":{"trip_id":"other","route_id":"REG"},"stop_time_update":[{"arrival":{"delay":0}}]}}
+			]
+		}`))
+	}))
+	defer server.Close()
+
+	runner := newTestRunner(t, []apis.API{{Name: "gtfs", BaseURL: server.URL, Public: true}})
+	var stdout, stderr bytes.Buffer
+	code := runner.Run(context.Background(), []string{"gtfs", "realtime", "--dataset", "sta-time-tables", "--feed", "trip-updates", "--trip-id", "match"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("Run exit = %d, stderr = %s", code, stderr.String())
+	}
+	var decoded struct {
+		EntityCount int `json:"entity_count"`
+		Count       int `json:"count"`
+		Entities    []struct {
+			ID string `json:"id"`
+		} `json:"entities"`
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &decoded); err != nil {
+		t.Fatalf("invalid JSON: %v\n%s", err, stdout.String())
+	}
+	if decoded.EntityCount != 1 || decoded.Count != 1 || decoded.Entities[0].ID != "one" {
+		t.Fatalf("unexpected decoded output: %#v", decoded)
+	}
+}
+
+func TestRunTransitStopsSearchUsesAuerAlias(t *testing.T) {
+	gtfsZip := buildTestGTFSZip(t)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/dataset/sta-time-tables/raw" {
+			t.Fatalf("unexpected path %q", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/zip")
+		_, _ = w.Write(gtfsZip)
+	}))
+	defer server.Close()
+
+	runner := newTestRunner(t, []apis.API{{Name: "gtfs", BaseURL: server.URL, Public: true}})
+	var stdout, stderr bytes.Buffer
+	code := runner.Run(context.Background(), []string{"transit", "stops", "search", "auer", "--cache-dir", t.TempDir()}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("Run exit = %d, stderr = %s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), `"name": "Ora, Stazione di Ora"`) {
+		t.Fatalf("unexpected stdout: %s", stdout.String())
+	}
+}
+
+func TestRunTransitDeparturesParsesStaticGTFS(t *testing.T) {
+	gtfsZip := buildTestGTFSZip(t)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/dataset/sta-time-tables/raw" {
+			t.Fatalf("unexpected path %q", r.URL.Path)
+		}
+		_, _ = w.Write(gtfsZip)
+	}))
+	defer server.Close()
+
+	runner := newTestRunner(t, []apis.API{{Name: "gtfs", BaseURL: server.URL, Public: true}})
+	var stdout, stderr bytes.Buffer
+	code := runner.Run(context.Background(), []string{
+		"transit", "departures",
+		"--stop", "auer",
+		"--date", "2026-05-16",
+		"--around", "14:05",
+		"--window", "5m",
+		"--mode", "train",
+		"--cache-dir", t.TempDir(),
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("Run exit = %d, stderr = %s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), `"route_short_name": "REG"`) ||
+		!strings.Contains(stdout.String(), `"departure_time": "14:05:00"`) {
+		t.Fatalf("unexpected stdout: %s", stdout.String())
+	}
+}
+
+func TestRunTransitTripFindsDirectGTFSMatch(t *testing.T) {
+	gtfsZip := buildTestGTFSZip(t)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/dataset/sta-time-tables/raw" {
+			t.Fatalf("unexpected path %q", r.URL.Path)
+		}
+		_, _ = w.Write(gtfsZip)
+	}))
+	defer server.Close()
+
+	runner := newTestRunner(t, []apis.API{{Name: "gtfs", BaseURL: server.URL, Public: true}})
+	var stdout, stderr bytes.Buffer
+	code := runner.Run(context.Background(), []string{
+		"transit", "trip",
+		"--from", "auer",
+		"--to", "brenner",
+		"--date", "2026-05-16",
+		"--time", "14:05",
+		"--window", "5m",
+		"--mode", "train",
+		"--cache-dir", t.TempDir(),
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("Run exit = %d, stderr = %s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), `"count": 1`) ||
+		!strings.Contains(stdout.String(), `"stop_name": "Brennero"`) ||
+		!strings.Contains(stdout.String(), "historical delay probability is not available") {
+		t.Fatalf("unexpected stdout: %s", stdout.String())
+	}
+}
+
+func TestRunTransitDelayStatsReportsUnsupported(t *testing.T) {
+	runner := newTestRunner(t, nil)
+	var stdout, stderr bytes.Buffer
+	code := runner.Run(context.Background(), []string{"transit", "delay-stats", "--from", "auer", "--to", "brenner", "--time", "14:05", "--weekday", "saturday"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("Run exit = %d, stderr = %s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), `"supported": false`) ||
+		!strings.Contains(stdout.String(), "no historical GTFS-RT archive") {
 		t.Fatalf("unexpected stdout: %s", stdout.String())
 	}
 }
@@ -758,6 +935,59 @@ func containsWarning(warnings []string, needle string) bool {
 		}
 	}
 	return false
+}
+
+func buildTestGTFSZip(t *testing.T) []byte {
+	t.Helper()
+	files := map[string]string{
+		"stops.txt": strings.Join([]string{
+			"stop_id,stop_name,stop_lat,stop_lon,zone_id,location_type,parent_station",
+			"ora-station,\"Ora, Stazione di Ora\",46.36075232,11.29752794,,,",
+			"brenner,\"Brennero\",47.00268073,11.50557389,,,",
+			"bozen,\"Bolzano\",46.498,11.354,,,",
+			"",
+		}, "\n"),
+		"routes.txt": strings.Join([]string{
+			"route_id,agency_id,route_short_name,route_long_name,route_type",
+			"route-reg,sta,REG,,2",
+			"route-bus,sta,120,,3",
+			"",
+		}, "\n"),
+		"trips.txt": strings.Join([]string{
+			"route_id,service_id,trip_id,trip_headsign,direction_id",
+			"route-reg,weekday-sat,trip-reg-1,Brennero,1",
+			"route-bus,weekday-sat,trip-bus-1,Ora,0",
+			"",
+		}, "\n"),
+		"calendar.txt": strings.Join([]string{
+			"service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday,start_date,end_date",
+			"weekday-sat,0,0,0,0,0,1,0,20260101,20261231",
+			"",
+		}, "\n"),
+		"calendar_dates.txt": "service_id,date,exception_type\n",
+		"stop_times.txt": strings.Join([]string{
+			"trip_id,arrival_time,departure_time,stop_id,stop_sequence",
+			"trip-reg-1,14:04:00,14:05:00,ora-station,1",
+			"trip-reg-1,15:39:00,15:40:00,brenner,2",
+			"trip-bus-1,14:05:00,14:05:00,ora-station,1",
+			"",
+		}, "\n"),
+	}
+	var buffer bytes.Buffer
+	zipWriter := zip.NewWriter(&buffer)
+	for name, content := range files {
+		writer, err := zipWriter.Create(name)
+		if err != nil {
+			t.Fatalf("zip create %s: %v", name, err)
+		}
+		if _, err := writer.Write([]byte(content)); err != nil {
+			t.Fatalf("zip write %s: %v", name, err)
+		}
+	}
+	if err := zipWriter.Close(); err != nil {
+		t.Fatalf("zip close: %v", err)
+	}
+	return buffer.Bytes()
 }
 
 func newTestRunner(t *testing.T, entries []apis.API) *Runner {

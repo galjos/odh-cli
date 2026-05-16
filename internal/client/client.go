@@ -67,8 +67,16 @@ func NewWithHTTPClient(httpClient *http.Client, userAgent string) *Client {
 
 // Get performs an HTTP GET and returns the response body for 2xx responses.
 func (c *Client) Get(ctx context.Context, url string) (Response, error) {
+	return c.GetWithLimit(ctx, url, 50*1024*1024)
+}
+
+// GetWithLimit performs an HTTP GET and reads at most limitBytes bytes.
+func (c *Client) GetWithLimit(ctx context.Context, url string, limitBytes int64) (Response, error) {
 	if strings.TrimSpace(url) == "" {
 		return Response{}, errors.New("url is required")
+	}
+	if limitBytes < 1 {
+		return Response{}, errors.New("limitBytes must be greater than zero")
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
@@ -83,9 +91,17 @@ func (c *Client) Get(ctx context.Context, url string) (Response, error) {
 	}
 	defer resp.Body.Close()
 
-	body, readErr := io.ReadAll(io.LimitReader(resp.Body, 50*1024*1024))
+	body, readErr := io.ReadAll(io.LimitReader(resp.Body, limitBytes+1))
 	if readErr != nil {
 		return Response{}, readErr
+	}
+	if int64(len(body)) > limitBytes {
+		return Response{
+			URL:         url,
+			StatusCode:  resp.StatusCode,
+			ContentType: resp.Header.Get("Content-Type"),
+			Body:        body[:limitBytes],
+		}, fmt.Errorf("GET %s response exceeded %d byte limit", url, limitBytes)
 	}
 
 	result := Response{

@@ -14,12 +14,12 @@ Open Data Hub is maintained by NOI Techpark and exposes datasets in domains such
 | --- | --- | --- | --- |
 | `tourism` | `content` | `https://tourism.opendatahub.com` | `https://tourism.opendatahub.com/swagger/v1/swagger.json` |
 | `mobility` | | `https://mobility.api.opendatahub.com` | `https://mobility.api.opendatahub.com/v2/apispec` |
-| `gtfs` | | `https://gtfs.api.opendatahub.com` | |
+| `gtfs` | | `https://gtfs.api.opendatahub.com` | `https://gtfs.api.opendatahub.com/v1/apispec` |
 | `gbfs` | | `https://gbfs.api.opendatahub.com` | |
-| `transmodel` | | `https://transmodel.api.opendatahub.com` | |
+| `transmodel` | | `https://transmodel.api.opendatahub.com` | `https://transmodel.api.opendatahub.com/apispec` |
 | `alpinebits` | | `https://alpinebits.opendatahub.com` | |
 
-Only Tourism and Mobility have curated commands in v0.1 because those are the public endpoints verified by the current smoke tests.
+Tourism, Mobility, and GTFS have curated commands in v0.1 because those are the public endpoints verified by the current smoke tests.
 
 ## API Notes
 
@@ -39,14 +39,21 @@ Mobility / Time Series API:
 
 Standards APIs:
 
-- `gtfs`, `gbfs`, `transmodel`, and `alpinebits` are registered so agents can discover their base URLs consistently.
-- v0.1 does not yet provide curated wrappers for these APIs.
+- `gtfs` has curated wrappers for dataset listing, GTFS-RT realtime feeds, stop search, static departures, and direct static timetable matches.
+- `gbfs`, `transmodel`, and `alpinebits` are registered so agents can discover their base URLs consistently.
+- v0.1 does not yet provide curated wrappers for `gbfs`, `transmodel`, or `alpinebits`.
+- `odh transit delay-stats` intentionally reports unsupported because the live GTFS API does not provide a historical GTFS-RT archive for probability calculations.
 
 The Mobility commands include a narrow A22 diagnostic path:
 
 - `odh traffic today --area ueberetsch-unterland --type roadworks` summarizes current Open Data Hub `PROVINCE_BZ` roadwork events.
 - `odh traffic events --area bozen-unterland --from YYYY-MM-DD --to YYYY-MM-DD` queries a specific traffic-event date range.
 - `odh traffic today --near 46.42,11.25 --radius 15km --json` filters Open Data Hub `PROVINCE_BZ` events by coordinates.
+- `odh gtfs datasets` lists Open Data Hub GTFS datasets and their realtime-feed metadata.
+- `odh gtfs realtime --dataset sta-time-tables --feed trip-updates --limit 5` inspects current GTFS-RT trip updates.
+- `odh transit stops search auer` searches static STA timetable stops with common German/Italian place aliases.
+- `odh transit departures --stop "Ora, Stazione di Ora" --date YYYY-MM-DD --around HH:MM` inspects static GTFS departures near a time.
+- `odh transit trip --from auer --to brenner --date YYYY-MM-DD --time HH:MM --mode train` looks for direct static GTFS trip matches; it does not perform transfer routing.
 - `odh mobility events --origin A22 --latest` checks current A22 events.
 - `odh mobility stations --station-type TrafficSensor --origin A22` lists A22 traffic-sensor station records.
 - `odh mobility datatypes --station-type TrafficSensor --origin A22` discovers A22 traffic-sensor data types.

@@ -36,7 +36,7 @@ Example output with `--network=false`:
 {
   "ok": true,
   "version": {
-    "version": "0.1.4-dev",
+    "version": "0.1.5-dev",
     "commit": "unknown",
     "date": "unknown",
     "goos": "darwin",
@@ -46,7 +46,7 @@ Example output with `--network=false`:
     {
       "name": "version",
       "ok": true,
-      "message": "0.1.4-dev"
+      "message": "0.1.5-dev"
     },
     {
       "name": "api_registry",
@@ -291,6 +291,122 @@ Flags:
 - `--representation value` - default `flat`.
 - `--limit n` - maximum events to request; default `20`.
 - `--param key=value` - additional query parameter. Repeatable.
+
+## `odh gtfs datasets`
+
+Lists Open Data Hub GTFS datasets and their metadata.
+
+```bash
+odh gtfs datasets
+odh gtfs datasets --format table
+```
+
+Flags:
+
+- `--format json|table` - output format; default `json`.
+
+The JSON output includes `endpoint`, `count`, and `datasets`. Dataset metadata can expose available realtime feeds such as `trip-updates`, `vehicle-positions`, and `service-alerts`.
+
+## `odh gtfs realtime`
+
+Fetches a GTFS-RT JSON feed from Open Data Hub.
+
+```bash
+odh gtfs realtime --dataset sta-time-tables --feed trip-updates --limit 5
+odh gtfs realtime --dataset sta-time-tables --feed vehicle-positions --route-id 101
+odh gtfs realtime --dataset sta-time-tables --feed service-alerts --raw
+```
+
+Flags:
+
+- `--dataset value` - GTFS dataset id; default `sta-time-tables`.
+- `--feed trip-updates|vehicle-positions|service-alerts` - realtime feed; default `trip-updates`.
+- `--limit n` - maximum entities to include; default `20`, use `0` for all.
+- `--trip-id value` - optional `trip_id` filter for trip updates.
+- `--route-id value` - optional `route_id` filter for trip updates or vehicle positions.
+- `--raw` - write the upstream JSON feed without wrapping or filtering when no filters are active and `--limit 0` is used.
+
+## `odh transit stops search <query>`
+
+Searches static GTFS stops from a cached Open Data Hub GTFS archive.
+
+```bash
+odh transit stops search auer
+odh transit stops search "Ora, Stazione di Ora" --limit 5
+```
+
+Flags:
+
+- `--dataset value` - GTFS dataset id; default `sta-time-tables`.
+- `--limit n` - maximum stops to return; default `20`.
+- `--cache-dir dir` - directory for cached GTFS archives.
+- `--refresh` - force a new archive download.
+
+Stop search supports common German/Italian place aliases such as `auer` / `ora`, `brenner` / `brennero`, `bozen` / `bolzano`, and `meran` / `merano`.
+
+## `odh transit departures`
+
+Finds static GTFS departures for matched stops near a time.
+
+```bash
+odh transit departures --stop "Ora, Stazione di Ora" --date 2026-05-16 --around 14:05
+odh transit departures --stop auer --date 2026-05-16 --around 14:05 --window 30m --mode train
+```
+
+Flags:
+
+- `--dataset value` - GTFS dataset id; default `sta-time-tables`.
+- `--stop value` - stop search query; required.
+- `--date YYYY-MM-DD` - service date; default today.
+- `--around HH:MM` - optional departure time to search around.
+- `--window duration` - time window around `--around`; default `15m`.
+- `--mode all|train|bus|cable-car` - route-type filter; default `all`.
+- `--limit n` - maximum departures to return; default `20`.
+- `--cache-dir dir` - directory for cached GTFS archives.
+- `--refresh` - force a new archive download.
+
+The command reads static GTFS. It is useful for timetable evidence, not for live delay probability.
+
+## `odh transit trip`
+
+Looks for direct static GTFS trip matches between two stop queries.
+
+```bash
+odh transit trip --from auer --to brenner --date 2026-05-16 --time 14:05 --mode train
+```
+
+Flags:
+
+- `--dataset value` - GTFS dataset id; default `sta-time-tables`.
+- `--from value` - origin stop query; required.
+- `--to value` - destination stop query; required.
+- `--date YYYY-MM-DD` - service date; default today.
+- `--time HH:MM` - origin departure time; required.
+- `--window duration` - time window around `--time`; default `15m`.
+- `--mode all|train|bus|cable-car` - route-type filter; default `all`.
+- `--limit n` - maximum direct trip matches to return; default `20`.
+- `--cache-dir dir` - directory for cached GTFS archives.
+- `--refresh` - force a new archive download.
+
+This command does not perform transfer routing. If no direct trip matches, the JSON output includes a warning.
+
+## `odh transit delay-stats`
+
+Reports whether historical delay probability can be computed.
+
+```bash
+odh transit delay-stats --from auer --to brenner --time 14:05 --weekday saturday
+```
+
+Flags:
+
+- `--from value` - origin stop query.
+- `--to value` - destination stop query.
+- `--time HH:MM` - origin departure time.
+- `--weekday value` - weekday filter, for example `saturday`.
+- `--since value` - requested archive range, for example `90d`.
+
+The current implementation returns `supported: false` because Open Data Hub GTFS exposes current static GTFS and live GTFS-RT, not an archived GTFS-RT history. The CLI intentionally does not guess delay probability from one live feed snapshot.
 
 ## `odh traffic today`
 

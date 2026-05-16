@@ -57,6 +57,25 @@ func TestGetReturnsHTTPError(t *testing.T) {
 	}
 }
 
+func TestGetWithLimitRejectsOversizedBody(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("abcdef"))
+	}))
+	defer server.Close()
+
+	c := NewWithHTTPClient(server.Client(), "test-agent")
+	resp, err := c.GetWithLimit(context.Background(), server.URL, 5)
+	if err == nil {
+		t.Fatal("expected oversized response error")
+	}
+	if !strings.Contains(err.Error(), "exceeded 5 byte limit") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if string(resp.Body) != "abcde" {
+		t.Fatalf("unexpected truncated body %q", string(resp.Body))
+	}
+}
+
 func TestNewAppliesTimeout(t *testing.T) {
 	c := New(3 * time.Second)
 	if c.httpClient.Timeout != 3*time.Second {
