@@ -40,7 +40,7 @@ This is an early v0.1 project. It intentionally focuses on a small working core:
 - query latest Mobility time-series measurements,
 - list GTFS datasets and inspect GTFS-RT trip updates, vehicle positions, and service alerts,
 - search STA timetable stops and inspect static GTFS departures and direct trip matches,
-- summarize South Tyrol roadworks, closures, events, and traffic notices from Open Data Hub `PROVINCE_BZ` with area aliases, date filtering, deduplication, and stale-record warnings,
+- summarize South Tyrol roadworks, closures, events, and traffic notices from Open Data Hub `PROVINCE_BZ` with zone discovery, date filtering, text search, deduplication, and stale-record warnings,
 - inspect A22 Mobility event and forecast feeds with explicit warnings when the data does not look like current traffic incidents.
 
 It does not yet include MCP, generated clients, Homebrew packaging, Docker images, a full upstream metadata catalog, or authenticated write flows.
@@ -58,7 +58,7 @@ The installer detects macOS/Linux and `amd64`/`arm64`, downloads the matching re
 Install a specific version or directory:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/galjos/odh-cli/main/scripts/install.sh | sh -s -- --version v0.1.5 --dir "$HOME/bin"
+curl -fsSL https://raw.githubusercontent.com/galjos/odh-cli/main/scripts/install.sh | sh -s -- --version v0.1.6 --dir "$HOME/bin"
 ```
 
 Build from source instead:
@@ -77,7 +77,7 @@ Build with release metadata:
 
 ```bash
 go build \
-  -ldflags "-X github.com/galjos/odh-cli/internal/version.Version=0.1.5 -X github.com/galjos/odh-cli/internal/version.Commit=$(git rev-parse --short HEAD) -X github.com/galjos/odh-cli/internal/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  -ldflags "-X github.com/galjos/odh-cli/internal/version.Version=0.1.6 -X github.com/galjos/odh-cli/internal/version.Commit=$(git rev-parse --short HEAD) -X github.com/galjos/odh-cli/internal/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   -o odh ./cmd/odh
 ```
 
@@ -144,10 +144,11 @@ odh mobility latest \
   --limit 5
 ```
 
-Discover Mobility event origins:
+Discover Mobility station types and station origins:
 
 ```bash
-odh mobility types --kind event
+odh mobility types --kind station
+odh mobility origins --station-type TrafficSensor
 ```
 
 List Open Data Hub GTFS datasets and inspect live GTFS-RT trip updates:
@@ -168,10 +169,13 @@ odh transit delay-stats --from auer --to brenner --time 14:05 --weekday saturday
 
 `odh transit delay-stats` is intentionally explicit: it reports that historical delay probability is unsupported until a GTFS-RT archive collector exists. It does not guess probabilities from the live feed.
 
-Summarize roadworks and closures for a South Tyrol traffic area:
+Summarize roadworks and closures for South Tyrol traffic zones and event text:
 
 ```bash
+odh traffic zones
+odh traffic categories
 odh traffic today --area ueberetsch-unterland --type roadworks --format table
+odh traffic search "road closed badia" --today --zone-id 6 --json
 odh traffic events --area bozen-unterland --from 2026-05-16 --to 2026-05-16 --format json
 ```
 
@@ -184,6 +188,7 @@ odh mobility stations --station-type ParkingStation --limit 5
 Find A22 traffic-sensor data types:
 
 ```bash
+odh mobility origins --station-type TrafficSensor
 odh mobility datatypes \
   --station-type TrafficSensor \
   --origin A22 \

@@ -131,6 +131,59 @@ func (r *Runner) runMobilityDatatypes(ctx context.Context, args []string, stdout
 	return 0
 }
 
+func (r *Runner) runMobilityOrigins(ctx context.Context, args []string, stdout, stderr io.Writer) int {
+	fs := newFlagSet("mobility origins", stderr)
+	stationType := fs.String("station-type", "", "station type, for example TrafficSensor")
+	representation := fs.String("representation", "flat", "API representation")
+	limit := fs.Int("limit", 1000, "maximum station records to inspect")
+	params := paramValues{}
+	fs.Var(&params, "param", "additional query parameter as key=value; repeatable")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	if fs.NArg() != 0 {
+		fmt.Fprintln(stderr, "mobility origins does not accept positional arguments")
+		return 2
+	}
+	if strings.TrimSpace(*stationType) == "" {
+		fmt.Fprintln(stderr, "--station-type is required")
+		return 2
+	}
+	if *limit < 1 {
+		fmt.Fprintln(stderr, "--limit must be greater than zero")
+		return 2
+	}
+
+	api, _ := r.Registry.Find("mobility")
+	path := fmt.Sprintf("/v2/%s/%s", url.PathEscape(*representation), url.PathEscape(*stationType))
+	path = strings.ReplaceAll(path, "%2C", ",")
+	values := params.Values()
+	values.Set("limit", strconv.Itoa(*limit))
+	requestURL, err := BuildURL(api.BaseURL, path, values)
+	if err != nil {
+		fmt.Fprintln(stderr, err)
+		return 2
+	}
+	value, err := r.fetchJSONValue(ctx, requestURL)
+	if err != nil {
+		fmt.Fprintln(stderr, err)
+		return 1
+	}
+	records := extractDataList(value)
+	origins := summarizeOrigins(records)
+	if err := output.WriteJSON(stdout, map[string]any{
+		"station_type": *stationType,
+		"endpoint":     requestURL,
+		"record_count": len(records),
+		"count":        len(origins),
+		"origins":      origins,
+	}); err != nil {
+		fmt.Fprintln(stderr, err)
+		return 1
+	}
+	return 0
+}
+
 func (r *Runner) runMobilityStations(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	fs := newFlagSet("mobility stations", stderr)
 	stationType := fs.String("station-type", "", "station type, for example ParkingStation")
@@ -357,6 +410,12 @@ type datatypeSummary struct {
 	Origins      []string `json:"origins,omitempty"`
 }
 
+type originSummary struct {
+	Name           string   `json:"name"`
+	StationCount   int      `json:"station_count"`
+	StationSamples []string `json:"station_samples,omitempty"`
+}
+
 func summarizeDatatypes(records []map[string]any, originFilter string) []datatypeSummary {
 	type aggregate struct {
 		datatypeSummary
@@ -404,6 +463,45 @@ func summarizeDatatypes(records []map[string]any, originFilter string) []datatyp
 		return summaries[i].Name < summaries[j].Name
 	})
 	return summaries
+}
+
+func summarizeOrigins(records []map[string]any) []originSummary {
+	type aggregate struct {
+		originSummary
+		stations map[string]struct{}
+	}
+	byName := map[string]*aggregate{}
+	for _, record := range records {
+		name := strings.TrimSpace(asString(record["sorigin"]))
+		if name == "" {
+			continue
+		}
+		current, ok := byName[name]
+		if !ok {
+			current = &aggregate{
+				originSummary: originSummary{Name: name},
+				stations:      map[string]struct{}{},
+			}
+			byName[name] = current
+		}
+		if code := asString(record["scode"]); code != "" {
+			current.stations[code] = struct{}{}
+		}
+	}
+	origins := make([]originSummary, 0, len(byName))
+	for _, current := range byName {
+		samples := sortedKeys(current.stations)
+		current.StationCount = len(samples)
+		if len(samples) > 5 {
+			samples = samples[:5]
+		}
+		current.StationSamples = samples
+		origins = append(origins, current.originSummary)
+	}
+	sort.Slice(origins, func(i, j int) bool {
+		return origins[i].Name < origins[j].Name
+	})
+	return origins
 }
 
 func extractDataList(value any) []map[string]any {

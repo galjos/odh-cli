@@ -526,6 +526,53 @@ func TestRunMobilityDatatypesSummarizesByName(t *testing.T) {
 	}
 }
 
+func TestRunMobilityOriginsSummarizesStationOrigins(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v2/flat/TrafficSensor" {
+			t.Fatalf("unexpected path %q", r.URL.Path)
+		}
+		if got := r.URL.Query().Get("limit"); got != "5" {
+			t.Fatalf("unexpected limit %q", got)
+		}
+		_, _ = w.Write([]byte(`{"data":[
+			{"scode":"A22:1","sorigin":"A22","sname":"A22 one"},
+			{"scode":"A22:2","sorigin":"A22","sname":"A22 two"},
+			{"scode":"SIAG:1","sorigin":"SIAG","sname":"SIAG one"},
+			{"scode":"missing","sname":"missing origin"}
+		]}`))
+	}))
+	defer server.Close()
+
+	runner := newTestRunner(t, []apis.API{{Name: "mobility", BaseURL: server.URL, Public: true}})
+	var stdout, stderr bytes.Buffer
+	code := runner.Run(context.Background(), []string{"mobility", "origins", "--station-type", "TrafficSensor", "--limit", "5"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("Run exit = %d, stderr = %s", code, stderr.String())
+	}
+	var decoded struct {
+		StationType string `json:"station_type"`
+		RecordCount int    `json:"record_count"`
+		Count       int    `json:"count"`
+		Origins     []struct {
+			Name           string   `json:"name"`
+			StationCount   int      `json:"station_count"`
+			StationSamples []string `json:"station_samples"`
+		} `json:"origins"`
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &decoded); err != nil {
+		t.Fatalf("invalid JSON: %v\n%s", err, stdout.String())
+	}
+	if decoded.StationType != "TrafficSensor" || decoded.RecordCount != 4 || decoded.Count != 2 || len(decoded.Origins) != 2 {
+		t.Fatalf("unexpected decoded output: %#v", decoded)
+	}
+	if decoded.Origins[0].Name != "A22" || decoded.Origins[0].StationCount != 2 || len(decoded.Origins[0].StationSamples) != 2 {
+		t.Fatalf("unexpected A22 origin summary: %#v", decoded.Origins[0])
+	}
+	if decoded.Origins[1].Name != "SIAG" || decoded.Origins[1].StationCount != 1 {
+		t.Fatalf("unexpected SIAG origin summary: %#v", decoded.Origins[1])
+	}
+}
+
 func TestRunMobilityStationsFiltersByOrigin(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v2/flat/ParkingStation" {
@@ -876,6 +923,228 @@ func TestRunTrafficEventsSupportsNearFilterAndTableOutput(t *testing.T) {
 		!strings.Contains(stdout.String(), "LS/SP 13") ||
 		strings.Contains(stdout.String(), "far away") {
 		t.Fatalf("unexpected stdout: %s", stdout.String())
+	}
+}
+
+func TestRunTrafficZonesOutputsKnownZoneIDs(t *testing.T) {
+	runner := newTestRunner(t, []apis.API{{Name: "mobility", BaseURL: "https://example.com", Public: true}})
+	var stdout, stderr bytes.Buffer
+	code := runner.Run(context.Background(), []string{"traffic", "zones", "--json"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("Run exit = %d, stderr = %s", code, stderr.String())
+	}
+	var decoded struct {
+		Zones []struct {
+			ZoneID string `json:"zone_id"`
+			Name   string `json:"name"`
+		} `json:"zones"`
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &decoded); err != nil {
+		t.Fatalf("invalid JSON: %v\n%s", err, stdout.String())
+	}
+	if len(decoded.Zones) != 7 {
+		t.Fatalf("unexpected zones: %#v", decoded.Zones)
+	}
+	if decoded.Zones[5].ZoneID != "6" || decoded.Zones[5].Name != "Pustertal" {
+		t.Fatalf("expected Pustertal zone 6, got %#v", decoded.Zones[5])
+	}
+}
+
+func TestRunTrafficCategoriesOutputsKnownFilters(t *testing.T) {
+	runner := newTestRunner(t, []apis.API{{Name: "mobility", BaseURL: "https://example.com", Public: true}})
+	var stdout, stderr bytes.Buffer
+	code := runner.Run(context.Background(), []string{"traffic", "categories", "--json"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("Run exit = %d, stderr = %s", code, stderr.String())
+	}
+	var decoded struct {
+		Categories []struct {
+			Name             string   `json:"name"`
+			Aliases          []string `json:"aliases"`
+			UpstreamSubtypes []string `json:"upstream_subtypes"`
+		} `json:"categories"`
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &decoded); err != nil {
+		t.Fatalf("invalid JSON: %v\n%s", err, stdout.String())
+	}
+	if len(decoded.Categories) != 7 {
+		t.Fatalf("unexpected categories: %#v", decoded.Categories)
+	}
+	if decoded.Categories[0].Name != "roadworks" || !containsString(decoded.Categories[0].UpstreamSubtypes, "BAUSTELLE") {
+		t.Fatalf("expected roadworks category first, got %#v", decoded.Categories[0])
+	}
+	if decoded.Categories[1].Name != "closure" || !containsString(decoded.Categories[1].Aliases, "gesperrt") {
+		t.Fatalf("expected closure category, got %#v", decoded.Categories[1])
+	}
+}
+
+func TestRunTrafficEventsSupportsZoneIDFilter(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v2/flat,event/PROVINCE_BZ/2026-05-16/2026-05-16" {
+			t.Fatalf("unexpected path %q", r.URL.Path)
+		}
+		_, _ = w.Write([]byte(`{"data":[
+			{
+				"evuuid":"zone-6",
+				"evstart":"2026-05-16 00:00:00.000+0200",
+				"evend":"2026-05-16 23:59:00.000+0200",
+				"evmetadata":{
+					"messageZoneId":"6",
+					"messageZoneDescDe":"Pustertal",
+					"messageStreetNr":"LS/SP 244",
+					"subTycodeValue":"SPERRE",
+					"placeDe":"Sperre bei Zwischenwasser"
+				}
+			},
+			{
+				"evuuid":"zone-3",
+				"evstart":"2026-05-16 00:00:00.000+0200",
+				"evend":"2026-05-16 23:59:00.000+0200",
+				"evmetadata":{
+					"messageZoneId":"3",
+					"messageZoneDescDe":"Bozen-Unterland",
+					"subTycodeValue":"SPERRE",
+					"placeDe":"Sperre bei Bozen"
+				}
+			}
+		]}`))
+	}))
+	defer server.Close()
+
+	runner := newTestRunner(t, []apis.API{{Name: "mobility", BaseURL: server.URL, Public: true}})
+	var stdout, stderr bytes.Buffer
+	code := runner.Run(context.Background(), []string{
+		"traffic", "events",
+		"--from", "2026-05-16",
+		"--to", "2026-05-16",
+		"--zone-id", "6",
+		"--json",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("Run exit = %d, stderr = %s", code, stderr.String())
+	}
+	var decoded struct {
+		ZoneID string `json:"zone_id"`
+		Count  int    `json:"count"`
+		Events []struct {
+			ID     string `json:"id"`
+			ZoneID string `json:"zone_id"`
+		} `json:"events"`
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &decoded); err != nil {
+		t.Fatalf("invalid JSON: %v\n%s", err, stdout.String())
+	}
+	if decoded.ZoneID != "6" || decoded.Count != 1 || len(decoded.Events) != 1 || decoded.Events[0].ID != "zone-6" || decoded.Events[0].ZoneID != "6" {
+		t.Fatalf("unexpected decoded output: %#v", decoded)
+	}
+}
+
+func TestRunTrafficSearchMatchesTextAndGenericClosureTerms(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v2/flat,event/PROVINCE_BZ/2026-05-16/2026-05-16" {
+			t.Fatalf("unexpected path %q", r.URL.Path)
+		}
+		_, _ = w.Write([]byte(`{"data":[
+			{
+				"evuuid":"closed-road",
+				"evstart":"2026-05-16 00:00:00.000+0200",
+				"evend":"2026-05-16 23:59:00.000+0200",
+				"evmetadata":{
+					"messageZoneId":"6",
+					"messageZoneDescDe":"Pustertal",
+					"messageStreetNr":"LS/SP 244",
+					"messageStreetInternetDescDe":"Gadertal",
+					"subTycodeValue":"SPERRE",
+					"placeDe":"Zwischenwasser: Straße aus Sicherheitsgründen gesperrt."
+				}
+			},
+			{
+				"evuuid":"other-road",
+				"evstart":"2026-05-16 00:00:00.000+0200",
+				"evend":"2026-05-16 23:59:00.000+0200",
+				"evmetadata":{
+					"messageZoneId":"3",
+					"messageZoneDescDe":"Bozen-Unterland",
+					"subTycodeValue":"BAUSTELLE",
+					"placeDe":"Bauarbeiten in Bozen"
+				}
+			}
+		]}`))
+	}))
+	defer server.Close()
+
+	runner := newTestRunner(t, []apis.API{{Name: "mobility", BaseURL: server.URL, Public: true}})
+	var stdout, stderr bytes.Buffer
+	code := runner.Run(context.Background(), []string{
+		"traffic", "search", "road", "closed", "zwischenwasser",
+		"--from", "2026-05-16",
+		"--to", "2026-05-16",
+		"--json",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("Run exit = %d, stderr = %s", code, stderr.String())
+	}
+	var decoded struct {
+		Search string `json:"search"`
+		Count  int    `json:"count"`
+		Events []struct {
+			ID   string `json:"id"`
+			Type string `json:"type"`
+		} `json:"events"`
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &decoded); err != nil {
+		t.Fatalf("invalid JSON: %v\n%s", err, stdout.String())
+	}
+	if decoded.Search != "road closed zwischenwasser" || decoded.Count != 1 || len(decoded.Events) != 1 || decoded.Events[0].ID != "closed-road" || decoded.Events[0].Type != "closure" {
+		t.Fatalf("unexpected decoded output: %#v", decoded)
+	}
+}
+
+func TestRunTrafficSearchWarnsWhenOnlyStaleOpenEndedRowsMatch(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v2/flat,event/PROVINCE_BZ/2026-05-16/2026-05-16" {
+			t.Fatalf("unexpected path %q", r.URL.Path)
+		}
+		_, _ = w.Write([]byte(`{"data":[
+			{
+				"evuuid":"stale-badia",
+				"evstart":"2025-01-01 00:00:00.000+0100",
+				"evtransactiontime":"2025-01-01 08:00:00.000+0100",
+				"evmetadata":{
+					"messageZoneId":"6",
+					"messageZoneDescDe":"Pustertal",
+					"subTycodeValue":"SPERRE",
+					"placeDe":"Sperre bei Badia"
+				}
+			}
+		]}`))
+	}))
+	defer server.Close()
+
+	runner := newTestRunner(t, []apis.API{{Name: "mobility", BaseURL: server.URL, Public: true}})
+	var stdout, stderr bytes.Buffer
+	code := runner.Run(context.Background(), []string{
+		"traffic", "search", "badia",
+		"--from", "2026-05-16",
+		"--to", "2026-05-16",
+		"--json",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("Run exit = %d, stderr = %s", code, stderr.String())
+	}
+	var decoded struct {
+		Count    int      `json:"count"`
+		Warnings []string `json:"warnings"`
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &decoded); err != nil {
+		t.Fatalf("invalid JSON: %v\n%s", err, stdout.String())
+	}
+	if decoded.Count != 0 {
+		t.Fatalf("expected no current results, got %#v", decoded)
+	}
+	if !containsWarning(decoded.Warnings, "stale open-ended matching events were hidden") ||
+		!containsWarning(decoded.Warnings, `no current ODH PROVINCE_BZ traffic events matched search "badia"`) {
+		t.Fatalf("expected stale/no-match warnings, got %#v", decoded.Warnings)
 	}
 }
 

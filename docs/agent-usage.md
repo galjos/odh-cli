@@ -30,6 +30,7 @@ odh openapi mobility
 odh tourism types --dataset event --limit 10
 odh tourism poi --limit 1 --seed 42 --fields Detail.en.Title,GpsInfo
 odh mobility types --kind event
+odh mobility origins --station-type TrafficSensor
 odh mobility stations --station-type ParkingStation --limit 5
 odh mobility datatypes --station-type TrafficSensor --origin A22 --limit 100
 odh mobility events --origin A22 --latest --limit 20
@@ -74,6 +75,7 @@ When the endpoint is not known yet, start with catalog and type discovery:
 odh datasets search <topic>
 odh tourism types --dataset event
 odh mobility types --kind station
+odh mobility origins --station-type ParkingStation
 odh mobility stations --station-type ParkingStation --limit 5
 ```
 
@@ -113,12 +115,18 @@ Agents should treat exit code `2` as a usage bug in the invocation and exit code
 Open Data Hub Mobility feeds can expose different traffic concepts as station measurements, events, and forecasts. For South Tyrol roadworks, closures, road events, and traffic restrictions, prefer the opinionated traffic layer:
 
 ```bash
+odh traffic zones
+odh traffic categories
 odh traffic today --area ueberetsch-unterland --type roadworks --format table
+odh traffic today --zone-id 6 --type closure --json
 odh traffic events --area unterland --from 2026-05-16 --to 2026-05-16 --type closure --json
+odh traffic search "road closed badia" --today --zone-id 6 --json
 odh traffic today --near 46.42,11.25 --radius 15km
 ```
 
-Traffic commands query Open Data Hub `PROVINCE_BZ` events and default to table output. Use `--json` or `--format json` for downstream parsing and `--format table` or `--format markdown` for direct human answers. The traffic layer deduplicates rows, maps German/Italian event categories to stable English category names, filters expired/future rows by date, hides stale open-ended records by default, and warns when timestamps look stale.
+Traffic commands query Open Data Hub `PROVINCE_BZ` events and default to table output. Use `--json` or `--format json` for downstream parsing and `--format table` or `--format markdown` for direct human answers. Use `odh traffic zones` to discover upstream zone IDs, then pass `--zone-id` when broad regional filtering is more reliable than a local place-name alias. The traffic layer deduplicates rows, maps German/Italian event categories to stable English category names, filters expired/future rows by date, hides stale open-ended records by default, and warns when timestamps look stale.
+
+Use `odh traffic search <text>` for towns, roads, place names, and natural-language traffic wording. The CLI intentionally does not hardcode local village aliases; agents should broaden multilingual or local place names themselves, then call `traffic search` and/or `--zone-id`. The search layer only applies generic traffic-term normalization such as `closed`/`closure`/`roadblock` to `sperre`/`gesperrt`, and `roadworks` to `baustelle`.
 
 If a user needs an exact public traffic bulletin, compare the Open Data Hub result with the official traffic service outside this CLI and state both the source and timestamp used. Do not imply that `odh traffic` silently switched to another upstream feed.
 

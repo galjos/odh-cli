@@ -38,9 +38,13 @@ Usage:
   odh transit stops search <query>
   odh transit departures --stop query --date YYYY-MM-DD --around HH:MM
   odh transit trip --from query --to query --date YYYY-MM-DD --time HH:MM
+  odh traffic zones [--format json|table|markdown]
+  odh traffic categories [--format json|table|markdown]
   odh traffic today [--area area] [--type type] [--format json|table|markdown]
   odh traffic events [--area area] [--from date] [--to date]
+  odh traffic search <text> [--today|--from date --to date]
   odh mobility types [--kind station|event|edge]
+  odh mobility origins --station-type type
   odh mobility stations --station-type type [--origin origin]
   odh mobility datatypes --station-type type [--origin origin]
   odh mobility events --origin origin [--latest]
@@ -377,6 +381,8 @@ func (r *Runner) runMobility(ctx context.Context, args []string, stdout, stderr 
 	switch args[0] {
 	case "types":
 		return r.runMobilityTypes(ctx, args[1:], stdout, stderr)
+	case "origins":
+		return r.runMobilityOrigins(ctx, args[1:], stdout, stderr)
 	case "stations":
 		return r.runMobilityStations(ctx, args[1:], stdout, stderr)
 	case "datatypes":
@@ -542,8 +548,12 @@ Examples:
   odh transit departures --stop "Ora, Stazione di Ora" --date 2026-05-16 --around 14:05
   odh transit trip --from auer --to brenner --date 2026-05-16 --time 14:05 --mode train
   odh transit delay-stats --from auer --to brenner --time 14:05 --weekday saturday
+  odh traffic zones
+  odh traffic categories
   odh traffic today --area ueberetsch-unterland --type roadworks --format table
+  odh traffic search "road closed badia" --today --zone-id 6 --json
   odh mobility types --kind event
+  odh mobility origins --station-type TrafficSensor
   odh mobility stations --station-type ParkingStation --limit 5
   odh mobility datatypes --station-type TrafficSensor --origin A22
   odh mobility events --origin A22 --latest

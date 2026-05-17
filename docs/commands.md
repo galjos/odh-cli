@@ -36,7 +36,7 @@ Example output with `--network=false`:
 {
   "ok": true,
   "version": {
-    "version": "0.1.5-dev",
+    "version": "0.1.6-dev",
     "commit": "unknown",
     "date": "unknown",
     "goos": "darwin",
@@ -46,7 +46,7 @@ Example output with `--network=false`:
     {
       "name": "version",
       "ok": true,
-      "message": "0.1.5-dev"
+      "message": "0.1.6-dev"
     },
     {
       "name": "api_registry",
@@ -233,6 +233,24 @@ Flags:
 
 The output wraps the upstream list with `kind`, `count`, and `types` fields so agents can check whether discovery returned data before using it.
 
+## `odh mobility origins`
+
+Summarizes available `sorigin` values for a Mobility station type.
+
+```bash
+odh mobility origins --station-type TrafficSensor
+odh mobility origins --station-type ParkingStation --limit 1000
+```
+
+Flags:
+
+- `--station-type value` - required.
+- `--representation value` - default `flat`.
+- `--limit n` - maximum station records to inspect; default `1000`.
+- `--param key=value` - additional query parameter. Repeatable.
+
+The output wraps discovered origin names with station counts and a few station-code samples. Use an origin from this command with `odh mobility stations --origin ...`, `odh mobility datatypes --origin ...`, or origin-specific Mobility event commands when the upstream feed supports them.
+
 ## `odh mobility stations`
 
 Lists Mobility stations for a station type.
@@ -408,12 +426,35 @@ Flags:
 
 The current implementation returns `supported: false` because Open Data Hub GTFS exposes current static GTFS and live GTFS-RT, not an archived GTFS-RT history. The CLI intentionally does not guess delay probability from one live feed snapshot.
 
+## `odh traffic zones`
+
+List the upstream Open Data Hub `PROVINCE_BZ` traffic zone IDs used by traffic events.
+
+```bash
+odh traffic zones
+odh traffic zones --json
+```
+
+Use these IDs with `--zone-id` when an agent needs a broad upstream region without relying on local aliases.
+
+## `odh traffic categories`
+
+List the stable traffic category names accepted by `--type` and the upstream subtype values they map from.
+
+```bash
+odh traffic categories
+odh traffic categories --json
+```
+
+Use these names with `odh traffic today`, `odh traffic events`, or `odh traffic search`.
+
 ## `odh traffic today`
 
 Opinionated wrapper for current South Tyrol traffic events from Open Data Hub Mobility `PROVINCE_BZ`.
 
 ```bash
 odh traffic today --area ueberetsch-unterland --type roadworks --format table
+odh traffic today --zone-id 6 --type closure --json
 odh traffic today --area unterland --type closure --format markdown
 odh traffic today --near 46.42,11.25 --radius 15km
 odh traffic today --area bozen-unterland --json
@@ -424,7 +465,8 @@ The command filters to today, collapses duplicate event rows, hides expired and 
 Flags:
 
 - `--source odh` - traffic source; `odh` is the only supported source.
-- `--area value` - area alias such as `ueberetsch-unterland`, `bozen-unterland`, `unterland`, `ueberetsch`, `salurn`, `kaltern`, `tramin`, `eppan`, `auer`, `neumarkt`, `kurtatsch`, `margreid`, or `montan`.
+- `--zone-id value` - Open Data Hub `PROVINCE_BZ` `messageZoneId` filter; run `odh traffic zones` to list known IDs.
+- `--area value` - compatibility convenience for existing broad area aliases such as `ueberetsch-unterland`, `bozen-unterland`, `unterland`, or `ueberetsch`; prefer `--zone-id` when an agent wants the upstream ODH traffic zone directly.
 - `--type all|roadworks|closure|event|traffic|mountain-pass|bike|radar` - category filter; default `all`.
 - `--road value` - road filter, for example `SP13`, `LS/SP 13`, or `SS42`.
 - `--near lat,lon` - coordinate filter.
@@ -451,6 +493,18 @@ Additional flags:
 
 - `--from YYYY-MM-DD` - start date.
 - `--to YYYY-MM-DD` - end date.
+
+## `odh traffic search`
+
+Free-text search over the normalized ODH traffic event fields: zone, zone ID, road, road name, German/Italian place text, subtype, severity, and event type.
+
+```bash
+odh traffic search "road closed badia" --today --zone-id 6 --json
+odh traffic search zwischenwasser --from 2026-05-16 --to 2026-05-16 --include-stale
+odh traffic search "SP244 closure" --today --format table
+```
+
+The search command is intentionally generic. It does not hardcode village aliases. Agents should use `odh traffic zones` and their own geographic reasoning when they need to broaden a user phrase such as a town, valley, or multilingual place name. The CLI only normalizes common traffic terms such as `closed`, `closure`, `roadblock`, `sperre`, `gesperrt`, `roadworks`, and `baustelle`.
 
 ## `odh a22 status`
 

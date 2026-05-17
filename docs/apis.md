@@ -33,9 +33,12 @@ Mobility / Time Series API:
 
 - Official API description: historical and real-time time-series data, primarily in the mobility domain.
 - API v2 uses station concepts such as station type, data type, origin, metadata, and measurements.
-- Use `odh mobility types` and `odh mobility datatypes` for discovery before assuming a station type or origin exists.
+- Use `odh mobility types`, `odh mobility origins`, and `odh mobility datatypes` for discovery before assuming a station type, origin, or data type exists.
 - Use `odh mobility stations --station-type <type>` after station-type discovery to inspect concrete station metadata, coordinates, origins, and provider fields.
 - Use `odh traffic today` or `odh traffic events` for South Tyrol roadworks, closures, road events, and traffic restrictions from Open Data Hub `PROVINCE_BZ`.
+- Use `odh traffic zones` to list upstream `PROVINCE_BZ` traffic zone IDs, and `--zone-id` for broad region filters.
+- Use `odh traffic categories` to list the stable `--type` names and upstream subtype hints.
+- Use `odh traffic search <text>` for roads, towns, and plain-language traffic questions while staying on Open Data Hub data.
 
 Standards APIs:
 
@@ -47,6 +50,7 @@ Standards APIs:
 The Mobility commands include a narrow A22 diagnostic path:
 
 - `odh traffic today --area ueberetsch-unterland --type roadworks` summarizes current Open Data Hub `PROVINCE_BZ` roadwork events.
+- `odh traffic search "road closed badia" --today --zone-id 6 --json` searches event text and uses the upstream Pustertal zone ID.
 - `odh traffic events --area bozen-unterland --from YYYY-MM-DD --to YYYY-MM-DD` queries a specific traffic-event date range.
 - `odh traffic today --near 46.42,11.25 --radius 15km --json` filters Open Data Hub `PROVINCE_BZ` events by coordinates.
 - `odh gtfs datasets` lists Open Data Hub GTFS datasets and their realtime-feed metadata.
@@ -55,6 +59,7 @@ The Mobility commands include a narrow A22 diagnostic path:
 - `odh transit departures --stop "Ora, Stazione di Ora" --date YYYY-MM-DD --around HH:MM` inspects static GTFS departures near a time.
 - `odh transit trip --from auer --to brenner --date YYYY-MM-DD --time HH:MM --mode train` looks for direct static GTFS trip matches; it does not perform transfer routing.
 - `odh mobility events --origin A22 --latest` checks current A22 events.
+- `odh mobility origins --station-type TrafficSensor` lists `sorigin` values before choosing one for sensor or datatype commands.
 - `odh mobility stations --station-type TrafficSensor --origin A22` lists A22 traffic-sensor station records.
 - `odh mobility datatypes --station-type TrafficSensor --origin A22` discovers A22 traffic-sensor data types.
 - `odh a22 status` combines current events with the traffic forecast feed and emits warnings when Open Data Hub data should not be treated as current incident data.

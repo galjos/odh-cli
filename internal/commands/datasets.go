@@ -248,6 +248,7 @@ func datasetCatalog() []datasetEntry {
 			Description: "A22 current event checks, traffic sensor discovery, and traffic forecast caveats.",
 			Commands: []string{
 				"odh a22 status --limit 10",
+				"odh mobility origins --station-type TrafficSensor",
 				"odh mobility datatypes --station-type TrafficSensor --origin A22 --limit 100",
 			},
 			Endpoints: []string{"/v2/flat,event/A22/latest", "/v2/flat/TrafficForecast/forecast/latest"},
@@ -258,14 +259,17 @@ func datasetCatalog() []datasetEntry {
 			Domain:      "mobility",
 			API:         "mobility",
 			Title:       "Traffic events and roadworks",
-			Description: "Opinionated Open Data Hub PROVINCE_BZ traffic-event view with area aliases, type filters, date filtering, deduplication, and stale-record warnings.",
+			Description: "Opinionated Open Data Hub PROVINCE_BZ traffic-event view with zone filters, text search, type filters, date filtering, deduplication, and stale-record warnings.",
 			Commands: []string{
+				"odh traffic zones",
+				"odh traffic categories",
 				"odh traffic today --area ueberetsch-unterland --type roadworks --format table",
 				"odh traffic events --area bozen-unterland --from 2026-05-16 --to 2026-05-16 --format json",
+				"odh traffic search \"road closed badia\" --today --zone-id 6 --json",
 				"odh traffic today --near 46.42,11.25 --radius 15km --json",
 			},
 			Endpoints: []string{"/v2/flat,event/PROVINCE_BZ/{from}/{to}"},
-			Keywords:  []string{"traffic", "roadworks", "closure", "roadblock", "unterland", "ueberetsch", "province_bz"},
+			Keywords:  []string{"traffic", "roadworks", "closure", "roadblock", "category", "zone", "zone-id", "unterland", "ueberetsch", "pustertal", "province_bz"},
 		},
 	}
 	sort.Slice(entries, func(i, j int) bool {
