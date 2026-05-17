@@ -168,6 +168,16 @@ odh a22 status --limit 10
 - Prefer `odh a22 status` for A22 because it reports current-event availability and warns when forecast rows are not current incident data.
 - Use `--where` and `--param key=value` instead of manually constructing query strings when a curated command supports them.
 
+## Agent Evals
+
+The upstream project includes agent eval tasks in `evals/agent/tasks.json` and a live smoke runner:
+
+```bash
+scripts/run-agent-evals.sh
+```
+
+Use those evals to decide whether a repeated agent failure belongs in docs, skill guidance, agent reasoning, or a narrow CLI feature. Do not ask for natural-language helper commands unless the evals show repeated friction that cannot be solved by existing discovery commands.
+
 ## Official References
 
 - https://opendatahub.com/api/

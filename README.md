@@ -243,10 +243,18 @@ Optional live smoke tests:
 ODH_LIVE_TESTS=1 go test ./internal/commands -run Live
 ```
 
+Agent evaluation smoke checks:
+
+```bash
+scripts/run-agent-evals.sh
+```
+
 More details are in [docs/development.md](docs/development.md).
 
 Installation details are in [docs/install.md](docs/install.md).
 
 Release builds are documented in [docs/release.md](docs/release.md).
+
+Agent evaluation is documented in [docs/evaluation.md](docs/evaluation.md).
 
 The agent skill bundle is in [skills/open-data-hub-cli/SKILL.md](skills/open-data-hub-cli/SKILL.md).

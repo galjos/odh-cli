@@ -15,6 +15,7 @@ SPDX-License-Identifier: CC0-1.0
 - `internal/openapi` - OpenAPI JSON/YAML normalization.
 - `internal/output` - deterministic JSON output helpers.
 - `docs` - user, API, agent, and development docs.
+- `evals` - agent task evals and scoring fixtures.
 - `examples` - small shell examples.
 - `scripts` - release and maintenance scripts.
 
@@ -42,6 +43,18 @@ ODH_LIVE_TESTS=1 go test ./internal/commands -run Live
 ```
 
 The live tests call public unauthenticated Tourism and Mobility endpoints.
+
+## Agent Evals
+
+Agent evals live outside the CLI command surface. They check whether agents can use existing commands correctly before new features are added.
+
+```bash
+scripts/run-agent-evals.sh
+```
+
+Set `ODH_EVAL_BIN=odh` to test an installed binary instead of the local source tree.
+
+The task set and scoring rubric are documented in [evaluation.md](evaluation.md).
 
 ## Build Metadata
 

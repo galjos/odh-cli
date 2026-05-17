@@ -137,3 +137,9 @@ If the user asks for current traffic conditions, report the timestamp and feed t
 ## Why No MCP Yet
 
 The project is structured so an MCP server can reuse the registry and HTTP client later. v0.1 ships the CLI first because it is simpler to review, easier to test, and immediately useful in scripts.
+
+## Agent Evals
+
+Use [evaluation.md](evaluation.md) and [../evals/agent/tasks.json](../evals/agent/tasks.json) to test whether agents can answer realistic Open Data Hub questions with the existing CLI surface.
+
+The evals are intentionally outside the CLI. If an agent fails a prompt, first improve the skill guidance or the agent's command path. Add CLI surface only when repeated failures show the same missing bounded upstream vocabulary or mechanical discovery step.

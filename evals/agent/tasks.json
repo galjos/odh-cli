@@ -1,0 +1,115 @@
+{
+  "schema_version": 1,
+  "purpose": "Evaluate whether agents can use odh as a clean Open Data Hub data-access CLI without requiring the CLI to encode local reasoning.",
+  "tasks": [
+    {
+      "id": "traffic-badia-road-closed",
+      "prompt": "Why is the road closed in Badia today?",
+      "expected_command_path": [
+        "odh traffic zones --json",
+        "odh traffic categories --json",
+        "odh traffic search badia --today --zone-id 6 --json",
+        "odh traffic search gadertal --today --zone-id 6 --include-stale --json"
+      ],
+      "pass_criteria": [
+        "Uses traffic zones or equivalent knowledge to scope the broad ODH zone when appropriate.",
+        "Uses traffic search for the place text instead of expecting a hardcoded Badia alias.",
+        "Mentions when ODH returns no current literal Badia match.",
+        "Does not present stale open-ended ODH rows as confirmed current closures.",
+        "States the ODH PROVINCE_BZ source and caveat for public traffic bulletins."
+      ],
+      "common_failures": [
+        "Invents a closure reason from stale rows.",
+        "Assumes Badia must be a CLI area alias.",
+        "Uses raw mobility events first and gets lost in noisy output.",
+        "Omits stale-data warnings."
+      ]
+    },
+    {
+      "id": "traffic-unterland-ueberetsch-roadworks",
+      "prompt": "Are there any roadblocks, road works, or road events today in Unterland and Ueberetsch?",
+      "expected_command_path": [
+        "odh traffic categories --json",
+        "odh traffic today --area ueberetsch-unterland --json",
+        "odh traffic today --area ueberetsch-unterland --type roadworks --json",
+        "odh traffic today --area ueberetsch-unterland --type closure --json"
+      ],
+      "pass_criteria": [
+        "Uses the opinionated traffic layer rather than raw PROVINCE_BZ events.",
+        "Deduplicates through CLI output instead of manually counting raw duplicates.",
+        "Separates roadworks, closures, events, and traffic notices when needed.",
+        "Mentions stale or source warnings from the output."
+      ],
+      "common_failures": [
+        "Reports duplicated raw rows as separate events.",
+        "Ignores the traffic layer and parses a huge raw event response.",
+        "Overstates ODH as the complete official live traffic bulletin."
+      ]
+    },
+    {
+      "id": "traffic-a22-available-data",
+      "prompt": "What A22 traffic data does Open Data Hub expose, and can I use it as live traffic?",
+      "expected_command_path": [
+        "odh datasets search a22",
+        "odh mobility origins --station-type TrafficSensor",
+        "odh mobility datatypes --station-type TrafficSensor --origin A22 --limit 100 --json",
+        "odh a22 status --limit 10"
+      ],
+      "pass_criteria": [
+        "Discovers A22 as a Mobility origin before querying origin-specific data.",
+        "Lists or summarizes TrafficSensor data types for A22.",
+        "Uses odh a22 status for current-event versus forecast semantics.",
+        "Does not infer live incidents from TrafficForecast rows alone."
+      ],
+      "common_failures": [
+        "Treats TrafficForecast as current live traffic.",
+        "Skips origin discovery and assumes the origin name.",
+        "Says there is no A22 data because current events are empty."
+      ]
+    },
+    {
+      "id": "transit-auer-brenner-delay-probability",
+      "prompt": "Can you go into past data and estimate the probability that the Saturday train from Auer around 14:05 to Brenner is delayed, and by how many minutes?",
+      "expected_command_path": [
+        "odh gtfs datasets --json",
+        "odh transit stops search auer",
+        "odh transit stops search brenner",
+        "odh transit trip --from auer --to brenner --date 2026-05-16 --time 14:05 --mode train",
+        "odh transit delay-stats --from auer --to brenner --time 14:05 --weekday saturday"
+      ],
+      "pass_criteria": [
+        "Uses transit commands before raw GTFS endpoints.",
+        "Reports that historical delay probability is unsupported without an archived GTFS-RT history.",
+        "Does not infer probabilities from one live GTFS-RT response.",
+        "Can still provide the static timetable/direct-trip limitation if relevant."
+      ],
+      "common_failures": [
+        "Invents historical delay probabilities.",
+        "Confuses static GTFS schedules with historical realtime delay observations.",
+        "Promises a route planner when only direct static trip matching is implemented."
+      ]
+    },
+    {
+      "id": "mobility-parking-discovery",
+      "prompt": "Find parking data in Open Data Hub and show how an agent should discover stations and available measurements.",
+      "expected_command_path": [
+        "odh datasets search parking",
+        "odh mobility types --kind station",
+        "odh mobility origins --station-type ParkingStation",
+        "odh mobility stations --station-type ParkingStation --limit 5",
+        "odh mobility datatypes --station-type ParkingStation --limit 100"
+      ],
+      "pass_criteria": [
+        "Starts with dataset or station-type discovery.",
+        "Uses mobility origins or station metadata before assuming a provider.",
+        "Distinguishes station metadata from latest measurements.",
+        "Keeps output machine-readable when parsing."
+      ],
+      "common_failures": [
+        "Assumes a provider origin without checking.",
+        "Confuses station list output with occupancy measurements.",
+        "Uses generic odh call when curated discovery commands are available."
+      ]
+    }
+  ]
+}

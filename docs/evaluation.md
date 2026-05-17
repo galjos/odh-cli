@@ -1,0 +1,74 @@
+<!--
+SPDX-FileCopyrightText: 2026 Josef Gallmetzer
+
+SPDX-License-Identifier: CC0-1.0
+-->
+
+# Evaluation
+
+`odh` should stay a clean data-access CLI. Evaluation work therefore lives outside the command surface.
+
+The evaluation layer answers one question: can an agent use the existing CLI correctly for realistic Open Data Hub tasks?
+
+## Agent Eval Tasks
+
+The task set is in [../evals/agent/tasks.json](../evals/agent/tasks.json). It contains user-style prompts, expected command paths, pass criteria, and common failure modes.
+
+Current task themes:
+
+- South Tyrol traffic text search and stale-event handling.
+- Unterland / Ueberetsch roadworks and closure summaries.
+- A22 traffic data discovery and forecast caveats.
+- Public-transport delay-probability limitations.
+- Mobility parking discovery.
+
+## Smoke Runner
+
+Run the command-affordance checks from the repository root:
+
+```bash
+scripts/run-agent-evals.sh
+```
+
+By default, this runs the local source tree with `go run ./cmd/odh --`. To test an installed binary:
+
+```bash
+ODH_EVAL_BIN=odh scripts/run-agent-evals.sh
+```
+
+The smoke runner is intentionally live: it calls public unauthenticated Open Data Hub endpoints. It should not be treated like a hermetic unit test or required in normal CI.
+
+## Manual Scoring
+
+For each prompt in `tasks.json`, run a fresh agent attempt and score it:
+
+- `pass` - expected command path, source-aware answer, caveats handled.
+- `partial` - useful data, but a missed warning, weak source handling, or unnecessary raw call.
+- `fail` - guessed answer, stale data presented as current, unsupported capability invented, or wrong command family.
+
+Record the failed command path and the reason. Then decide the fix category:
+
+- Docs or skill guidance.
+- Eval wording.
+- Agent reasoning.
+- Narrow CLI feature.
+
+Only the last category should change the CLI, and only when repeated eval failures point to the same missing bounded upstream vocabulary or mechanical discovery step.
+
+## Clean CLI Rule
+
+Do not add natural-language commands just because one eval prompt is difficult.
+
+Prefer:
+
+- discovery commands for bounded upstream vocabularies,
+- stable JSON contracts,
+- explicit unsupported responses,
+- clear warnings.
+
+Avoid:
+
+- hardcoded local place aliases,
+- agent reasoning inside the CLI,
+- endpoint-specific wrappers for one-off questions,
+- silent fallback to non-ODH sources.
