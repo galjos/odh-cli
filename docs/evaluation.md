@@ -21,6 +21,7 @@ Current task themes:
 - A22 traffic data discovery and forecast caveats.
 - Public-transport delay-probability limitations.
 - Mobility parking discovery.
+- Mobility latest freshness and inactive-station filtering for availability questions.
 
 ## Smoke Runner
 

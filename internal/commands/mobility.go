@@ -416,6 +416,34 @@ type originSummary struct {
 	StationSamples []string `json:"station_samples,omitempty"`
 }
 
+type mobilityLatestFilter struct {
+	StationType   string
+	DataType      string
+	Origin        string
+	ActiveOnly    bool
+	FreshWithin   string
+	FreshDuration time.Duration
+	Sort          string
+	Limit         int
+	RequestLimit  int
+	Endpoint      string
+	Now           time.Time
+}
+
+type mobilityLatestResult struct {
+	StationType  string           `json:"station_type"`
+	DataType     string           `json:"data_type"`
+	Origin       string           `json:"origin,omitempty"`
+	ActiveOnly   bool             `json:"active_only,omitempty"`
+	FreshWithin  string           `json:"fresh_within,omitempty"`
+	Sort         string           `json:"sort"`
+	Endpoint     string           `json:"endpoint"`
+	RawCount     int              `json:"raw_count"`
+	Count        int              `json:"count"`
+	Measurements []map[string]any `json:"measurements"`
+	Warnings     []string         `json:"warnings,omitempty"`
+}
+
 func summarizeDatatypes(records []map[string]any, originFilter string) []datatypeSummary {
 	type aggregate struct {
 		datatypeSummary
@@ -463,6 +491,135 @@ func summarizeDatatypes(records []map[string]any, originFilter string) []datatyp
 		return summaries[i].Name < summaries[j].Name
 	})
 	return summaries
+}
+
+func mobilityLatestNeedsLocalProcessing(origin string, active bool, freshDuration time.Duration, sortMode string) bool {
+	return strings.TrimSpace(origin) != "" || active || freshDuration > 0 || sortMode != "upstream"
+}
+
+func filterMobilityLatest(records []map[string]any, filter mobilityLatestFilter) mobilityLatestResult {
+	now := filter.Now
+	if now.IsZero() {
+		now = time.Now()
+	}
+	origin := strings.TrimSpace(filter.Origin)
+	matched := make([]map[string]any, 0, len(records))
+	filteredOrigin := 0
+	filteredInactive := 0
+	filteredStale := 0
+	for _, record := range records {
+		if origin != "" && !strings.EqualFold(asString(record["sorigin"]), origin) {
+			filteredOrigin++
+			continue
+		}
+		if filter.ActiveOnly && !asBool(record["sactive"]) {
+			filteredInactive++
+			continue
+		}
+		if filter.FreshDuration > 0 {
+			validTime := parseODHTime(asString(record["mvalidtime"]))
+			if validTime == nil || validTime.Before(now.Add(-filter.FreshDuration)) {
+				filteredStale++
+				continue
+			}
+		}
+		matched = append(matched, record)
+	}
+	sortMobilityLatest(matched, filter.Sort)
+	if filter.Limit > 0 && len(matched) > filter.Limit {
+		matched = matched[:filter.Limit]
+	}
+	warnings := make([]string, 0)
+	if filteredOrigin > 0 {
+		warnings = append(warnings, fmt.Sprintf("%d rows were hidden by --origin", filteredOrigin))
+	}
+	if filteredInactive > 0 {
+		warnings = append(warnings, fmt.Sprintf("%d inactive rows were hidden by --active", filteredInactive))
+	}
+	if filteredStale > 0 {
+		warnings = append(warnings, fmt.Sprintf("%d stale rows were hidden by --fresh-within", filteredStale))
+	}
+	if filter.RequestLimit > 0 && len(records) >= filter.RequestLimit {
+		warnings = append(warnings, fmt.Sprintf("inspected %d upstream rows; increase --request-limit if filters may hide later rows", filter.RequestLimit))
+	}
+	if len(matched) == 0 && len(warnings) > 0 {
+		warnings = append(warnings, "local filters matched no rows from the inspected upstream response")
+	}
+	return mobilityLatestResult{
+		StationType:  filter.StationType,
+		DataType:     filter.DataType,
+		Origin:       origin,
+		ActiveOnly:   filter.ActiveOnly,
+		FreshWithin:  strings.TrimSpace(filter.FreshWithin),
+		Sort:         filter.Sort,
+		Endpoint:     filter.Endpoint,
+		RawCount:     len(records),
+		Count:        len(matched),
+		Measurements: matched,
+		Warnings:     warnings,
+	}
+}
+
+func sortMobilityLatest(records []map[string]any, sortMode string) {
+	switch sortMode {
+	case "newest":
+		sort.SliceStable(records, func(i, j int) bool {
+			return mobilityValidTime(records[i]).After(mobilityValidTime(records[j]))
+		})
+	case "oldest":
+		sort.SliceStable(records, func(i, j int) bool {
+			return mobilityValidTime(records[i]).Before(mobilityValidTime(records[j]))
+		})
+	case "station":
+		sort.SliceStable(records, func(i, j int) bool {
+			if asString(records[i]["sname"]) != asString(records[j]["sname"]) {
+				return asString(records[i]["sname"]) < asString(records[j]["sname"])
+			}
+			return asString(records[i]["scode"]) < asString(records[j]["scode"])
+		})
+	}
+}
+
+func mobilityValidTime(record map[string]any) time.Time {
+	parsed := parseODHTime(asString(record["mvalidtime"]))
+	if parsed == nil {
+		return time.Time{}
+	}
+	return *parsed
+}
+
+func normalizeMobilityLatestSort(value string) (string, error) {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "", "upstream", "none":
+		return "upstream", nil
+	case "new", "newest", "newest-first", "desc", "valid-time-desc":
+		return "newest", nil
+	case "old", "oldest", "oldest-first", "asc", "valid-time-asc":
+		return "oldest", nil
+	case "station", "station-name":
+		return "station", nil
+	default:
+		return "", fmt.Errorf("unsupported mobility latest sort %q", value)
+	}
+}
+
+func parseFreshWithin(value string) (time.Duration, error) {
+	value = strings.TrimSpace(strings.ToLower(value))
+	if value == "" {
+		return 0, nil
+	}
+	if strings.HasSuffix(value, "d") {
+		days, err := strconv.ParseFloat(strings.TrimSpace(strings.TrimSuffix(value, "d")), 64)
+		if err != nil || days <= 0 {
+			return 0, fmt.Errorf("invalid --fresh-within %q; use a positive duration like 24h or 7d", value)
+		}
+		return time.Duration(days * float64(24*time.Hour)), nil
+	}
+	duration, err := time.ParseDuration(value)
+	if err != nil || duration <= 0 {
+		return 0, fmt.Errorf("invalid --fresh-within %q; use a positive duration like 24h or 7d", value)
+	}
+	return duration, nil
 }
 
 func summarizeOrigins(records []map[string]any) []originSummary {
@@ -563,6 +720,26 @@ func asString(value any) string {
 		return ""
 	default:
 		return fmt.Sprint(typed)
+	}
+}
+
+func asBool(value any) bool {
+	switch typed := value.(type) {
+	case bool:
+		return typed
+	case string:
+		switch strings.ToLower(strings.TrimSpace(typed)) {
+		case "true", "1", "yes", "y":
+			return true
+		default:
+			return false
+		}
+	case float64:
+		return typed != 0
+	case int:
+		return typed != 0
+	default:
+		return false
 	}
 }
 

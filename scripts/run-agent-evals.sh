@@ -80,6 +80,9 @@ assert_json_filter "mobility origins discovers A22 traffic sensors" "$tmpdir/tra
 run_odh mobility datatypes --station-type TrafficSensor --origin A22 --limit 1000 >"$tmpdir/a22-datatypes.json"
 assert_json_filter "mobility datatypes summarizes A22 measurements" "$tmpdir/a22-datatypes.json" '.origin == "A22" and .count > 0 and (.datatypes | length > 0)'
 
+run_odh mobility latest --station-type EChargingStation --data-type number-available --origin ALPERIA --active --fresh-within 24h --sort newest --request-limit 1000 --limit 5 >"$tmpdir/ev-availability.json"
+assert_json_filter "mobility latest exposes filtered availability wrapper" "$tmpdir/ev-availability.json" '.station_type == "EChargingStation" and .data_type == "number-available" and .origin == "ALPERIA" and .active_only == true and .fresh_within == "24h" and .sort == "newest" and (.raw_count | type == "number") and (.measurements | type == "array") and (.warnings | type == "array")'
+
 run_odh a22 status --limit 5 >"$tmpdir/a22-status.json"
 assert_json_filter "a22 status separates events and forecast feeds" "$tmpdir/a22-status.json" '.events.count >= 0 and .forecast.count >= 0 and (.warnings | type == "array")'
 

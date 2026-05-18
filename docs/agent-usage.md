@@ -43,7 +43,7 @@ odh transit delay-stats --from auer --to brenner --time 14:05 --weekday saturday
 odh traffic today --area ueberetsch-unterland --type roadworks --format table
 odh traffic events --area bozen-unterland --from 2026-05-16 --to 2026-05-16 --json
 odh traffic today --near 46.42,11.25 --radius 15km --json
-odh mobility latest --station-type EChargingStation --data-type number-available --limit 5
+odh mobility latest --station-type EChargingStation --data-type number-available --origin ALPERIA --active --fresh-within 24h --sort newest --request-limit 1000 --limit 5
 odh a22 status --limit 10
 ```
 
@@ -79,6 +79,20 @@ odh mobility origins --station-type ParkingStation
 odh mobility stations --station-type ParkingStation --limit 5
 ```
 
+## Mobility Availability Questions
+
+For current EV charging, parking, or similar availability questions, avoid parsing raw latest rows in upstream order. Open Data Hub can return old inactive stations first for some station/data-type combinations.
+
+Use discovery first, then filtered latest measurements:
+
+```bash
+odh mobility origins --station-type EChargingStation --limit 1000
+odh mobility datatypes --station-type EChargingStation --origin ALPERIA --limit 1000
+odh mobility latest --station-type EChargingStation --data-type number-available --origin ALPERIA --active --fresh-within 24h --sort newest --request-limit 1000 --limit 10
+```
+
+The filtered `mobility latest` output wraps measurements with `raw_count`, `count`, and `warnings`. Report warnings when filters hide stale or inactive rows, and increase `--request-limit` when a question needs broader coverage than the inspected upstream rows.
+
 ## Public Transport And Delay Questions
 
 For public-transport timetable or live-feed questions, prefer the GTFS and transit commands before raw API calls:
@@ -92,7 +106,9 @@ odh transit departures --stop "Ora, Stazione di Ora" --date 2026-05-16 --around 
 odh transit trip --from auer --to brenner --date 2026-05-16 --time 14:05 --mode train
 ```
 
-The transit layer reads the static STA GTFS archive and caches it locally for 24 hours. Stop search supports common German/Italian aliases such as `auer` / `ora`, `brenner` / `brennero`, and `bozen` / `bolzano`.
+The transit layer reads the static STA GTFS archive and caches it locally for 24 hours. A cold cache download can be large, so transit commands allow a longer archive-download timeout than normal API calls. Stop search supports common German/Italian aliases such as `auer` / `ora`, `brenner` / `brennero`, and `bozen` / `bolzano`.
+
+If `transit departures` or `transit trip` returns a warning that a stop query matched many stops, narrow the stop wording with `odh transit stops search <query> --limit 5` and rerun the command with a more specific stop name.
 
 `odh transit trip` only finds direct static GTFS trip matches. It does not perform full connection planning or transfer routing. If the user asks for a multi-leg journey, report that limitation and use the returned stop matches plus GTFS-RT feed as supporting data, not as a full journey planner.
 

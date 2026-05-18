@@ -36,7 +36,7 @@ Example output with `--network=false`:
 {
   "ok": true,
   "version": {
-    "version": "0.1.6-dev",
+    "version": "0.1.7-dev",
     "commit": "unknown",
     "date": "unknown",
     "goos": "darwin",
@@ -46,7 +46,7 @@ Example output with `--network=false`:
     {
       "name": "version",
       "ok": true,
-      "message": "0.1.6-dev"
+      "message": "0.1.7-dev"
     },
     {
       "name": "api_registry",
@@ -203,6 +203,11 @@ Curated wrapper for Mobility API latest measurements.
 odh mobility latest \
   --station-type EChargingStation \
   --data-type number-available \
+  --origin ALPERIA \
+  --active \
+  --fresh-within 24h \
+  --sort newest \
+  --request-limit 1000 \
   --limit 5
 ```
 
@@ -211,10 +216,17 @@ Flags:
 - `--station-type value` - required.
 - `--data-type value` - required.
 - `--representation value` - default `flat,node`.
-- `--limit n` - default `5`.
+- `--limit n` - final number of measurements to output; default `5`.
+- `--request-limit n` - upstream rows to inspect before local filtering. Used with local filters; default is at least `1000`.
 - `--offset n` - default `0`.
+- `--origin value` - local `sorigin` filter, case-insensitive, for example `ALPERIA`.
+- `--active` - keep only rows whose station is active.
+- `--fresh-within duration` - keep only rows whose `mvalidtime` is within this age, for example `24h` or `7d`.
+- `--sort upstream|newest|oldest|station` - local sort mode; default `upstream`.
 - `--where expr` - Open Data Hub where filter.
 - `--param key=value` - additional query parameter. Repeatable.
+
+Without local flags, output is the raw upstream JSON response. With `--origin`, `--active`, `--fresh-within`, or a local `--sort`, the command returns a wrapper containing `station_type`, `data_type`, `raw_count`, `count`, `measurements`, and optional `warnings`. This keeps the raw command lightweight while allowing agents to avoid stale or inactive availability rows.
 
 ## `odh mobility types`
 

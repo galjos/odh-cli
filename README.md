@@ -37,7 +37,7 @@ This is an early v0.1 project. It intentionally focuses on a small working core:
 - discover Mobility station, event, and edge types,
 - list Mobility stations for a station type,
 - summarize Mobility data types for a station type and origin,
-- query latest Mobility time-series measurements,
+- query latest Mobility time-series measurements, with optional local origin, active-station, freshness, and sorting filters for agent-friendly availability checks,
 - list GTFS datasets and inspect GTFS-RT trip updates, vehicle positions, and service alerts,
 - search STA timetable stops and inspect static GTFS departures and direct trip matches,
 - summarize South Tyrol roadworks, closures, events, and traffic notices from Open Data Hub `PROVINCE_BZ` with zone discovery, date filtering, text search, deduplication, and stale-record warnings,
@@ -58,7 +58,7 @@ The installer detects macOS/Linux and `amd64`/`arm64`, downloads the matching re
 Install a specific version or directory:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/galjos/odh-cli/main/scripts/install.sh | sh -s -- --version v0.1.6 --dir "$HOME/bin"
+curl -fsSL https://raw.githubusercontent.com/galjos/odh-cli/main/scripts/install.sh | sh -s -- --version v0.1.7 --dir "$HOME/bin"
 ```
 
 Build from source instead:
@@ -77,7 +77,7 @@ Build with release metadata:
 
 ```bash
 go build \
-  -ldflags "-X github.com/galjos/odh-cli/internal/version.Version=0.1.6 -X github.com/galjos/odh-cli/internal/version.Commit=$(git rev-parse --short HEAD) -X github.com/galjos/odh-cli/internal/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  -ldflags "-X github.com/galjos/odh-cli/internal/version.Version=0.1.7 -X github.com/galjos/odh-cli/internal/version.Commit=$(git rev-parse --short HEAD) -X github.com/galjos/odh-cli/internal/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   -o odh ./cmd/odh
 ```
 
@@ -141,6 +141,11 @@ Use the curated Mobility latest-measurements command:
 odh mobility latest \
   --station-type EChargingStation \
   --data-type number-available \
+  --origin ALPERIA \
+  --active \
+  --fresh-within 24h \
+  --sort newest \
+  --request-limit 1000 \
   --limit 5
 ```
 

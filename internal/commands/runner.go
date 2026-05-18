@@ -48,7 +48,7 @@ Usage:
   odh mobility stations --station-type type [--origin origin]
   odh mobility datatypes --station-type type [--origin origin]
   odh mobility events --origin origin [--latest]
-  odh mobility latest --station-type type --data-type type [--limit n] [--where expr]
+  odh mobility latest --station-type type --data-type type [--limit n] [--origin origin] [--active] [--fresh-within duration] [--sort newest|oldest|station|upstream] [--where expr]
   odh a22 status
 
 Run "odh help" for examples.
@@ -403,7 +403,12 @@ func (r *Runner) runMobilityLatest(ctx context.Context, args []string, stdout, s
 	dataType := fs.String("data-type", "", "data type, for example number-available")
 	representation := fs.String("representation", "flat,node", "API representation")
 	limit := fs.Int("limit", 5, "number of measurements to request")
+	requestLimit := fs.Int("request-limit", 0, "raw upstream rows to request before local filtering")
 	offset := fs.Int("offset", 0, "pagination offset")
+	origin := fs.String("origin", "", "optional sorigin filter, for example ALPERIA")
+	active := fs.Bool("active", false, "keep only active stations")
+	freshWithin := fs.String("fresh-within", "", "keep only rows with mvalidtime within this age, for example 24h or 7d")
+	sortMode := fs.String("sort", "upstream", "local sort: upstream, newest, oldest, or station")
 	where := fs.String("where", "", "Open Data Hub where filter")
 	params := paramValues{}
 	fs.Var(&params, "param", "additional query parameter as key=value; repeatable")
@@ -426,15 +431,40 @@ func (r *Runner) runMobilityLatest(ctx context.Context, args []string, stdout, s
 		fmt.Fprintln(stderr, "--limit must be greater than zero")
 		return 2
 	}
+	if *requestLimit < 0 {
+		fmt.Fprintln(stderr, "--request-limit must not be negative")
+		return 2
+	}
 	if *offset < 0 {
 		fmt.Fprintln(stderr, "--offset must not be negative")
+		return 2
+	}
+	sortModeValue, err := normalizeMobilityLatestSort(*sortMode)
+	if err != nil {
+		fmt.Fprintln(stderr, err)
+		return 2
+	}
+	freshDuration, err := parseFreshWithin(*freshWithin)
+	if err != nil {
+		fmt.Fprintln(stderr, err)
 		return 2
 	}
 	api, _ := r.Registry.Find("mobility")
 	path := fmt.Sprintf("/v2/%s/%s/%s/latest", url.PathEscape(*representation), url.PathEscape(*stationType), url.PathEscape(*dataType))
 	path = strings.ReplaceAll(path, "%2C", ",")
 	values := params.Values()
-	values.Set("limit", strconv.Itoa(*limit))
+	localProcessing := mobilityLatestNeedsLocalProcessing(*origin, *active, freshDuration, sortModeValue)
+	upstreamLimit := *limit
+	if localProcessing {
+		upstreamLimit = *requestLimit
+		if upstreamLimit == 0 {
+			upstreamLimit = max(*limit, 1000)
+		}
+		if upstreamLimit < *limit {
+			upstreamLimit = *limit
+		}
+	}
+	values.Set("limit", strconv.Itoa(upstreamLimit))
 	values.Set("offset", strconv.Itoa(*offset))
 	if strings.TrimSpace(*where) != "" {
 		values.Set("where", *where)
@@ -443,6 +473,32 @@ func (r *Runner) runMobilityLatest(ctx context.Context, args []string, stdout, s
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return 2
+	}
+	if localProcessing {
+		value, err := r.fetchJSONValue(ctx, requestURL)
+		if err != nil {
+			fmt.Fprintln(stderr, err)
+			return 1
+		}
+		records := extractDataList(value)
+		result := filterMobilityLatest(records, mobilityLatestFilter{
+			StationType:   *stationType,
+			DataType:      *dataType,
+			Origin:        *origin,
+			ActiveOnly:    *active,
+			FreshWithin:   *freshWithin,
+			FreshDuration: freshDuration,
+			Sort:          sortModeValue,
+			Limit:         *limit,
+			RequestLimit:  upstreamLimit,
+			Endpoint:      requestURL,
+			Now:           time.Now(),
+		})
+		if err := output.WriteJSON(stdout, result); err != nil {
+			fmt.Fprintln(stderr, err)
+			return 1
+		}
+		return 0
 	}
 	return r.fetchJSON(ctx, requestURL, stdout, stderr)
 }

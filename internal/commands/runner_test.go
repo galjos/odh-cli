@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/galjos/odh-cli/internal/apis"
 	"github.com/galjos/odh-cli/internal/client"
@@ -475,6 +476,106 @@ func TestRunMobilityLatestSupportsWhere(t *testing.T) {
 	}
 	if !strings.Contains(stdout.String(), `"data"`) {
 		t.Fatalf("unexpected stdout: %s", stdout.String())
+	}
+}
+
+func TestRunMobilityLatestFiltersAndSorts(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v2/flat,node/EChargingStation/number-available/latest" {
+			t.Fatalf("unexpected path %q", r.URL.Path)
+		}
+		if got := r.URL.Query().Get("limit"); got != "5" {
+			t.Fatalf("unexpected limit %q", got)
+		}
+		_, _ = w.Write([]byte(`{"data":[
+			{"scode":"alperia-old","sorigin":"ALPERIA","sname":"Old station","sactive":true,"mvalidtime":"2025-01-01 08:00:00.000+0000"},
+			{"scode":"alperia-inactive","sorigin":"ALPERIA","sname":"Inactive station","sactive":false,"mvalidtime":"2026-05-18 10:00:00.000+0000"},
+			{"scode":"other-fresh","sorigin":"OTHER","sname":"Other station","sactive":true,"mvalidtime":"2026-05-18 11:00:00.000+0000"},
+			{"scode":"alperia-fresh-a","sorigin":"ALPERIA","sname":"Fresh A","sactive":true,"mvalidtime":"2026-05-18 09:00:00.000+0000"},
+			{"scode":"alperia-fresh-b","sorigin":"ALPERIA","sname":"Fresh B","sactive":true,"mvalidtime":"2026-05-18 12:00:00.000+0000"}
+		]}`))
+	}))
+	defer server.Close()
+
+	runner := newTestRunner(t, []apis.API{{Name: "mobility", BaseURL: server.URL, Public: true}})
+	var stdout, stderr bytes.Buffer
+	code := runner.Run(context.Background(), []string{
+		"mobility", "latest",
+		"--station-type", "EChargingStation",
+		"--data-type", "number-available",
+		"--origin", "alperia",
+		"--active",
+		"--sort", "newest",
+		"--request-limit", "5",
+		"--limit", "2",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("Run exit = %d, stderr = %s", code, stderr.String())
+	}
+
+	var got mobilityLatestResult
+	if err := json.Unmarshal(stdout.Bytes(), &got); err != nil {
+		t.Fatalf("invalid json: %v\n%s", err, stdout.String())
+	}
+	if got.StationType != "EChargingStation" || got.DataType != "number-available" || got.Origin != "alperia" {
+		t.Fatalf("unexpected summary: %+v", got)
+	}
+	if got.RawCount != 5 || got.Count != 2 || len(got.Measurements) != 2 {
+		t.Fatalf("unexpected counts: raw=%d count=%d len=%d", got.RawCount, got.Count, len(got.Measurements))
+	}
+	if asString(got.Measurements[0]["scode"]) != "alperia-fresh-b" || asString(got.Measurements[1]["scode"]) != "alperia-fresh-a" {
+		t.Fatalf("unexpected sorted measurements: %+v", got.Measurements)
+	}
+	if !strings.Contains(strings.Join(got.Warnings, "\n"), "inactive rows were hidden") {
+		t.Fatalf("missing active warning: %+v", got.Warnings)
+	}
+	if !strings.Contains(strings.Join(got.Warnings, "\n"), "rows were hidden by --origin") {
+		t.Fatalf("missing origin warning: %+v", got.Warnings)
+	}
+}
+
+func TestFilterMobilityLatestFiltersFreshWithin(t *testing.T) {
+	records := []map[string]any{
+		{
+			"scode":      "fresh",
+			"sorigin":    "ALPERIA",
+			"sactive":    true,
+			"mvalidtime": "2026-05-18 09:00:00.000+0000",
+		},
+		{
+			"scode":      "stale",
+			"sorigin":    "ALPERIA",
+			"sactive":    true,
+			"mvalidtime": "2026-05-16 08:00:00.000+0000",
+		},
+		{
+			"scode":      "invalid-time",
+			"sorigin":    "ALPERIA",
+			"sactive":    true,
+			"mvalidtime": "not-a-time",
+		},
+	}
+
+	got := filterMobilityLatest(records, mobilityLatestFilter{
+		StationType:   "EChargingStation",
+		DataType:      "number-available",
+		FreshWithin:   "24h",
+		FreshDuration: 24 * time.Hour,
+		Sort:          "newest",
+		Limit:         10,
+		RequestLimit:  100,
+		Endpoint:      "https://example.test",
+		Now:           time.Date(2026, 5, 18, 10, 0, 0, 0, time.UTC),
+	})
+
+	if got.RawCount != 3 || got.Count != 1 || len(got.Measurements) != 1 {
+		t.Fatalf("unexpected result: %+v", got)
+	}
+	if asString(got.Measurements[0]["scode"]) != "fresh" {
+		t.Fatalf("unexpected measurement: %+v", got.Measurements[0])
+	}
+	if !strings.Contains(strings.Join(got.Warnings, "\n"), "2 stale rows were hidden by --fresh-within") {
+		t.Fatalf("missing stale warning: %+v", got.Warnings)
 	}
 }
 

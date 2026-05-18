@@ -82,3 +82,20 @@ func TestNewAppliesTimeout(t *testing.T) {
 		t.Fatalf("unexpected timeout %s", c.httpClient.Timeout)
 	}
 }
+
+func TestWithTimeoutCopiesClient(t *testing.T) {
+	base := NewWithHTTPClient(&http.Client{Timeout: 3 * time.Second}, "test-agent")
+	copied := base.WithTimeout(2 * time.Minute)
+	if copied == base {
+		t.Fatal("WithTimeout returned the same client")
+	}
+	if base.httpClient.Timeout != 3*time.Second {
+		t.Fatalf("base timeout changed to %s", base.httpClient.Timeout)
+	}
+	if copied.httpClient.Timeout != 2*time.Minute {
+		t.Fatalf("unexpected copied timeout %s", copied.httpClient.Timeout)
+	}
+	if copied.userAgent != "test-agent" {
+		t.Fatalf("unexpected user agent %q", copied.userAgent)
+	}
+}

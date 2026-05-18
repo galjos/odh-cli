@@ -110,6 +110,26 @@
         "Confuses station list output with occupancy measurements.",
         "Uses generic odh call when curated discovery commands are available."
       ]
+    },
+    {
+      "id": "mobility-latest-fresh-availability",
+      "prompt": "Show current EV charging availability without returning old inactive charging stations first.",
+      "expected_command_path": [
+        "odh mobility origins --station-type EChargingStation --limit 1000",
+        "odh mobility datatypes --station-type EChargingStation --origin ALPERIA --limit 1000",
+        "odh mobility latest --station-type EChargingStation --data-type number-available --origin ALPERIA --active --fresh-within 24h --sort newest --request-limit 1000 --limit 10"
+      ],
+      "pass_criteria": [
+        "Uses mobility origin and datatype discovery before assuming a provider.",
+        "Uses --active, --fresh-within, and --sort newest for availability questions.",
+        "Reports warnings if local filters hid stale or inactive rows.",
+        "Does not present 2015-2017 inactive stations as current availability."
+      ],
+      "common_failures": [
+        "Runs raw mobility latest and accepts stale upstream ordering.",
+        "Omits freshness filtering for a current-availability question.",
+        "Treats filtered-zero output as proof that the whole upstream has no data without considering request-limit warnings."
+      ]
     }
   ]
 }

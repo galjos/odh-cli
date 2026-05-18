@@ -65,6 +65,23 @@ func NewWithHTTPClient(httpClient *http.Client, userAgent string) *Client {
 	return &Client{httpClient: httpClient, userAgent: userAgent}
 }
 
+// WithTimeout returns a copy of the client with a different HTTP timeout.
+func (c *Client) WithTimeout(timeout time.Duration) *Client {
+	if c == nil {
+		return New(timeout)
+	}
+	if timeout <= 0 {
+		return c
+	}
+	httpClient := &http.Client{Timeout: timeout}
+	if c.httpClient != nil {
+		copied := *c.httpClient
+		copied.Timeout = timeout
+		httpClient = &copied
+	}
+	return NewWithHTTPClient(httpClient, c.userAgent)
+}
+
 // Get performs an HTTP GET and returns the response body for 2xx responses.
 func (c *Client) Get(ctx context.Context, url string) (Response, error) {
 	return c.GetWithLimit(ctx, url, 50*1024*1024)

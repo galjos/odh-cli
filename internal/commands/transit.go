@@ -24,6 +24,7 @@ import (
 const (
 	defaultTransitWindow = 15 * time.Minute
 	defaultGTFSCacheTTL  = 24 * time.Hour
+	gtfsDownloadTimeout  = 2 * time.Minute
 	maxGTFSArchiveBytes  = 200 * 1024 * 1024
 )
 
@@ -243,6 +244,7 @@ func (r *Runner) runTransitDepartures(ctx context.Context, args []string, stdout
 		fmt.Fprintln(stderr, err)
 		return 1
 	}
+	warnings := appendTransitStopMatchWarning(nil, "stop", *stopQuery, len(result.Stops))
 	if err := output.WriteJSON(stdout, map[string]any{
 		"dataset":       *dataset,
 		"stop_query":    *stopQuery,
@@ -254,6 +256,7 @@ func (r *Runner) runTransitDepartures(ctx context.Context, args []string, stdout
 		"matched_stops": result.Stops,
 		"count":         len(result.Departures),
 		"departures":    result.Departures,
+		"warnings":      warnings,
 	}); err != nil {
 		fmt.Fprintln(stderr, err)
 		return 1
@@ -320,6 +323,8 @@ func (r *Runner) runTransitTrip(ctx context.Context, args []string, stdout, stde
 	if len(result.Matches) == 0 {
 		warnings = append(warnings, "no direct GTFS trip matched; this command does not perform transfer routing")
 	}
+	warnings = appendTransitStopMatchWarning(warnings, "from", *fromQuery, len(result.FromStops))
+	warnings = appendTransitStopMatchWarning(warnings, "to", *toQuery, len(result.ToStops))
 	warnings = append(warnings, "historical delay probability is not available from the live GTFS API without an archived GTFS-RT snapshot dataset")
 	if err := output.WriteJSON(stdout, map[string]any{
 		"dataset":    *dataset,
@@ -379,6 +384,13 @@ func (r *Runner) runTransitDelayStats(args []string, stdout, stderr io.Writer) i
 	return 0
 }
 
+func appendTransitStopMatchWarning(warnings []string, label, query string, count int) []string {
+	if count <= 10 {
+		return warnings
+	}
+	return append(warnings, fmt.Sprintf("%s query %q matched %d stops; use odh transit stops search and a more specific stop name if results are noisy", label, strings.TrimSpace(query), count))
+}
+
 type transitTimeQuery struct {
 	Date       time.Time
 	AroundText string
@@ -422,7 +434,7 @@ func (r *Runner) fetchGTFSArchive(ctx context.Context, dataset, cacheDir string,
 	if !refresh && cacheFresh(cachePath, defaultGTFSCacheTTL) {
 		return gtfsArchiveInfo{Dataset: dataset, Endpoint: endpoint, Path: cachePath, Cached: true}, nil
 	}
-	resp, err := r.Client.GetWithLimit(ctx, endpoint, maxGTFSArchiveBytes)
+	resp, err := r.Client.WithTimeout(gtfsDownloadTimeout).GetWithLimit(ctx, endpoint, maxGTFSArchiveBytes)
 	if err != nil {
 		return gtfsArchiveInfo{}, err
 	}

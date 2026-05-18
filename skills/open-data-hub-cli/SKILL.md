@@ -13,7 +13,7 @@ metadata:
             {
               "id": "go",
               "kind": "go",
-              "module": "github.com/galjos/odh-cli/cmd/odh@v0.1.6",
+              "module": "github.com/galjos/odh-cli/cmd/odh@v0.1.7",
               "bins": ["odh"],
               "label": "Install odh CLI (go)",
             },
@@ -37,10 +37,10 @@ odh version
 odh doctor --timeout 10s
 ```
 
-The traffic discovery, GTFS, and transit commands require `odh` `v0.1.6` or newer. If `odh version` reports an older release, install the current release into a directory that is already on PATH:
+The traffic discovery, GTFS, transit, and filtered mobility-latest commands require `odh` `v0.1.7` or newer. If `odh version` reports an older release, install the current release into a directory that is already on PATH:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/galjos/odh-cli/main/scripts/install.sh | sh -s -- --version v0.1.6 --dir "$HOME/bin"
+curl -fsSL https://raw.githubusercontent.com/galjos/odh-cli/main/scripts/install.sh | sh -s -- --version v0.1.7 --dir "$HOME/bin"
 ```
 
 If `odh` is not installed in a normal shell, install the latest release:
@@ -106,8 +106,15 @@ Mobility latest measurements:
 odh mobility latest \
   --station-type EChargingStation \
   --data-type number-available \
+  --origin ALPERIA \
+  --active \
+  --fresh-within 24h \
+  --sort newest \
+  --request-limit 1000 \
   --limit 5
 ```
+
+For EV charging, parking, or other availability questions, discover the station type and origin first, then use `mobility latest` with `--active`, `--fresh-within`, and `--sort newest`. Raw upstream latest rows can include old inactive stations before current measurements. If filtered output includes `warnings`, surface them in the answer.
 
 Mobility type and data-type discovery:
 
@@ -129,7 +136,7 @@ odh transit trip --from auer --to brenner --date 2026-05-16 --time 14:05 --mode 
 odh transit delay-stats --from auer --to brenner --time 14:05 --weekday saturday
 ```
 
-Use these commands when the user asks about trains, buses, public-transport stops, STA timetables, GTFS, GTFS-RT, live trip updates, or whether delay probability can be computed. `odh transit trip` only finds direct static GTFS trip matches; it does not do transfer routing. `odh transit delay-stats` currently returns `supported: false` because delay probability requires historical GTFS-RT snapshots, not just the current live feed. Do not infer historical delay probability from one realtime response.
+Use these commands when the user asks about trains, buses, public-transport stops, STA timetables, GTFS, GTFS-RT, live trip updates, or whether delay probability can be computed. The first transit command may download a large static GTFS archive and cache it for 24 hours; retry once if the upstream download is interrupted. If the output warns that a stop query matched many stops, run `odh transit stops search <query> --limit 5` and rerun with a more specific stop name. `odh transit trip` only finds direct static GTFS trip matches; it does not do transfer routing. `odh transit delay-stats` currently returns `supported: false` because delay probability requires historical GTFS-RT snapshots, not just the current live feed. Do not infer historical delay probability from one realtime response.
 
 South Tyrol traffic events, roadworks, closures, and road events:
 
