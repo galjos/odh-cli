@@ -83,6 +83,15 @@ assert_json_filter "mobility datatypes summarizes A22 measurements" "$tmpdir/a22
 run_odh mobility latest --station-type EChargingStation --data-type number-available --origin ALPERIA --active --fresh-within 24h --sort newest --request-limit 1000 --limit 5 >"$tmpdir/ev-availability.json"
 assert_json_filter "mobility latest exposes filtered availability wrapper" "$tmpdir/ev-availability.json" '.station_type == "EChargingStation" and .data_type == "number-available" and .origin == "ALPERIA" and .active_only == true and .fresh_within == "24h" and .sort == "newest" and (.raw_count | type == "number") and (.measurements | type == "array") and (.warnings | type == "array")'
 
+run_odh diagnostics ev-charging --origin ALPERIA --fresh-within 24h --request-limit 1000 --limit 5 >"$tmpdir/ev-diagnostics.json"
+assert_json_filter "diagnostics reports EV availability caveats" "$tmpdir/ev-diagnostics.json" '.domain == "ev-charging" and (.verdict | type == "string") and (.raw_count | type == "number") and (.current_count | type == "number") and (.warnings | type == "array") and (.recommended_command | test("odh mobility latest"))'
+
+run_odh diagnostics parking-forecasts --origin "Municipality Merano" --fresh-within 2h --forecast-minutes 60 --request-limit 1000 --limit 5 >"$tmpdir/parking-forecast-diagnostics.json"
+assert_json_filter "diagnostics separates current parking from stale forecasts" "$tmpdir/parking-forecast-diagnostics.json" '.domain == "parking-forecasts" and (.verdict | type == "string") and .current.station_type == "ParkingStation" and .current.data_type == "free" and .forecast.data_type == "parking-forecast-60" and (.warnings | type == "array")'
+
+run_odh diagnostics tourism-events --limit 5 >"$tmpdir/tourism-event-diagnostics.json"
+assert_json_filter "diagnostics reports tourism event caveats" "$tmpdir/tourism-event-diagnostics.json" '.domain == "tourism-events" and (.verdict | type == "string") and (.events | type == "array") and (.warnings | type == "array")'
+
 run_odh a22 status --limit 5 >"$tmpdir/a22-status.json"
 assert_json_filter "a22 status separates events and forecast feeds" "$tmpdir/a22-status.json" '.events.count >= 0 and .forecast.count >= 0 and (.warnings | type == "array")'
 

@@ -728,6 +728,105 @@ func TestFilterMobilityLatestFiltersFreshWithin(t *testing.T) {
 	}
 }
 
+func TestRunDiagnosticsEVChargingWarnsWhenNoFreshRows(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v2/flat,node/EChargingStation/number-available/latest" {
+			t.Fatalf("unexpected path %q", r.URL.Path)
+		}
+		_, _ = w.Write([]byte(`{"data":[
+			{"scode":"old","sorigin":"ALPERIA","sactive":true,"mvalidtime":"2017-01-01 08:00:00.000+0000"},
+			{"scode":"inactive","sorigin":"ALPERIA","sactive":false,"mvalidtime":"2999-05-18 09:00:00.000+0000"}
+		]}`))
+	}))
+	defer server.Close()
+
+	runner := newTestRunner(t, []apis.API{{Name: "mobility", BaseURL: server.URL, Public: true}})
+	var stdout, stderr bytes.Buffer
+	code := runner.Run(context.Background(), []string{
+		"diagnostics", "ev-charging",
+		"--origin", "ALPERIA",
+		"--fresh-within", "24h",
+		"--request-limit", "2",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("Run exit = %d, stderr = %s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), `"verdict": "unavailable"`) ||
+		!strings.Contains(stdout.String(), "no fresh active EV availability rows found") ||
+		!strings.Contains(stdout.String(), `"current_count": 0`) {
+		t.Fatalf("unexpected stdout: %s", stdout.String())
+	}
+}
+
+func TestRunDiagnosticsParkingForecastsKeepsStaleForecastUnavailable(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v2/flat,node/ParkingStation/free/latest":
+			_, _ = w.Write([]byte(`{"data":[
+				{"scode":"park","sorigin":"Municipality Merano","sactive":true,"mvalidtime":"2999-05-18 09:30:00.000+0000","mvalue":42}
+			]}`))
+		case "/v2/flat,node/ParkingStation/parking-forecast-60/latest":
+			_, _ = w.Write([]byte(`{"data":[
+				{"scode":"park","sorigin":"Municipality Merano","sactive":true,"mvalidtime":"2017-05-17 09:30:00.000+0000","mvalue":40}
+			]}`))
+		default:
+			t.Fatalf("unexpected path %q", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	runner := newTestRunner(t, []apis.API{{Name: "mobility", BaseURL: server.URL, Public: true}})
+	var stdout, stderr bytes.Buffer
+	code := runner.Run(context.Background(), []string{
+		"diagnostics", "parking-forecasts",
+		"--origin", "Municipality Merano",
+		"--fresh-within", "48h",
+		"--forecast-minutes", "60",
+		"--request-limit", "2",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("Run exit = %d, stderr = %s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), `"verdict": "current_only"`) ||
+		!strings.Contains(stdout.String(), "no fresh parking forecast rows found") ||
+		!strings.Contains(stdout.String(), `"count": 1`) {
+		t.Fatalf("unexpected stdout: %s", stdout.String())
+	}
+}
+
+func TestRunDiagnosticsTourismEventsReportsOnlyActiveCaveats(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/EventShort" {
+			t.Fatalf("unexpected path %q", r.URL.Path)
+		}
+		query := r.URL.Query()
+		if query.Get("onlyactive") != "true" || query.Get("pagesize") != "1" {
+			t.Fatalf("unexpected query %q", r.URL.RawQuery)
+		}
+		_, _ = w.Write([]byte(`{"Items":[
+			{"Id":"event-one","Active":true,"ActiveToday":false,"StartDate":"2018-01-22T09:00:00","EndDate":"2018-01-25T11:00:00","GpsInfo":null,"EventTitle":{"en":"Workshop"}}
+		]}`))
+	}))
+	defer server.Close()
+
+	runner := newTestRunner(t, []apis.API{{Name: "tourism", BaseURL: server.URL, Public: true}})
+	var stdout, stderr bytes.Buffer
+	code := runner.Run(context.Background(), []string{
+		"diagnostics", "tourism-events",
+		"--date", "2026-05-18",
+		"--limit", "1",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("Run exit = %d, stderr = %s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), `"verdict": "unavailable"`) ||
+		!strings.Contains(stdout.String(), `"date_status": "expired"`) ||
+		!strings.Contains(stdout.String(), "ActiveToday=false") ||
+		!strings.Contains(stdout.String(), "missing GpsInfo") {
+		t.Fatalf("unexpected stdout: %s", stdout.String())
+	}
+}
+
 func TestRunMobilityTypesBuildsEventPath(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v2/flat,event" {

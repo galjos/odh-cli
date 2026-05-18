@@ -38,6 +38,7 @@ This is an early v0.1 project. It intentionally focuses on a small working core:
 - list Mobility stations for a station type,
 - summarize Mobility data types for a station type and origin,
 - query latest Mobility time-series measurements, with optional local origin, active-station, freshness, and sorting filters for agent-friendly availability checks,
+- run data-quality diagnostics for EV charging availability, parking forecasts, and Tourism event caveats,
 - list GTFS datasets and inspect GTFS-RT trip updates, vehicle positions, and service alerts,
 - search STA timetable stops and inspect static GTFS departures and direct trip matches,
 - summarize South Tyrol roadworks, closures, events, and traffic notices from Open Data Hub `PROVINCE_BZ` with zone discovery, date filtering, text search, deduplication, and stale-record warnings,
@@ -58,7 +59,7 @@ The installer detects macOS/Linux and `amd64`/`arm64`, downloads the matching re
 Install a specific version or directory:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/galjos/odh-cli/main/scripts/install.sh | sh -s -- --version v0.1.8 --dir "$HOME/bin"
+curl -fsSL https://raw.githubusercontent.com/galjos/odh-cli/main/scripts/install.sh | sh -s -- --version v0.1.9 --dir "$HOME/bin"
 ```
 
 Build from source instead:
@@ -77,7 +78,7 @@ Build with release metadata:
 
 ```bash
 go build \
-  -ldflags "-X github.com/galjos/odh-cli/internal/version.Version=0.1.8 -X github.com/galjos/odh-cli/internal/version.Commit=$(git rev-parse --short HEAD) -X github.com/galjos/odh-cli/internal/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  -ldflags "-X github.com/galjos/odh-cli/internal/version.Version=0.1.9 -X github.com/galjos/odh-cli/internal/version.Commit=$(git rev-parse --short HEAD) -X github.com/galjos/odh-cli/internal/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   -o odh ./cmd/odh
 ```
 
@@ -147,6 +148,14 @@ odh mobility latest \
   --sort newest \
   --request-limit 1000 \
   --limit 5
+```
+
+Check whether a data area is currently reliable enough to answer from:
+
+```bash
+odh diagnostics ev-charging --origin ALPERIA --fresh-within 24h
+odh diagnostics parking-forecasts --origin "Municipality Merano" --fresh-within 2h
+odh diagnostics tourism-events --date 2026-05-18
 ```
 
 Discover Mobility station types and station origins:
@@ -224,6 +233,8 @@ odh a22 status --limit 10
 - commands avoid hidden browser state and web scraping.
 
 See [docs/agent-usage.md](docs/agent-usage.md) for details.
+
+Data-quality caveats and diagnostics are described in [docs/data-quality.md](docs/data-quality.md).
 
 ## Open Data Hub Links
 

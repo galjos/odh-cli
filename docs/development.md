@@ -14,7 +14,7 @@ SPDX-License-Identifier: CC0-1.0
 - `internal/commands` - CLI parsing and command execution.
 - `internal/openapi` - OpenAPI JSON/YAML normalization.
 - `internal/output` - deterministic JSON output helpers.
-- `docs` - user, API, agent, and development docs.
+- `docs` - user, API, agent, data-quality, and development docs.
 - `evals` - agent task evals and scoring fixtures.
 - `examples` - small shell examples.
 - `scripts` - release and maintenance scripts.
@@ -56,13 +56,15 @@ Set `ODH_EVAL_BIN=odh` to test an installed binary instead of the local source t
 
 The task set and scoring rubric are documented in [evaluation.md](evaluation.md).
 
+Use [data-quality.md](data-quality.md) when deciding whether a repeated agent failure should be handled as a diagnostic warning rather than a new natural-language command.
+
 ## Build Metadata
 
-Development builds default to `0.1.8-dev` with best-effort VCS metadata. Release builds can stamp metadata through Go linker flags:
+Development builds default to `0.1.9-dev` with best-effort VCS metadata. Release builds can stamp metadata through Go linker flags:
 
 ```bash
 go build \
-  -ldflags "-X github.com/galjos/odh-cli/internal/version.Version=0.1.8 -X github.com/galjos/odh-cli/internal/version.Commit=$(git rev-parse --short HEAD) -X github.com/galjos/odh-cli/internal/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  -ldflags "-X github.com/galjos/odh-cli/internal/version.Version=0.1.9 -X github.com/galjos/odh-cli/internal/version.Commit=$(git rev-parse --short HEAD) -X github.com/galjos/odh-cli/internal/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   -o odh ./cmd/odh
 ```
 

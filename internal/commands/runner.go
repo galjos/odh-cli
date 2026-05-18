@@ -38,6 +38,9 @@ Usage:
   odh transit stops search <query>
   odh transit departures (--stop query | --stop-id id) --date YYYY-MM-DD --around HH:MM
   odh transit trip (--from query | --from-stop-id id) (--to query | --to-stop-id id) --date YYYY-MM-DD --time HH:MM
+  odh diagnostics ev-charging
+  odh diagnostics parking-forecasts
+  odh diagnostics tourism-events
   odh traffic zones [--format json|table|markdown]
   odh traffic categories [--format json|table|markdown]
   odh traffic today [--area area] [--type type] [--format json|table|markdown]
@@ -109,6 +112,8 @@ func (r *Runner) Run(ctx context.Context, args []string, stdout, stderr io.Write
 		return r.runGTFS(ctx, args[1:], stdout, stderr)
 	case "transit":
 		return r.runTransit(ctx, args[1:], stdout, stderr)
+	case "diagnostics":
+		return r.runDiagnostics(ctx, args[1:], stdout, stderr)
 	case "traffic":
 		return r.runTraffic(ctx, args[1:], stdout, stderr)
 	case "mobility":
@@ -604,6 +609,9 @@ Examples:
   odh transit departures --stop "Ora, Stazione di Ora" --date 2026-05-16 --around 14:05
   odh transit trip --from auer --to brenner --date 2026-05-16 --time 14:05 --mode train
   odh transit delay-stats --from auer --to brenner --time 14:05 --weekday saturday
+  odh diagnostics ev-charging
+  odh diagnostics parking-forecasts --origin "Municipality Merano"
+  odh diagnostics tourism-events --date 2026-05-18
   odh traffic zones
   odh traffic categories
   odh traffic today --area ueberetsch-unterland --type roadworks --format table

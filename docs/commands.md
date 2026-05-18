@@ -36,7 +36,7 @@ Example output with `--network=false`:
 {
   "ok": true,
   "version": {
-    "version": "0.1.8-dev",
+    "version": "0.1.9-dev",
     "commit": "unknown",
     "date": "unknown",
     "goos": "darwin",
@@ -46,7 +46,7 @@ Example output with `--network=false`:
     {
       "name": "version",
       "ok": true,
-      "message": "0.1.8-dev"
+      "message": "0.1.9-dev"
     },
     {
       "name": "api_registry",
@@ -193,6 +193,53 @@ Flags:
 - `--limit n` - maps to `pagesize`; default `100`.
 - `--page n` - maps to `pagenumber`; default `1`.
 - `--seed value` - stable randomization seed.
+- `--param key=value` - additional query parameter. Repeatable.
+
+## `odh diagnostics`
+
+Data-quality checks for areas where raw upstream data can be stale, semantically surprising, or incomplete.
+
+```bash
+odh diagnostics ev-charging --origin ALPERIA --fresh-within 24h
+odh diagnostics parking-forecasts --origin "Municipality Merano" --fresh-within 2h --forecast-minutes 60
+odh diagnostics tourism-events --date 2026-05-18 --limit 20
+```
+
+The diagnostics commands return JSON with `domain`, `source`, `verdict`, and `warnings`. Treat `unavailable` as "no reliable current data from the checked request", not as zero availability or proof that the whole upstream domain has no records.
+
+### `odh diagnostics ev-charging`
+
+Checks `EChargingStation/number-available/latest` through the filtered Mobility latest path.
+
+Flags:
+
+- `--origin value` - optional `sorigin` filter, for example `ALPERIA`.
+- `--fresh-within duration` - freshness window; default `24h`.
+- `--limit n` - maximum filtered rows to include; default `10`.
+- `--request-limit n` - upstream rows to inspect before filtering; default `10000`.
+
+### `odh diagnostics parking-forecasts`
+
+Compares current parking occupancy (`free`) with a parking forecast data type such as `parking-forecast-60`.
+
+Flags:
+
+- `--origin value` - optional `sorigin` filter, for example `Municipality Merano`.
+- `--forecast-minutes n` - forecast horizon; default `60`.
+- `--fresh-within duration` - freshness window for current and forecast rows; default `2h`.
+- `--limit n` - maximum filtered rows to include per feed; default `10`.
+- `--request-limit n` - upstream rows to inspect before filtering; default `10000`.
+
+### `odh diagnostics tourism-events`
+
+Checks Tourism `EventShort` rows for local date status, upstream `ActiveToday` caveats, and missing GPS fields.
+
+Flags:
+
+- `--date YYYY-MM-DD` - date used for local active checks; default today.
+- `--only-active` - request upstream `onlyactive=true`; default `true`.
+- `--limit n` - number of upstream events to inspect; default `20`.
+- `--page n` - page number; default `1`.
 - `--param key=value` - additional query parameter. Repeatable.
 
 ## `odh mobility latest`

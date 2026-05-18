@@ -23,6 +23,7 @@ Current task themes:
 - Public-transport stop-ID disambiguation for station names with many matches.
 - Mobility parking discovery.
 - Mobility latest freshness and inactive-station filtering for availability questions.
+- Data-quality diagnostics for EV availability, parking forecasts, and Tourism event caveats.
 
 ## Smoke Runner
 
@@ -67,6 +68,7 @@ Prefer:
 - stable JSON contracts,
 - explicit unsupported responses,
 - clear warnings.
+- diagnostic commands when the upstream data is present but frequently stale or semantically surprising.
 
 Avoid:
 

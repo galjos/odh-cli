@@ -44,6 +44,9 @@ odh traffic today --area ueberetsch-unterland --type roadworks --format table
 odh traffic events --area bozen-unterland --from 2026-05-16 --to 2026-05-16 --json
 odh traffic today --near 46.42,11.25 --radius 15km --json
 odh mobility latest --station-type EChargingStation --data-type number-available --origin ALPERIA --active --fresh-within 24h --sort newest --request-limit 1000 --limit 5
+odh diagnostics ev-charging --origin ALPERIA --fresh-within 24h
+odh diagnostics parking-forecasts --origin "Municipality Merano" --fresh-within 2h
+odh diagnostics tourism-events --date 2026-05-18
 odh a22 status --limit 10
 ```
 
@@ -92,6 +95,24 @@ odh mobility latest --station-type EChargingStation --data-type number-available
 ```
 
 The filtered `mobility latest` output wraps measurements with `raw_count`, `count`, and `warnings`. Report warnings when filters hide stale or inactive rows, and increase `--request-limit` when a question needs broader coverage than the inspected upstream rows.
+
+## Data Quality Diagnostics
+
+Before answering EV availability, parking forecast, or Tourism event-discovery questions, run the matching diagnostic command:
+
+```bash
+odh diagnostics ev-charging --origin ALPERIA --fresh-within 24h
+odh diagnostics parking-forecasts --origin "Municipality Merano" --fresh-within 2h --forecast-minutes 60
+odh diagnostics tourism-events --date 2026-05-18 --limit 20
+```
+
+Diagnostics return a `verdict` and `warnings`. Surface warnings in the final answer. Treat `unavailable` as "the checked request does not contain reliable current data", not as zero chargers, zero parking spaces, or proof that no Tourism events exist.
+
+Use these defaults:
+
+- EV availability: `--active --fresh-within 24h` through `odh diagnostics ev-charging`.
+- Parking forecasts: current occupancy can be usable even when forecasts are stale; if the verdict is `current_only`, answer only with current occupancy.
+- Tourism events: inspect `date_status`, `ActiveToday`, and `location_status`; missing GPS makes radius or place claims weak.
 
 ## Public Transport And Delay Questions
 

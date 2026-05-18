@@ -14,6 +14,7 @@ The goal is not to make `odh` answer broad natural-language questions directly. 
 - choose stable CLI filters instead of guessing hidden IDs,
 - parse JSON output,
 - notice stale-data and unsupported-capability warnings,
+- run diagnostics before making claims from data areas with known freshness or semantics caveats,
 - state Open Data Hub limitations clearly.
 
 ## Files

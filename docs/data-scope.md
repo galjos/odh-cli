@@ -64,6 +64,9 @@ When location matters:
 - A small curated dataset catalog for common Tourism and Mobility entry points.
 - Tourism taxonomy/type discovery for common public endpoints.
 - Mobility station metadata discovery by station type.
+- GTFS and STA timetable discovery through Open Data Hub GTFS endpoints.
+- South Tyrol traffic event summaries over Open Data Hub `PROVINCE_BZ`.
+- Data-quality diagnostics for EV charging, parking forecasts, and Tourism event caveats.
 - API discovery and OpenAPI retrieval for the registered public surfaces.
 - A narrow A22 diagnostic command that separates current events from forecast rows.
 

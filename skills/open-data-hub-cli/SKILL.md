@@ -13,7 +13,7 @@ metadata:
             {
               "id": "go",
               "kind": "go",
-              "module": "github.com/galjos/odh-cli/cmd/odh@v0.1.8",
+              "module": "github.com/galjos/odh-cli/cmd/odh@v0.1.9",
               "bins": ["odh"],
               "label": "Install odh CLI (go)",
             },
@@ -37,10 +37,10 @@ odh version
 odh doctor --timeout 10s
 ```
 
-The traffic discovery, GTFS, transit, and filtered mobility-latest commands require `odh` `v0.1.8` or newer. If `odh version` reports an older release, install the current release into a directory that is already on PATH:
+The traffic discovery, GTFS, transit, and filtered mobility-latest commands require `odh` `v0.1.9` or newer. If `odh version` reports an older release, install the current release into a directory that is already on PATH:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/galjos/odh-cli/main/scripts/install.sh | sh -s -- --version v0.1.8 --dir "$HOME/bin"
+curl -fsSL https://raw.githubusercontent.com/galjos/odh-cli/main/scripts/install.sh | sh -s -- --version v0.1.9 --dir "$HOME/bin"
 ```
 
 If `odh` is not installed in a normal shell, install the latest release:
@@ -116,6 +116,16 @@ odh mobility latest \
 
 For EV charging, parking, or other availability questions, discover the station type and origin first, then use `mobility latest` with `--active`, `--fresh-within`, and `--sort newest`. Raw upstream latest rows can include old inactive stations before current measurements. If filtered output includes `warnings`, surface them in the answer.
 
+Data-quality diagnostics:
+
+```bash
+odh diagnostics ev-charging --origin ALPERIA --fresh-within 24h
+odh diagnostics parking-forecasts --origin "Municipality Merano" --fresh-within 2h --forecast-minutes 60
+odh diagnostics tourism-events --date 2026-05-18 --limit 20
+```
+
+Use diagnostics before answering EV availability, parking forecast, or Tourism event-discovery questions. Parse `verdict` and `warnings`. Treat `unavailable` as "no reliable current data from the checked request", not as zero availability or proof that the entire upstream domain has no data. For `parking-forecasts`, a `current_only` verdict means current parking occupancy can be used but fresh forecast rows should not be reported. For `tourism-events`, inspect `date_status` and `location_status`; missing GPS makes radius or precise place claims weak.
+
 Mobility type and data-type discovery:
 
 ```bash
@@ -174,6 +184,7 @@ odh a22 status --limit 10
 - For roadworks and closures, prefer `odh traffic today` or `odh traffic events` before falling back to raw Mobility events.
 - For public transport, prefer `odh gtfs` and `odh transit` before falling back to raw API calls.
 - For historical delay probability, report the `odh transit delay-stats` caveat instead of guessing.
+- Use `odh diagnostics` for EV availability, parking forecasts, and Tourism event caveats before making factual current-data claims.
 - Do not infer live A22 traffic from `TrafficForecast` rows alone.
 - Prefer `odh a22 status` for A22 because it reports current-event availability and warns when forecast rows are not current incident data.
 - Use `--where` and `--param key=value` instead of manually constructing query strings when a curated command supports them.
