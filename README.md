@@ -58,7 +58,7 @@ The installer detects macOS/Linux and `amd64`/`arm64`, downloads the matching re
 Install a specific version or directory:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/galjos/odh-cli/main/scripts/install.sh | sh -s -- --version v0.1.7 --dir "$HOME/bin"
+curl -fsSL https://raw.githubusercontent.com/galjos/odh-cli/main/scripts/install.sh | sh -s -- --version v0.1.8 --dir "$HOME/bin"
 ```
 
 Build from source instead:
@@ -77,7 +77,7 @@ Build with release metadata:
 
 ```bash
 go build \
-  -ldflags "-X github.com/galjos/odh-cli/internal/version.Version=0.1.7 -X github.com/galjos/odh-cli/internal/version.Commit=$(git rev-parse --short HEAD) -X github.com/galjos/odh-cli/internal/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  -ldflags "-X github.com/galjos/odh-cli/internal/version.Version=0.1.8 -X github.com/galjos/odh-cli/internal/version.Commit=$(git rev-parse --short HEAD) -X github.com/galjos/odh-cli/internal/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   -o odh ./cmd/odh
 ```
 
@@ -169,10 +169,14 @@ Search public-transport stops and check timetable data:
 odh transit stops search auer
 odh transit departures --stop "Ora, Stazione di Ora" --date 2026-05-16 --around 14:05
 odh transit trip --from auer --to brenner --date 2026-05-16 --time 14:05 --mode train
+odh transit departures --stop-id <stop_id-from-search> --date 2026-05-16 --around 14:05 --mode train
+odh transit trip --from-stop-id <origin-stop-id> --to-stop-id <destination-stop-id> --date 2026-05-16 --time 14:05 --mode train
 odh transit delay-stats --from auer --to brenner --time 14:05 --weekday saturday
 ```
 
 `odh transit delay-stats` is intentionally explicit: it reports that historical delay probability is unsupported until a GTFS-RT archive collector exists. It does not guess probabilities from the live feed.
+
+Use `odh transit stops search` first and switch to stop IDs when a place name matches many platforms or bus bays. Parent station IDs are valid and expand to their child platform stops.
 
 Summarize roadworks and closures for South Tyrol traffic zones and event text:
 

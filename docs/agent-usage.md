@@ -104,11 +104,14 @@ odh gtfs realtime --dataset sta-time-tables --feed trip-updates --limit 5
 odh transit stops search auer
 odh transit departures --stop "Ora, Stazione di Ora" --date 2026-05-16 --around 14:05 --mode train
 odh transit trip --from auer --to brenner --date 2026-05-16 --time 14:05 --mode train
+odh transit stops search merano --limit 10
+odh transit departures --stop-id <stop_id-from-search> --date 2026-05-16 --around 13:00 --mode train
+odh transit trip --from-stop-id <origin-stop-id> --to-stop-id <destination-stop-id> --date 2026-05-16 --time 13:00 --mode train
 ```
 
 The transit layer reads the static STA GTFS archive and caches it locally for 24 hours. A cold cache download can be large, so transit commands allow a longer archive-download timeout than normal API calls. Stop search supports common German/Italian aliases such as `auer` / `ora`, `brenner` / `brennero`, and `bozen` / `bolzano`.
 
-If `transit departures` or `transit trip` returns a warning that a stop query matched many stops, narrow the stop wording with `odh transit stops search <query> --limit 5` and rerun the command with a more specific stop name.
+If `transit departures` or `transit trip` returns a warning that a stop query matched many stops, narrow the stop wording with `odh transit stops search <query> --limit 5` and rerun with the returned `stop_id`: `--stop-id` for departures, or `--from-stop-id` / `--to-stop-id` for trip matching. Parent station IDs are valid and expand to their child platform stops. This is the preferred agent pattern for ambiguous station names such as Merano or Bolzano.
 
 `odh transit trip` only finds direct static GTFS trip matches. It does not perform full connection planning or transfer routing. If the user asks for a multi-leg journey, report that limitation and use the returned stop matches plus GTFS-RT feed as supporting data, not as a full journey planner.
 

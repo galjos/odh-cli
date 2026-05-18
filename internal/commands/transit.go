@@ -102,6 +102,11 @@ type gtfsArchiveInfo struct {
 	Cached   bool   `json:"cached"`
 }
 
+type transitStopSelector struct {
+	Query string
+	ID    string
+}
+
 func (r *Runner) runTransit(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
 		fmt.Fprintln(stderr, "usage: odh transit <stops|departures|trip|delay-stats>")
@@ -202,6 +207,7 @@ func (r *Runner) runTransitDepartures(ctx context.Context, args []string, stdout
 	fs := newFlagSet("transit departures", stderr)
 	dataset := fs.String("dataset", defaultGTFSDataset, "GTFS dataset id")
 	stopQuery := fs.String("stop", "", "stop search query")
+	stopID := fs.String("stop-id", "", "exact GTFS stop_id or parent_station")
 	dateText := fs.String("date", time.Now().Format("2006-01-02"), "service date YYYY-MM-DD")
 	around := fs.String("around", "", "departure time HH:MM to search around")
 	windowText := fs.String("window", defaultTransitWindow.String(), "time window around --around, for example 15m")
@@ -216,8 +222,9 @@ func (r *Runner) runTransitDepartures(ctx context.Context, args []string, stdout
 		fmt.Fprintln(stderr, "transit departures does not accept positional arguments")
 		return 2
 	}
-	if strings.TrimSpace(*stopQuery) == "" {
-		fmt.Fprintln(stderr, "--stop is required")
+	selector := transitStopSelector{Query: *stopQuery, ID: *stopID}
+	if err := selector.validate("stop", "stop-id"); err != nil {
+		fmt.Fprintln(stderr, err)
 		return 2
 	}
 	if *limit < 1 {
@@ -239,24 +246,26 @@ func (r *Runner) runTransitDepartures(ctx context.Context, args []string, stdout
 		fmt.Fprintln(stderr, err)
 		return 1
 	}
-	result, err := findTransitDepartures(archive.Path, *stopQuery, query, routeTypes, *limit)
+	result, err := findTransitDepartures(archive.Path, selector, query, routeTypes, *limit)
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return 1
 	}
-	warnings := appendTransitStopMatchWarning(nil, "stop", *stopQuery, len(result.Stops))
+	warnings := appendTransitStopMatchWarning(nil, "stop", "stop-id", selector, result.StopMatchMode, len(result.Stops))
 	if err := output.WriteJSON(stdout, map[string]any{
-		"dataset":       *dataset,
-		"stop_query":    *stopQuery,
-		"date":          query.Date.Format("2006-01-02"),
-		"around":        query.AroundText,
-		"window":        query.Window.String(),
-		"mode":          normalizeTransitModeName(*mode),
-		"archive":       archive,
-		"matched_stops": result.Stops,
-		"count":         len(result.Departures),
-		"departures":    result.Departures,
-		"warnings":      warnings,
+		"dataset":         *dataset,
+		"stop_query":      *stopQuery,
+		"stop_id":         *stopID,
+		"stop_match_mode": result.StopMatchMode,
+		"date":            query.Date.Format("2006-01-02"),
+		"around":          query.AroundText,
+		"window":          query.Window.String(),
+		"mode":            normalizeTransitModeName(*mode),
+		"archive":         archive,
+		"matched_stops":   result.Stops,
+		"count":           len(result.Departures),
+		"departures":      result.Departures,
+		"warnings":        warnings,
 	}); err != nil {
 		fmt.Fprintln(stderr, err)
 		return 1
@@ -268,7 +277,9 @@ func (r *Runner) runTransitTrip(ctx context.Context, args []string, stdout, stde
 	fs := newFlagSet("transit trip", stderr)
 	dataset := fs.String("dataset", defaultGTFSDataset, "GTFS dataset id")
 	fromQuery := fs.String("from", "", "origin stop query")
+	fromStopID := fs.String("from-stop-id", "", "exact origin GTFS stop_id or parent_station")
 	toQuery := fs.String("to", "", "destination stop query")
+	toStopID := fs.String("to-stop-id", "", "exact destination GTFS stop_id or parent_station")
 	dateText := fs.String("date", time.Now().Format("2006-01-02"), "service date YYYY-MM-DD")
 	timeText := fs.String("time", "", "origin departure time HH:MM")
 	windowText := fs.String("window", defaultTransitWindow.String(), "time window around --time, for example 15m")
@@ -283,12 +294,14 @@ func (r *Runner) runTransitTrip(ctx context.Context, args []string, stdout, stde
 		fmt.Fprintln(stderr, "transit trip does not accept positional arguments")
 		return 2
 	}
-	if strings.TrimSpace(*fromQuery) == "" {
-		fmt.Fprintln(stderr, "--from is required")
+	fromSelector := transitStopSelector{Query: *fromQuery, ID: *fromStopID}
+	toSelector := transitStopSelector{Query: *toQuery, ID: *toStopID}
+	if err := fromSelector.validate("from", "from-stop-id"); err != nil {
+		fmt.Fprintln(stderr, err)
 		return 2
 	}
-	if strings.TrimSpace(*toQuery) == "" {
-		fmt.Fprintln(stderr, "--to is required")
+	if err := toSelector.validate("to", "to-stop-id"); err != nil {
+		fmt.Fprintln(stderr, err)
 		return 2
 	}
 	if strings.TrimSpace(*timeText) == "" {
@@ -314,7 +327,7 @@ func (r *Runner) runTransitTrip(ctx context.Context, args []string, stdout, stde
 		fmt.Fprintln(stderr, err)
 		return 1
 	}
-	result, err := findTransitTripMatches(archive.Path, *fromQuery, *toQuery, query, routeTypes, *limit)
+	result, err := findTransitTripMatches(archive.Path, fromSelector, toSelector, query, routeTypes, *limit)
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return 1
@@ -323,23 +336,27 @@ func (r *Runner) runTransitTrip(ctx context.Context, args []string, stdout, stde
 	if len(result.Matches) == 0 {
 		warnings = append(warnings, "no direct GTFS trip matched; this command does not perform transfer routing")
 	}
-	warnings = appendTransitStopMatchWarning(warnings, "from", *fromQuery, len(result.FromStops))
-	warnings = appendTransitStopMatchWarning(warnings, "to", *toQuery, len(result.ToStops))
+	warnings = appendTransitStopMatchWarning(warnings, "from", "from-stop-id", fromSelector, result.FromMatchMode, len(result.FromStops))
+	warnings = appendTransitStopMatchWarning(warnings, "to", "to-stop-id", toSelector, result.ToMatchMode, len(result.ToStops))
 	warnings = append(warnings, "historical delay probability is not available from the live GTFS API without an archived GTFS-RT snapshot dataset")
 	if err := output.WriteJSON(stdout, map[string]any{
-		"dataset":    *dataset,
-		"from_query": *fromQuery,
-		"to_query":   *toQuery,
-		"date":       query.Date.Format("2006-01-02"),
-		"time":       query.AroundText,
-		"window":     query.Window.String(),
-		"mode":       normalizeTransitModeName(*mode),
-		"archive":    archive,
-		"from_stops": result.FromStops,
-		"to_stops":   result.ToStops,
-		"count":      len(result.Matches),
-		"matches":    result.Matches,
-		"warnings":   warnings,
+		"dataset":         *dataset,
+		"from_query":      *fromQuery,
+		"from_stop_id":    *fromStopID,
+		"from_match_mode": result.FromMatchMode,
+		"to_query":        *toQuery,
+		"to_stop_id":      *toStopID,
+		"to_match_mode":   result.ToMatchMode,
+		"date":            query.Date.Format("2006-01-02"),
+		"time":            query.AroundText,
+		"window":          query.Window.String(),
+		"mode":            normalizeTransitModeName(*mode),
+		"archive":         archive,
+		"from_stops":      result.FromStops,
+		"to_stops":        result.ToStops,
+		"count":           len(result.Matches),
+		"matches":         result.Matches,
+		"warnings":        warnings,
 	}); err != nil {
 		fmt.Fprintln(stderr, err)
 		return 1
@@ -384,11 +401,31 @@ func (r *Runner) runTransitDelayStats(args []string, stdout, stderr io.Writer) i
 	return 0
 }
 
-func appendTransitStopMatchWarning(warnings []string, label, query string, count int) []string {
-	if count <= 10 {
+func (s transitStopSelector) validate(queryFlag, idFlag string) error {
+	query := strings.TrimSpace(s.Query)
+	id := strings.TrimSpace(s.ID)
+	switch {
+	case query == "" && id == "":
+		return fmt.Errorf("--%s or --%s is required", queryFlag, idFlag)
+	case query != "" && id != "":
+		return fmt.Errorf("use either --%s or --%s, not both", queryFlag, idFlag)
+	default:
+		return nil
+	}
+}
+
+func (s transitStopSelector) display() string {
+	if strings.TrimSpace(s.ID) != "" {
+		return strings.TrimSpace(s.ID)
+	}
+	return strings.TrimSpace(s.Query)
+}
+
+func appendTransitStopMatchWarning(warnings []string, label, idFlag string, selector transitStopSelector, matchMode string, count int) []string {
+	if count <= 10 || matchMode != "query" {
 		return warnings
 	}
-	return append(warnings, fmt.Sprintf("%s query %q matched %d stops; use odh transit stops search and a more specific stop name if results are noisy", label, strings.TrimSpace(query), count))
+	return append(warnings, fmt.Sprintf("%s query %q matched %d stops; use odh transit stops search and rerun with --%s if results are noisy", label, selector.display(), count, idFlag))
 }
 
 type transitTimeQuery struct {
@@ -400,14 +437,17 @@ type transitTimeQuery struct {
 }
 
 type transitDeparturesResult struct {
-	Stops      []gtfsStop         `json:"stops"`
-	Departures []transitDeparture `json:"departures"`
+	Stops         []gtfsStop         `json:"stops"`
+	StopMatchMode string             `json:"stop_match_mode"`
+	Departures    []transitDeparture `json:"departures"`
 }
 
 type transitTripResult struct {
-	FromStops []gtfsStop         `json:"from_stops"`
-	ToStops   []gtfsStop         `json:"to_stops"`
-	Matches   []transitTripMatch `json:"matches"`
+	FromStops     []gtfsStop         `json:"from_stops"`
+	FromMatchMode string             `json:"from_match_mode"`
+	ToStops       []gtfsStop         `json:"to_stops"`
+	ToMatchMode   string             `json:"to_match_mode"`
+	Matches       []transitTripMatch `json:"matches"`
 }
 
 func (r *Runner) fetchGTFSArchive(ctx context.Context, dataset, cacheDir string, refresh bool) (gtfsArchiveInfo, error) {
@@ -510,7 +550,7 @@ func readGTFSStops(zipPath string) ([]gtfsStop, error) {
 	return stops, nil
 }
 
-func findTransitDepartures(zipPath, stopQuery string, query transitTimeQuery, routeTypes map[string]struct{}, limit int) (transitDeparturesResult, error) {
+func findTransitDepartures(zipPath string, selector transitStopSelector, query transitTimeQuery, routeTypes map[string]struct{}, limit int) (transitDeparturesResult, error) {
 	reader, closeFn, err := openGTFSZip(zipPath)
 	if err != nil {
 		return transitDeparturesResult{}, err
@@ -520,7 +560,10 @@ func findTransitDepartures(zipPath, stopQuery string, query transitTimeQuery, ro
 	if err != nil {
 		return transitDeparturesResult{}, err
 	}
-	matchedStops := searchGTFSStops(stops, stopQuery, 50)
+	matchedStops, matchMode, err := selectGTFSStops(stops, selector, 50)
+	if err != nil {
+		return transitDeparturesResult{}, err
+	}
 	matchedStopIDs := stopIDSet(matchedStops)
 	activeServices, err := loadActiveGTFSServiceIDs(reader, query.Date)
 	if err != nil {
@@ -555,10 +598,10 @@ func findTransitDepartures(zipPath, stopQuery string, query transitTimeQuery, ro
 	if len(departures) > limit {
 		departures = departures[:limit]
 	}
-	return transitDeparturesResult{Stops: matchedStops, Departures: departures}, nil
+	return transitDeparturesResult{Stops: matchedStops, StopMatchMode: matchMode, Departures: departures}, nil
 }
 
-func findTransitTripMatches(zipPath, fromQuery, toQuery string, query transitTimeQuery, routeTypes map[string]struct{}, limit int) (transitTripResult, error) {
+func findTransitTripMatches(zipPath string, fromSelector, toSelector transitStopSelector, query transitTimeQuery, routeTypes map[string]struct{}, limit int) (transitTripResult, error) {
 	reader, closeFn, err := openGTFSZip(zipPath)
 	if err != nil {
 		return transitTripResult{}, err
@@ -568,8 +611,14 @@ func findTransitTripMatches(zipPath, fromQuery, toQuery string, query transitTim
 	if err != nil {
 		return transitTripResult{}, err
 	}
-	fromStops := searchGTFSStops(stops, fromQuery, 50)
-	toStops := searchGTFSStops(stops, toQuery, 50)
+	fromStops, fromMode, err := selectGTFSStops(stops, fromSelector, 50)
+	if err != nil {
+		return transitTripResult{}, err
+	}
+	toStops, toMode, err := selectGTFSStops(stops, toSelector, 50)
+	if err != nil {
+		return transitTripResult{}, err
+	}
 	fromIDs := stopIDSet(fromStops)
 	toIDs := stopIDSet(toStops)
 	activeServices, err := loadActiveGTFSServiceIDs(reader, query.Date)
@@ -627,7 +676,38 @@ func findTransitTripMatches(zipPath, fromQuery, toQuery string, query transitTim
 	if len(matches) > limit {
 		matches = matches[:limit]
 	}
-	return transitTripResult{FromStops: fromStops, ToStops: toStops, Matches: matches}, nil
+	return transitTripResult{FromStops: fromStops, FromMatchMode: fromMode, ToStops: toStops, ToMatchMode: toMode, Matches: matches}, nil
+}
+
+func selectGTFSStops(stops []gtfsStop, selector transitStopSelector, queryLimit int) ([]gtfsStop, string, error) {
+	id := strings.TrimSpace(selector.ID)
+	if id == "" {
+		return searchGTFSStops(stops, selector.Query, queryLimit), "query", nil
+	}
+	parentMatches := make([]gtfsStop, 0)
+	var exactMatch *gtfsStop
+	for _, stop := range stops {
+		if stop.ID == id {
+			stopCopy := stop
+			exactMatch = &stopCopy
+		}
+		if stop.ParentStation == id {
+			parentMatches = append(parentMatches, stop)
+		}
+	}
+	if len(parentMatches) > 0 {
+		sort.Slice(parentMatches, func(i, j int) bool {
+			if parentMatches[i].Name != parentMatches[j].Name {
+				return parentMatches[i].Name < parentMatches[j].Name
+			}
+			return parentMatches[i].ID < parentMatches[j].ID
+		})
+		return parentMatches, "parent-station", nil
+	}
+	if exactMatch != nil {
+		return []gtfsStop{*exactMatch}, "stop-id", nil
+	}
+	return nil, "stop-id", fmt.Errorf("GTFS stop id %q was not found", id)
 }
 
 func openGTFSZip(path string) (*zip.Reader, func(), error) {

@@ -36,8 +36,8 @@ Usage:
   odh gtfs datasets
   odh gtfs realtime --dataset sta-time-tables --feed trip-updates
   odh transit stops search <query>
-  odh transit departures --stop query --date YYYY-MM-DD --around HH:MM
-  odh transit trip --from query --to query --date YYYY-MM-DD --time HH:MM
+  odh transit departures (--stop query | --stop-id id) --date YYYY-MM-DD --around HH:MM
+  odh transit trip (--from query | --from-stop-id id) (--to query | --to-stop-id id) --date YYYY-MM-DD --time HH:MM
   odh traffic zones [--format json|table|markdown]
   odh traffic categories [--format json|table|markdown]
   odh traffic today [--area area] [--type type] [--format json|table|markdown]

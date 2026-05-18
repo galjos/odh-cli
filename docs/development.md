@@ -58,11 +58,11 @@ The task set and scoring rubric are documented in [evaluation.md](evaluation.md)
 
 ## Build Metadata
 
-Development builds default to `0.1.7-dev` with best-effort VCS metadata. Release builds can stamp metadata through Go linker flags:
+Development builds default to `0.1.8-dev` with best-effort VCS metadata. Release builds can stamp metadata through Go linker flags:
 
 ```bash
 go build \
-  -ldflags "-X github.com/galjos/odh-cli/internal/version.Version=0.1.7 -X github.com/galjos/odh-cli/internal/version.Commit=$(git rev-parse --short HEAD) -X github.com/galjos/odh-cli/internal/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  -ldflags "-X github.com/galjos/odh-cli/internal/version.Version=0.1.8 -X github.com/galjos/odh-cli/internal/version.Commit=$(git rev-parse --short HEAD) -X github.com/galjos/odh-cli/internal/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   -o odh ./cmd/odh
 ```
 

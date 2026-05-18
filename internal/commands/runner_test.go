@@ -340,6 +340,87 @@ func TestRunTransitDeparturesParsesStaticGTFS(t *testing.T) {
 	}
 }
 
+func TestRunTransitDeparturesSupportsStopID(t *testing.T) {
+	gtfsZip := buildTestGTFSZip(t)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/dataset/sta-time-tables/raw" {
+			t.Fatalf("unexpected path %q", r.URL.Path)
+		}
+		_, _ = w.Write(gtfsZip)
+	}))
+	defer server.Close()
+
+	runner := newTestRunner(t, []apis.API{{Name: "gtfs", BaseURL: server.URL, Public: true}})
+	var stdout, stderr bytes.Buffer
+	code := runner.Run(context.Background(), []string{
+		"transit", "departures",
+		"--stop-id", "ora-station",
+		"--date", "2026-05-16",
+		"--around", "14:05",
+		"--window", "5m",
+		"--mode", "train",
+		"--cache-dir", t.TempDir(),
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("Run exit = %d, stderr = %s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), `"stop_match_mode": "stop-id"`) ||
+		!strings.Contains(stdout.String(), `"stop_id": "ora-station"`) ||
+		!strings.Contains(stdout.String(), `"departure_time": "14:05:00"`) {
+		t.Fatalf("unexpected stdout: %s", stdout.String())
+	}
+	if strings.Contains(stdout.String(), "matched 50 stops") {
+		t.Fatalf("stop-id mode emitted ambiguity warning: %s", stdout.String())
+	}
+}
+
+func TestRunTransitDeparturesSupportsParentStationID(t *testing.T) {
+	gtfsZip := buildTestGTFSZip(t)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/dataset/sta-time-tables/raw" {
+			t.Fatalf("unexpected path %q", r.URL.Path)
+		}
+		_, _ = w.Write(gtfsZip)
+	}))
+	defer server.Close()
+
+	runner := newTestRunner(t, []apis.API{{Name: "gtfs", BaseURL: server.URL, Public: true}})
+	var stdout, stderr bytes.Buffer
+	code := runner.Run(context.Background(), []string{
+		"transit", "departures",
+		"--stop-id", "ora-parent",
+		"--date", "2026-05-16",
+		"--around", "14:05",
+		"--window", "5m",
+		"--mode", "train",
+		"--cache-dir", t.TempDir(),
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("Run exit = %d, stderr = %s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), `"stop_match_mode": "parent-station"`) ||
+		!strings.Contains(stdout.String(), `"stop_id": "ora-parent"`) ||
+		!strings.Contains(stdout.String(), `"departure_time": "14:05:00"`) {
+		t.Fatalf("unexpected stdout: %s", stdout.String())
+	}
+}
+
+func TestRunTransitDeparturesRejectsStopAndStopID(t *testing.T) {
+	runner := newTestRunner(t, nil)
+	var stdout, stderr bytes.Buffer
+	code := runner.Run(context.Background(), []string{
+		"transit", "departures",
+		"--stop", "auer",
+		"--stop-id", "ora-station",
+	}, &stdout, &stderr)
+	if code != 2 {
+		t.Fatalf("Run exit = %d, want 2", code)
+	}
+	if !strings.Contains(stderr.String(), "use either --stop or --stop-id") {
+		t.Fatalf("unexpected stderr: %s", stderr.String())
+	}
+}
+
 func TestRunTransitTripFindsDirectGTFSMatch(t *testing.T) {
 	gtfsZip := buildTestGTFSZip(t)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -368,6 +449,74 @@ func TestRunTransitTripFindsDirectGTFSMatch(t *testing.T) {
 	if !strings.Contains(stdout.String(), `"count": 1`) ||
 		!strings.Contains(stdout.String(), `"stop_name": "Brennero"`) ||
 		!strings.Contains(stdout.String(), "historical delay probability is not available") {
+		t.Fatalf("unexpected stdout: %s", stdout.String())
+	}
+}
+
+func TestRunTransitTripSupportsStopIDs(t *testing.T) {
+	gtfsZip := buildTestGTFSZip(t)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/dataset/sta-time-tables/raw" {
+			t.Fatalf("unexpected path %q", r.URL.Path)
+		}
+		_, _ = w.Write(gtfsZip)
+	}))
+	defer server.Close()
+
+	runner := newTestRunner(t, []apis.API{{Name: "gtfs", BaseURL: server.URL, Public: true}})
+	var stdout, stderr bytes.Buffer
+	code := runner.Run(context.Background(), []string{
+		"transit", "trip",
+		"--from-stop-id", "ora-station",
+		"--to-stop-id", "brenner",
+		"--date", "2026-05-16",
+		"--time", "14:05",
+		"--window", "5m",
+		"--mode", "train",
+		"--cache-dir", t.TempDir(),
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("Run exit = %d, stderr = %s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), `"from_match_mode": "stop-id"`) ||
+		!strings.Contains(stdout.String(), `"to_match_mode": "stop-id"`) ||
+		!strings.Contains(stdout.String(), `"from_stop_id": "ora-station"`) ||
+		!strings.Contains(stdout.String(), `"to_stop_id": "brenner"`) ||
+		!strings.Contains(stdout.String(), `"count": 1`) {
+		t.Fatalf("unexpected stdout: %s", stdout.String())
+	}
+}
+
+func TestRunTransitTripSupportsParentStationIDs(t *testing.T) {
+	gtfsZip := buildTestGTFSZip(t)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/dataset/sta-time-tables/raw" {
+			t.Fatalf("unexpected path %q", r.URL.Path)
+		}
+		_, _ = w.Write(gtfsZip)
+	}))
+	defer server.Close()
+
+	runner := newTestRunner(t, []apis.API{{Name: "gtfs", BaseURL: server.URL, Public: true}})
+	var stdout, stderr bytes.Buffer
+	code := runner.Run(context.Background(), []string{
+		"transit", "trip",
+		"--from-stop-id", "ora-parent",
+		"--to-stop-id", "brenner-parent",
+		"--date", "2026-05-16",
+		"--time", "14:05",
+		"--window", "5m",
+		"--mode", "train",
+		"--cache-dir", t.TempDir(),
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("Run exit = %d, stderr = %s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), `"from_match_mode": "parent-station"`) ||
+		!strings.Contains(stdout.String(), `"to_match_mode": "parent-station"`) ||
+		!strings.Contains(stdout.String(), `"from_stop_id": "ora-parent"`) ||
+		!strings.Contains(stdout.String(), `"to_stop_id": "brenner-parent"`) ||
+		!strings.Contains(stdout.String(), `"count": 1`) {
 		t.Fatalf("unexpected stdout: %s", stdout.String())
 	}
 }
@@ -1312,8 +1461,10 @@ func buildTestGTFSZip(t *testing.T) []byte {
 	files := map[string]string{
 		"stops.txt": strings.Join([]string{
 			"stop_id,stop_name,stop_lat,stop_lon,zone_id,location_type,parent_station",
-			"ora-station,\"Ora, Stazione di Ora\",46.36075232,11.29752794,,,",
-			"brenner,\"Brennero\",47.00268073,11.50557389,,,",
+			"ora-parent,\"Ora\",46.36075232,11.29752794,,1,",
+			"ora-station,\"Ora, Stazione di Ora\",46.36075232,11.29752794,,,ora-parent",
+			"brenner-parent,\"Brennero\",47.00268073,11.50557389,,1,",
+			"brenner,\"Brennero\",47.00268073,11.50557389,,,brenner-parent",
 			"bozen,\"Bolzano\",46.498,11.354,,,",
 			"",
 		}, "\n"),

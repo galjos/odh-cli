@@ -13,7 +13,7 @@ metadata:
             {
               "id": "go",
               "kind": "go",
-              "module": "github.com/galjos/odh-cli/cmd/odh@v0.1.7",
+              "module": "github.com/galjos/odh-cli/cmd/odh@v0.1.8",
               "bins": ["odh"],
               "label": "Install odh CLI (go)",
             },
@@ -37,10 +37,10 @@ odh version
 odh doctor --timeout 10s
 ```
 
-The traffic discovery, GTFS, transit, and filtered mobility-latest commands require `odh` `v0.1.7` or newer. If `odh version` reports an older release, install the current release into a directory that is already on PATH:
+The traffic discovery, GTFS, transit, and filtered mobility-latest commands require `odh` `v0.1.8` or newer. If `odh version` reports an older release, install the current release into a directory that is already on PATH:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/galjos/odh-cli/main/scripts/install.sh | sh -s -- --version v0.1.7 --dir "$HOME/bin"
+curl -fsSL https://raw.githubusercontent.com/galjos/odh-cli/main/scripts/install.sh | sh -s -- --version v0.1.8 --dir "$HOME/bin"
 ```
 
 If `odh` is not installed in a normal shell, install the latest release:
@@ -133,10 +133,13 @@ odh gtfs realtime --dataset sta-time-tables --feed trip-updates --limit 5
 odh transit stops search auer
 odh transit departures --stop "Ora, Stazione di Ora" --date 2026-05-16 --around 14:05 --mode train
 odh transit trip --from auer --to brenner --date 2026-05-16 --time 14:05 --mode train
+odh transit stops search merano --limit 10
+odh transit departures --stop-id <stop_id-from-search> --date 2026-05-16 --around 13:00 --mode train
+odh transit trip --from-stop-id <origin-stop-id> --to-stop-id <destination-stop-id> --date 2026-05-16 --time 13:00 --mode train
 odh transit delay-stats --from auer --to brenner --time 14:05 --weekday saturday
 ```
 
-Use these commands when the user asks about trains, buses, public-transport stops, STA timetables, GTFS, GTFS-RT, live trip updates, or whether delay probability can be computed. The first transit command may download a large static GTFS archive and cache it for 24 hours; retry once if the upstream download is interrupted. If the output warns that a stop query matched many stops, run `odh transit stops search <query> --limit 5` and rerun with a more specific stop name. `odh transit trip` only finds direct static GTFS trip matches; it does not do transfer routing. `odh transit delay-stats` currently returns `supported: false` because delay probability requires historical GTFS-RT snapshots, not just the current live feed. Do not infer historical delay probability from one realtime response.
+Use these commands when the user asks about trains, buses, public-transport stops, STA timetables, GTFS, GTFS-RT, live trip updates, or whether delay probability can be computed. The first transit command may download a large static GTFS archive and cache it for 24 hours; retry once if the upstream download is interrupted. If the output warns that a stop query matched many stops, run `odh transit stops search <query> --limit 5` and rerun with `--stop-id`, `--from-stop-id`, or `--to-stop-id`. Parent station IDs are valid and expand to their child platform stops. This is the preferred agent pattern for ambiguous station names like Merano and Bolzano. `odh transit trip` only finds direct static GTFS trip matches; it does not do transfer routing. `odh transit delay-stats` currently returns `supported: false` because delay probability requires historical GTFS-RT snapshots, not just the current live feed. Do not infer historical delay probability from one realtime response.
 
 South Tyrol traffic events, roadworks, closures, and road events:
 

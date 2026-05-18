@@ -20,6 +20,7 @@ Current task themes:
 - Unterland / Ueberetsch roadworks and closure summaries.
 - A22 traffic data discovery and forecast caveats.
 - Public-transport delay-probability limitations.
+- Public-transport stop-ID disambiguation for station names with many matches.
 - Mobility parking discovery.
 - Mobility latest freshness and inactive-station filtering for availability questions.
 

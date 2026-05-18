@@ -36,7 +36,7 @@ Example output with `--network=false`:
 {
   "ok": true,
   "version": {
-    "version": "0.1.7-dev",
+    "version": "0.1.8-dev",
     "commit": "unknown",
     "date": "unknown",
     "goos": "darwin",
@@ -46,7 +46,7 @@ Example output with `--network=false`:
     {
       "name": "version",
       "ok": true,
-      "message": "0.1.7-dev"
+      "message": "0.1.8-dev"
     },
     {
       "name": "api_registry",
@@ -363,6 +363,7 @@ Searches static GTFS stops from a cached Open Data Hub GTFS archive.
 ```bash
 odh transit stops search auer
 odh transit stops search "Ora, Stazione di Ora" --limit 5
+odh transit stops search merano --limit 10
 ```
 
 Flags:
@@ -381,12 +382,14 @@ Finds static GTFS departures for matched stops near a time.
 ```bash
 odh transit departures --stop "Ora, Stazione di Ora" --date 2026-05-16 --around 14:05
 odh transit departures --stop auer --date 2026-05-16 --around 14:05 --window 30m --mode train
+odh transit departures --stop-id it:22021:210:52:31041 --date 2026-05-16 --around 14:05 --mode train
 ```
 
 Flags:
 
 - `--dataset value` - GTFS dataset id; default `sta-time-tables`.
-- `--stop value` - stop search query; required.
+- `--stop value` - stop search query; required unless `--stop-id` is used.
+- `--stop-id value` - exact GTFS `stop_id` or `parent_station` from `odh transit stops search`; required unless `--stop` is used.
 - `--date YYYY-MM-DD` - service date; default today.
 - `--around HH:MM` - optional departure time to search around.
 - `--window duration` - time window around `--around`; default `15m`.
@@ -395,7 +398,7 @@ Flags:
 - `--cache-dir dir` - directory for cached GTFS archives.
 - `--refresh` - force a new archive download.
 
-The command reads static GTFS. It is useful for timetable evidence, not for live delay probability.
+The command reads static GTFS. It is useful for timetable evidence, not for live delay probability. Use `--stop-id` after `odh transit stops search` when a broad stop name matches many platforms, bus bays, or nearby stops. If the selected ID is a GTFS parent station, the CLI expands it to its child platform stops. Output includes `stop_match_mode` so agents can tell whether matching used a fuzzy query, exact stop id, or parent station.
 
 ## `odh transit trip`
 
@@ -403,13 +406,16 @@ Looks for direct static GTFS trip matches between two stop queries.
 
 ```bash
 odh transit trip --from auer --to brenner --date 2026-05-16 --time 14:05 --mode train
+odh transit trip --from-stop-id it:22021:210:52:31041 --to-stop-id it:22003:500:52:20001 --date 2026-05-16 --time 14:05 --mode train
 ```
 
 Flags:
 
 - `--dataset value` - GTFS dataset id; default `sta-time-tables`.
-- `--from value` - origin stop query; required.
-- `--to value` - destination stop query; required.
+- `--from value` - origin stop query; required unless `--from-stop-id` is used.
+- `--from-stop-id value` - exact origin GTFS `stop_id` or `parent_station` from `odh transit stops search`.
+- `--to value` - destination stop query; required unless `--to-stop-id` is used.
+- `--to-stop-id value` - exact destination GTFS `stop_id` or `parent_station` from `odh transit stops search`.
 - `--date YYYY-MM-DD` - service date; default today.
 - `--time HH:MM` - origin departure time; required.
 - `--window duration` - time window around `--time`; default `15m`.
@@ -418,7 +424,7 @@ Flags:
 - `--cache-dir dir` - directory for cached GTFS archives.
 - `--refresh` - force a new archive download.
 
-This command does not perform transfer routing. If no direct trip matches, the JSON output includes a warning.
+This command does not perform transfer routing. If no direct trip matches, the JSON output includes a warning. Output includes `from_match_mode` and `to_match_mode`; use stop-id or parent-station mode for agent workflows where names like Merano or Bolzano return many matches.
 
 ## `odh transit delay-stats`
 

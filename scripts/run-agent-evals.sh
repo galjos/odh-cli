@@ -89,4 +89,14 @@ assert_json_filter "a22 status separates events and forecast feeds" "$tmpdir/a22
 run_odh transit delay-stats --from auer --to brenner --time 14:05 --weekday saturday >"$tmpdir/delay-stats.json"
 assert_json_filter "transit delay-stats reports historical archive limitation" "$tmpdir/delay-stats.json" '.supported == false and (.reason | test("historical|archive|GTFS-RT"))'
 
+run_odh transit stops search auer --limit 1 >"$tmpdir/transit-stops.json"
+transit_stop_id="$(jq -r '.stops[0].id // ""' "$tmpdir/transit-stops.json")"
+if [ -z "$transit_stop_id" ]; then
+  echo "not ok - transit stop search returned no stop id" >&2
+  sed -n '1,120p' "$tmpdir/transit-stops.json" >&2
+  exit 1
+fi
+run_odh transit departures --stop-id "$transit_stop_id" --date 2026-05-16 --around 14:05 --window 5m --mode train --limit 5 >"$tmpdir/transit-departures-by-id.json"
+assert_json_filter "transit departures supports exact stop ids" "$tmpdir/transit-departures-by-id.json" '(.stop_match_mode == "stop-id" or .stop_match_mode == "parent-station") and (.stop_id | length > 0) and (.matched_stops | length >= 1) and (.departures | type == "array")'
+
 printf '\nAgent eval smoke checks passed. Use evals/agent/tasks.json for manual agent scoring.\n'

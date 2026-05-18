@@ -90,6 +90,26 @@
       ]
     },
     {
+      "id": "transit-stop-id-disambiguation",
+      "prompt": "Find a Merano to Bolzano train without mixing the main train station with bus bays or other similarly named stops.",
+      "expected_command_path": [
+        "odh transit stops search merano --limit 10",
+        "odh transit stops search bolzano --limit 10",
+        "odh transit trip --from-stop-id <merano-stop-id> --to-stop-id <bolzano-stop-id> --date 2026-05-16 --time 13:00 --mode train"
+      ],
+      "pass_criteria": [
+        "Uses stop search to discover GTFS stop IDs before querying the trip.",
+        "Uses --from-stop-id and --to-stop-id when name-based matching is ambiguous.",
+        "Reports if only direct static GTFS matches are supported.",
+        "Does not mix train-station platform IDs with bus bay results unless the selected IDs show that."
+      ],
+      "common_failures": [
+        "Runs broad --from merano --to bolzano and ignores ambiguity warnings.",
+        "Chooses a bus bay because the station name matched many stops.",
+        "Claims full transfer routing when the CLI only supports direct matches."
+      ]
+    },
+    {
       "id": "mobility-parking-discovery",
       "prompt": "Find parking data in Open Data Hub and show how an agent should discover stations and available measurements.",
       "expected_command_path": [
