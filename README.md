@@ -32,6 +32,8 @@ This is an early v0.1 project. It intentionally focuses on a small working core:
 - search a small curated dataset catalog for common entry points,
 - fetch OpenAPI specs as JSON,
 - call any registered API path with query parameters,
+- retry transient HTTP `429` and `5xx` failures with bounded exponential backoff,
+- cache low-risk discovery responses such as OpenAPI specs, taxonomies, and station metadata for 24 hours,
 - query a random Tourism POI,
 - discover Tourism taxonomies such as POI, event, accommodation, venue, article, and tag types,
 - discover Mobility station, event, and edge types,
@@ -229,6 +231,8 @@ odh a22 status --limit 10
 - stderr is for diagnostics,
 - failures return nonzero exit codes,
 - commands are non-interactive,
+- usage errors return exit code `2`, while runtime failures return exit code `1`,
+- current-data commands are not cached by the generic HTTP cache,
 - examples use public endpoints only,
 - commands avoid hidden browser state and web scraping.
 

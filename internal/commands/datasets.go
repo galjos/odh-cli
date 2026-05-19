@@ -6,11 +6,11 @@ package commands
 
 import (
 	"fmt"
-	"io"
 	"sort"
 	"strings"
 
 	"github.com/galjos/odh-cli/internal/output"
+	"github.com/spf13/cobra"
 )
 
 type datasetEntry struct {
@@ -24,71 +24,61 @@ type datasetEntry struct {
 	Keywords    []string `json:"-"`
 }
 
-func (r *Runner) runDatasets(args []string, stdout, stderr io.Writer) int {
-	if len(args) == 0 {
-		fmt.Fprintln(stderr, "usage: odh datasets <list|search>")
-		return 2
+func (r *Runner) newDatasetsCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "datasets",
+		Short: "Search and list Open Data Hub datasets",
+		RunE:  requireSubcommand,
 	}
-	switch args[0] {
-	case "list":
-		return runDatasetsList(args[1:], stdout, stderr)
-	case "search":
-		return runDatasetsSearch(args[1:], stdout, stderr)
-	default:
-		fmt.Fprintf(stderr, "unknown datasets subcommand %q\n", args[0])
-		return 2
+
+	var listDomain string
+	var listFormat string
+	listCmd := &cobra.Command{
+		Use:   "list",
+		Short: "List known datasets",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			entries := filterDatasetsByDomain(datasetCatalog(), listDomain)
+			return writeDatasetEntries(cmd, entries, listFormat)
+		},
 	}
+	listCmd.Flags().StringVar(&listDomain, "domain", "", "optional domain filter, for example tourism or mobility")
+	listCmd.Flags().StringVar(&listFormat, "format", "json", "output format: json or table")
+
+	var searchDomain string
+	var searchFormat string
+	searchCmd := &cobra.Command{
+		Use:   "search <query>",
+		Short: "Search the curated dataset catalog",
+		Args:  cobra.MinimumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			query := strings.Join(args, " ")
+			entries := filterDatasetsByDomain(datasetCatalog(), searchDomain)
+			entries = filterDatasetsByQuery(entries, query)
+			return writeDatasetEntries(cmd, entries, searchFormat)
+		},
+	}
+	searchCmd.Flags().StringVar(&searchDomain, "domain", "", "optional domain filter, for example tourism or mobility")
+	searchCmd.Flags().StringVar(&searchFormat, "format", "json", "output format: json or table")
+
+	cmd.AddCommand(listCmd)
+	cmd.AddCommand(searchCmd)
+	return cmd
 }
 
-func runDatasetsList(args []string, stdout, stderr io.Writer) int {
-	fs := newFlagSet("datasets list", stderr)
-	domain := fs.String("domain", "", "optional domain filter, for example tourism or mobility")
-	format := fs.String("format", "json", "output format: json or table")
-	if err := fs.Parse(args); err != nil {
-		return 2
-	}
-	if fs.NArg() != 0 {
-		fmt.Fprintln(stderr, "datasets list does not accept positional arguments")
-		return 2
-	}
-	entries := filterDatasetsByDomain(datasetCatalog(), *domain)
-	return writeDatasetEntries(stdout, stderr, entries, *format)
-}
-
-func runDatasetsSearch(args []string, stdout, stderr io.Writer) int {
-	fs := newFlagSet("datasets search", stderr)
-	domain := fs.String("domain", "", "optional domain filter, for example tourism or mobility")
-	format := fs.String("format", "json", "output format: json or table")
-	if err := fs.Parse(args); err != nil {
-		return 2
-	}
-	query := strings.TrimSpace(strings.Join(fs.Args(), " "))
-	if query == "" {
-		fmt.Fprintln(stderr, "usage: odh datasets search <query>")
-		return 2
-	}
-	entries := filterDatasetsByDomain(datasetCatalog(), *domain)
-	entries = filterDatasetsByQuery(entries, query)
-	return writeDatasetEntries(stdout, stderr, entries, *format)
-}
-
-func writeDatasetEntries(stdout, stderr io.Writer, entries []datasetEntry, format string) int {
+func writeDatasetEntries(cmd *cobra.Command, entries []datasetEntry, format string) error {
 	switch format {
 	case "json":
-		if err := output.WriteJSON(stdout, map[string]any{"count": len(entries), "datasets": entries}); err != nil {
-			fmt.Fprintln(stderr, err)
-			return 1
-		}
+		return output.WriteJSON(cmd.OutOrStdout(), map[string]any{"count": len(entries), "datasets": entries})
 	case "table":
-		fmt.Fprintln(stdout, "ID\tDOMAIN\tAPI\tTITLE")
+		fmt.Fprintln(cmd.OutOrStdout(), "ID\tDOMAIN\tAPI\tTITLE")
 		for _, entry := range entries {
-			fmt.Fprintf(stdout, "%s\t%s\t%s\t%s\n", entry.ID, entry.Domain, entry.API, entry.Title)
+			fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\t%s\t%s\n", entry.ID, entry.Domain, entry.API, entry.Title)
 		}
+		return nil
 	default:
-		fmt.Fprintf(stderr, "unsupported format %q\n", format)
-		return 2
+		return fmt.Errorf("unsupported format %q", format)
 	}
-	return 0
 }
 
 func filterDatasetsByDomain(entries []datasetEntry, domain string) []datasetEntry {
@@ -264,6 +254,7 @@ func datasetCatalog() []datasetEntry {
 				"odh traffic zones",
 				"odh traffic categories",
 				"odh traffic today --area ueberetsch-unterland --type roadworks --format table",
+				"odh traffic today --zone-id 6 --type closure --json",
 				"odh traffic events --area bozen-unterland --from 2026-05-16 --to 2026-05-16 --format json",
 				"odh traffic search \"road closed badia\" --today --zone-id 6 --json",
 				"odh traffic today --near 46.42,11.25 --radius 15km --json",

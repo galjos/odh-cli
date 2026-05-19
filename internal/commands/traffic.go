@@ -6,7 +6,6 @@ package commands
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"io"
 	"math"
@@ -18,6 +17,7 @@ import (
 	"time"
 
 	"github.com/galjos/odh-cli/internal/output"
+	"github.com/spf13/cobra"
 )
 
 type trafficQuery struct {
@@ -33,7 +33,6 @@ type trafficQuery struct {
 	Search         string
 	Today          bool
 	Format         string
-	JSON           bool
 	Limit          int
 	Raw            bool
 	IncludeExpired bool
@@ -97,198 +96,178 @@ type trafficCategoriesResult struct {
 	OutputFormat string            `json:"-"`
 }
 
-func (r *Runner) runTraffic(ctx context.Context, args []string, stdout, stderr io.Writer) int {
-	if len(args) == 0 {
-		fmt.Fprintln(stderr, "usage: odh traffic <zones|categories|today|events|search>")
-		return 2
+func (r *Runner) newTrafficCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "traffic",
+		Short: "Opinionated Open Data Hub traffic commands",
+		RunE:  requireSubcommand,
 	}
-	switch args[0] {
-	case "zones":
-		return r.runTrafficZones(args[1:], stdout, stderr)
-	case "categories":
-		return r.runTrafficCategories(args[1:], stdout, stderr)
-	case "today":
-		return r.runTrafficToday(ctx, args[1:], stdout, stderr)
-	case "events":
-		return r.runTrafficEvents(ctx, args[1:], stdout, stderr)
-	case "search":
-		return r.runTrafficSearch(ctx, args[1:], stdout, stderr)
-	default:
-		fmt.Fprintf(stderr, "unknown traffic subcommand %q\n", args[0])
-		return 2
+
+	var zonesFormat string
+	var zonesJSON bool
+	zonesCmd := &cobra.Command{
+		Use:   "zones",
+		Short: "List traffic zones",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if zonesJSON {
+				zonesFormat = "json"
+			}
+			normalizedFormat, err := normalizeTrafficFormat(zonesFormat)
+			if err != nil {
+				return err
+			}
+			return writeTrafficZonesOutput(cmd.OutOrStdout(), trafficZonesResult{
+				Source:       "odh",
+				SourceDetail: "Open Data Hub Mobility API PROVINCE_BZ traffic zones",
+				Zones:        knownTrafficZones(),
+				OutputFormat: normalizedFormat,
+			})
+		},
 	}
+	zonesCmd.Flags().StringVar(&zonesFormat, "format", "table", "output format: json, table, or markdown")
+	zonesCmd.Flags().BoolVar(&zonesJSON, "json", false, "shortcut for --format json")
+
+	var catsFormat string
+	var catsJSON bool
+	categoriesCmd := &cobra.Command{
+		Use:   "categories",
+		Short: "List traffic event categories",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if catsJSON {
+				catsFormat = "json"
+			}
+			normalizedFormat, err := normalizeTrafficFormat(catsFormat)
+			if err != nil {
+				return err
+			}
+			return writeTrafficCategoriesOutput(cmd.OutOrStdout(), trafficCategoriesResult{
+				Source:       "odh",
+				SourceDetail: "Open Data Hub Mobility API PROVINCE_BZ traffic event categories",
+				Categories:   knownTrafficCategories(),
+				OutputFormat: normalizedFormat,
+			})
+		},
+	}
+	categoriesCmd.Flags().StringVar(&catsFormat, "format", "table", "output format: json, table, or markdown")
+	categoriesCmd.Flags().BoolVar(&catsJSON, "json", false, "shortcut for --format json")
+
+	var todayQuery trafficQuery
+	var todayJSON bool
+	todayCmd := &cobra.Command{
+		Use:   "today",
+		Short: "Query today's traffic events",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if todayJSON {
+				todayQuery.Format = "json"
+			}
+			today := time.Now().Format("2006-01-02")
+			todayQuery.From = today
+			todayQuery.To = today
+			q, err := finalizeTrafficFlags(todayQuery)
+			if err != nil {
+				return err
+			}
+			return r.runTrafficQueryCobra(cmd.Context(), q, cmd.OutOrStdout(), cmd.OutOrStderr())
+		},
+	}
+	addTrafficCobraFlags(todayCmd, &todayQuery)
+	todayCmd.Flags().BoolVar(&todayJSON, "json", false, "shortcut for --format json")
+
+	var eventsQuery trafficQuery
+	var eventsJSON bool
+	eventsCmd := &cobra.Command{
+		Use:   "events",
+		Short: "Query traffic events by date",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if eventsJSON {
+				eventsQuery.Format = "json"
+			}
+			if strings.TrimSpace(eventsQuery.From) == "" && strings.TrimSpace(eventsQuery.To) == "" {
+				today := time.Now().Format("2006-01-02")
+				eventsQuery.From = today
+				eventsQuery.To = today
+			}
+			if strings.TrimSpace(eventsQuery.From) == "" {
+				eventsQuery.From = eventsQuery.To
+			}
+			if strings.TrimSpace(eventsQuery.To) == "" {
+				eventsQuery.To = eventsQuery.From
+			}
+			q, err := finalizeTrafficFlags(eventsQuery)
+			if err != nil {
+				return err
+			}
+			return r.runTrafficQueryCobra(cmd.Context(), q, cmd.OutOrStdout(), cmd.OutOrStderr())
+		},
+	}
+	addTrafficCobraFlags(eventsCmd, &eventsQuery)
+	eventsCmd.Flags().BoolVar(&eventsJSON, "json", false, "shortcut for --format json")
+
+	var searchQuery trafficQuery
+	var searchJSON bool
+	searchCmd := &cobra.Command{
+		Use:   "search <query>",
+		Short: "Search traffic events by text",
+		Args:  cobra.MinimumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if searchJSON {
+				searchQuery.Format = "json"
+			}
+			searchQuery.Search = strings.Join(args, " ")
+			if searchQuery.Today || (strings.TrimSpace(searchQuery.From) == "" && strings.TrimSpace(searchQuery.To) == "") {
+				today := time.Now().Format("2006-01-02")
+				searchQuery.From = today
+				searchQuery.To = today
+			}
+			if strings.TrimSpace(searchQuery.From) == "" {
+				searchQuery.From = searchQuery.To
+			}
+			if strings.TrimSpace(searchQuery.To) == "" {
+				searchQuery.To = searchQuery.From
+			}
+			q, err := finalizeTrafficFlags(searchQuery)
+			if err != nil {
+				return err
+			}
+			return r.runTrafficQueryCobra(cmd.Context(), q, cmd.OutOrStdout(), cmd.OutOrStderr())
+		},
+	}
+	addTrafficCobraFlags(searchCmd, &searchQuery)
+	searchCmd.Flags().BoolVar(&searchQuery.Today, "today", false, "search today's traffic events")
+	searchCmd.Flags().BoolVar(&searchJSON, "json", false, "shortcut for --format json")
+
+	cmd.AddCommand(zonesCmd)
+	cmd.AddCommand(categoriesCmd)
+	cmd.AddCommand(todayCmd)
+	cmd.AddCommand(eventsCmd)
+	cmd.AddCommand(searchCmd)
+	return cmd
 }
 
-func (r *Runner) runTrafficZones(args []string, stdout, stderr io.Writer) int {
-	fs := newFlagSet("traffic zones", stderr)
-	format := fs.String("format", "table", "output format: json, table, or markdown")
-	jsonOutput := fs.Bool("json", false, "shortcut for --format json")
-	if err := fs.Parse(args); err != nil {
-		return 2
-	}
-	if fs.NArg() != 0 {
-		fmt.Fprintln(stderr, "traffic zones does not accept positional arguments")
-		return 2
-	}
-	if *jsonOutput {
-		*format = "json"
-	}
-	normalizedFormat, err := normalizeTrafficFormat(*format)
-	if err != nil {
-		fmt.Fprintln(stderr, err)
-		return 2
-	}
-	if err := writeTrafficZonesOutput(stdout, trafficZonesResult{
-		Source:       "odh",
-		SourceDetail: "Open Data Hub Mobility API PROVINCE_BZ traffic zones",
-		Zones:        knownTrafficZones(),
-		OutputFormat: normalizedFormat,
-	}); err != nil {
-		fmt.Fprintln(stderr, err)
-		return 1
-	}
-	return 0
-}
-
-func (r *Runner) runTrafficCategories(args []string, stdout, stderr io.Writer) int {
-	fs := newFlagSet("traffic categories", stderr)
-	format := fs.String("format", "table", "output format: json, table, or markdown")
-	jsonOutput := fs.Bool("json", false, "shortcut for --format json")
-	if err := fs.Parse(args); err != nil {
-		return 2
-	}
-	if fs.NArg() != 0 {
-		fmt.Fprintln(stderr, "traffic categories does not accept positional arguments")
-		return 2
-	}
-	if *jsonOutput {
-		*format = "json"
-	}
-	normalizedFormat, err := normalizeTrafficFormat(*format)
-	if err != nil {
-		fmt.Fprintln(stderr, err)
-		return 2
-	}
-	if err := writeTrafficCategoriesOutput(stdout, trafficCategoriesResult{
-		Source:       "odh",
-		SourceDetail: "Open Data Hub Mobility API PROVINCE_BZ traffic event categories",
-		Categories:   knownTrafficCategories(),
-		OutputFormat: normalizedFormat,
-	}); err != nil {
-		fmt.Fprintln(stderr, err)
-		return 1
-	}
-	return 0
-}
-
-func (r *Runner) runTrafficToday(ctx context.Context, args []string, stdout, stderr io.Writer) int {
-	query, err := parseTrafficFlags("traffic today", args, stderr)
-	if err != nil {
-		fmt.Fprintln(stderr, err)
-		return 2
-	}
-	today := time.Now().Format("2006-01-02")
-	query.From = today
-	query.To = today
-	return r.runTrafficQuery(ctx, query, stdout, stderr)
-}
-
-func (r *Runner) runTrafficEvents(ctx context.Context, args []string, stdout, stderr io.Writer) int {
-	query, err := parseTrafficFlags("traffic events", args, stderr)
-	if err != nil {
-		fmt.Fprintln(stderr, err)
-		return 2
-	}
-	if strings.TrimSpace(query.From) == "" && strings.TrimSpace(query.To) == "" {
-		today := time.Now().Format("2006-01-02")
-		query.From = today
-		query.To = today
-	}
-	if strings.TrimSpace(query.From) == "" {
-		query.From = query.To
-	}
-	if strings.TrimSpace(query.To) == "" {
-		query.To = query.From
-	}
-	return r.runTrafficQuery(ctx, query, stdout, stderr)
-}
-
-func (r *Runner) runTrafficSearch(ctx context.Context, args []string, stdout, stderr io.Writer) int {
-	query, err := parseTrafficSearchFlags(args, stderr)
-	if err != nil {
-		fmt.Fprintln(stderr, err)
-		return 2
-	}
-	if query.Today || (strings.TrimSpace(query.From) == "" && strings.TrimSpace(query.To) == "") {
-		today := time.Now().Format("2006-01-02")
-		query.From = today
-		query.To = today
-	}
-	if strings.TrimSpace(query.From) == "" {
-		query.From = query.To
-	}
-	if strings.TrimSpace(query.To) == "" {
-		query.To = query.From
-	}
-	return r.runTrafficQuery(ctx, query, stdout, stderr)
-}
-
-func parseTrafficFlags(name string, args []string, stderr io.Writer) (trafficQuery, error) {
-	fs := newFlagSet(name, stderr)
-	query := trafficQuery{}
-	addTrafficFlags(fs, &query)
-	if err := fs.Parse(args); err != nil {
-		return trafficQuery{}, err
-	}
-	if fs.NArg() != 0 {
-		return trafficQuery{}, fmt.Errorf("%s does not accept positional arguments", name)
-	}
-	return finalizeTrafficFlags(query)
-}
-
-func parseTrafficSearchFlags(args []string, stderr io.Writer) (trafficQuery, error) {
-	flagArgs, terms := splitTrafficSearchArgs(args)
-	fs := newFlagSet("traffic search", stderr)
-	query := trafficQuery{}
-	addTrafficFlags(fs, &query)
-	fs.BoolVar(&query.Today, "today", false, "search today's traffic events")
-	if err := fs.Parse(flagArgs); err != nil {
-		return trafficQuery{}, err
-	}
-	if fs.NArg() != 0 {
-		return trafficQuery{}, fmt.Errorf("traffic search could not parse arguments: %s", strings.Join(fs.Args(), " "))
-	}
-	query.Search = strings.TrimSpace(strings.Join(terms, " "))
-	if query.Search == "" {
-		return trafficQuery{}, fmt.Errorf("traffic search requires a query")
-	}
-	return finalizeTrafficFlags(query)
-}
-
-func addTrafficFlags(fs *flag.FlagSet, query *trafficQuery) {
-	fs.StringVar(&query.Source, "source", "odh", "traffic source: odh")
-	fs.StringVar(&query.ZoneID, "zone-id", "", "ODH PROVINCE_BZ messageZoneId filter, for example 6")
-	fs.StringVar(&query.Area, "area", "", "area alias, for example ueberetsch-unterland")
-	fs.StringVar(&query.Type, "type", "all", "type filter: all, roadworks, closure, event, traffic, mountain-pass, bike, or radar")
-	fs.StringVar(&query.Road, "road", "", "road filter, for example SP13 or SS42")
-	fs.StringVar(&query.Near, "near", "", "coordinate filter as lat,lon")
-	fs.StringVar(&query.Radius, "radius", "15km", "radius for --near, for example 15km")
-	fs.StringVar(&query.From, "from", "", "start date YYYY-MM-DD")
-	fs.StringVar(&query.To, "to", "", "end date YYYY-MM-DD")
-	fs.StringVar(&query.Format, "format", "table", "output format: json, table, or markdown")
-	fs.BoolVar(&query.JSON, "json", false, "shortcut for --format json")
-	fs.IntVar(&query.Limit, "limit", 1000, "maximum raw events to request")
-	fs.BoolVar(&query.Raw, "raw", false, "include raw upstream event objects in JSON output")
-	fs.BoolVar(&query.IncludeExpired, "include-expired", false, "include expired events after local date filtering")
-	fs.BoolVar(&query.IncludeStale, "include-stale", false, "include stale open-ended events that are hidden by default")
+func addTrafficCobraFlags(cmd *cobra.Command, query *trafficQuery) {
+	cmd.Flags().StringVar(&query.Source, "source", "odh", "traffic source: odh")
+	cmd.Flags().StringVar(&query.ZoneID, "zone-id", "", "ODH PROVINCE_BZ messageZoneId filter, for example 6")
+	cmd.Flags().StringVar(&query.Area, "area", "", "area alias, for example ueberetsch-unterland")
+	cmd.Flags().StringVar(&query.Type, "type", "all", "type filter: all, roadworks, closure, event, traffic, mountain-pass, bike, or radar")
+	cmd.Flags().StringVar(&query.Road, "road", "", "road filter, for example SP13 or SS42")
+	cmd.Flags().StringVar(&query.Near, "near", "", "coordinate filter as lat,lon")
+	cmd.Flags().StringVar(&query.Radius, "radius", "15km", "radius for --near, for example 15km")
+	cmd.Flags().StringVar(&query.From, "from", "", "start date YYYY-MM-DD")
+	cmd.Flags().StringVar(&query.To, "to", "", "end date YYYY-MM-DD")
+	cmd.Flags().StringVar(&query.Format, "format", "table", "output format: json, table, or markdown")
+	cmd.Flags().IntVar(&query.Limit, "limit", 1000, "maximum raw events to request")
+	cmd.Flags().BoolVar(&query.Raw, "raw", false, "include raw upstream event objects in JSON output")
+	cmd.Flags().BoolVar(&query.IncludeExpired, "include-expired", false, "include expired events after local date filtering")
+	cmd.Flags().BoolVar(&query.IncludeStale, "include-stale", false, "include stale open-ended events that are hidden by default")
 }
 
 func finalizeTrafficFlags(query trafficQuery) (trafficQuery, error) {
 	if query.Limit < 1 {
 		return trafficQuery{}, fmt.Errorf("--limit must be greater than zero")
-	}
-	if query.JSON {
-		query.Format = "json"
 	}
 	format, err := normalizeTrafficFormat(query.Format)
 	if err != nil {
@@ -298,87 +277,50 @@ func finalizeTrafficFlags(query trafficQuery) (trafficQuery, error) {
 	return query, nil
 }
 
-func splitTrafficSearchArgs(args []string) ([]string, []string) {
-	valueFlags := map[string]struct{}{
-		"area": {}, "format": {}, "from": {}, "limit": {}, "near": {}, "radius": {}, "road": {}, "source": {}, "to": {}, "type": {}, "zone-id": {},
-	}
-	flagArgs := make([]string, 0, len(args))
-	terms := make([]string, 0, len(args))
-	for index := 0; index < len(args); index++ {
-		arg := args[index]
-		if arg == "--" {
-			terms = append(terms, args[index+1:]...)
-			break
-		}
-		if !strings.HasPrefix(arg, "--") {
-			terms = append(terms, arg)
-			continue
-		}
-		flagArgs = append(flagArgs, arg)
-		name := strings.TrimPrefix(arg, "--")
-		if cut, _, ok := strings.Cut(name, "="); ok {
-			name = cut
-		}
-		if _, ok := valueFlags[name]; ok && !strings.Contains(arg, "=") && index+1 < len(args) {
-			index++
-			flagArgs = append(flagArgs, args[index])
-		}
-	}
-	return flagArgs, terms
-}
-
-func (r *Runner) runTrafficQuery(ctx context.Context, query trafficQuery, stdout, stderr io.Writer) int {
+func (r *Runner) runTrafficQueryCobra(ctx context.Context, query trafficQuery, stdout, stderr io.Writer) error {
 	if source := strings.ToLower(strings.TrimSpace(query.Source)); source != "" && source != "odh" {
-		fmt.Fprintf(stderr, "unsupported traffic source %q; supported source: odh\n", query.Source)
-		return 2
+		return fmt.Errorf("unsupported traffic source %q; supported source: odh", query.Source)
 	}
 	if strings.TrimSpace(query.Near) != "" {
 		if _, _, _, err := parseNearRadius(query.Near, query.Radius); err != nil {
-			fmt.Fprintln(stderr, err)
-			return 2
+			return err
 		}
 	}
 	fromDay, toDay, err := parseTrafficDateRange(query.From, query.To)
 	if err != nil {
-		fmt.Fprintln(stderr, err)
-		return 2
+		return err
 	}
 	area, err := resolveTrafficArea(query.Area)
 	if err != nil {
-		fmt.Fprintln(stderr, err)
-		return 2
+		return err
 	}
 	if strings.TrimSpace(query.ZoneID) != "" {
 		if err := validateTrafficZoneIDs(query.ZoneID); err != nil {
-			fmt.Fprintln(stderr, err)
-			return 2
+			return err
 		}
 	}
 	if _, err := normalizeTrafficTypeFilter(query.Type); err != nil {
-		fmt.Fprintln(stderr, err)
-		return 2
+		return err
 	}
-	return r.runODHTrafficQuery(ctx, query, area, fromDay, toDay, stdout, stderr)
+	return r.runODHTrafficQueryCobra(ctx, query, area, fromDay, toDay, stdout, stderr)
 }
 
-func (r *Runner) runODHTrafficQuery(ctx context.Context, query trafficQuery, area trafficArea, fromDay, toDay time.Time, stdout, stderr io.Writer) int {
+func (r *Runner) runODHTrafficQueryCobra(ctx context.Context, query trafficQuery, area trafficArea, fromDay, toDay time.Time, stdout, stderr io.Writer) error {
 	api, _ := r.Registry.Find("mobility")
 	path := fmt.Sprintf("/v2/flat,event/PROVINCE_BZ/%s/%s", fromDay.Format("2006-01-02"), toDay.Format("2006-01-02"))
 	values := url.Values{}
 	values.Set("limit", strconv.Itoa(query.Limit))
 	requestURL, err := BuildURL(api.BaseURL, path, values)
 	if err != nil {
-		fmt.Fprintln(stderr, err)
-		return 2
+		return err
 	}
 	value, err := r.fetchJSONValue(ctx, requestURL)
 	if err != nil {
-		fmt.Fprintln(stderr, err)
-		return 1
+		return err
 	}
 	rawEvents := extractDataList(value)
 	events, warnings := normalizeTrafficEvents(rawEvents, query, area, fromDay, toDay)
-	if err := writeTrafficOutput(stdout, trafficResult{
+	return writeTrafficOutput(stdout, trafficResult{
 		Source:       "odh",
 		SourceDetail: "Open Data Hub Mobility API PROVINCE_BZ traffic events",
 		Endpoint:     requestURL,
@@ -394,11 +336,7 @@ func (r *Runner) runODHTrafficQuery(ctx context.Context, query trafficQuery, are
 		Warnings:     warnings,
 		OutputFormat: query.Format,
 		IncludeRaw:   query.Raw,
-	}); err != nil {
-		fmt.Fprintln(stderr, err)
-		return 1
-	}
-	return 0
+	})
 }
 
 type trafficResult struct {

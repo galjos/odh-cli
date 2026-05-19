@@ -5,14 +5,13 @@
 package commands
 
 import (
-	"context"
 	"fmt"
-	"io"
 	"net/url"
 	"sort"
 	"strings"
 
 	"github.com/galjos/odh-cli/internal/output"
+	"github.com/spf13/cobra"
 )
 
 const defaultGTFSDataset = "sta-time-tables"
@@ -27,131 +26,112 @@ type gtfsDataset struct {
 	Realtime    map[string]any `json:"realtime,omitempty"`
 }
 
-func (r *Runner) runGTFS(ctx context.Context, args []string, stdout, stderr io.Writer) int {
-	if len(args) == 0 {
-		fmt.Fprintln(stderr, "usage: odh gtfs <datasets|realtime>")
-		return 2
-	}
-	switch args[0] {
-	case "datasets":
-		return r.runGTFSDatasets(ctx, args[1:], stdout, stderr)
-	case "realtime":
-		return r.runGTFSRealtime(ctx, args[1:], stdout, stderr)
-	default:
-		fmt.Fprintf(stderr, "unknown gtfs subcommand %q\n", args[0])
-		return 2
-	}
-}
-
-func (r *Runner) runGTFSDatasets(ctx context.Context, args []string, stdout, stderr io.Writer) int {
-	fs := newFlagSet("gtfs datasets", stderr)
-	format := fs.String("format", "json", "output format: json or table")
-	if err := fs.Parse(args); err != nil {
-		return 2
-	}
-	if fs.NArg() != 0 {
-		fmt.Fprintln(stderr, "gtfs datasets does not accept positional arguments")
-		return 2
+func (r *Runner) newGTFSCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "gtfs",
+		Short: "Public transport GTFS commands",
+		RunE:  requireSubcommand,
 	}
 
-	api, _ := r.Registry.Find("gtfs")
-	requestURL, err := BuildURL(api.BaseURL, "/v1/dataset", nil)
-	if err != nil {
-		fmt.Fprintln(stderr, err)
-		return 2
+	var datasetsFormat string
+	datasetsCmd := &cobra.Command{
+		Use:   "datasets",
+		Short: "List GTFS datasets",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			api, _ := r.Registry.Find("gtfs")
+			requestURL, err := BuildURL(api.BaseURL, "/v1/dataset", nil)
+			if err != nil {
+				return err
+			}
+			value, err := r.fetchJSONValue(cmd.Context(), requestURL)
+			if err != nil {
+				return err
+			}
+			datasets := normalizeGTFSDatasets(value)
+			switch strings.ToLower(strings.TrimSpace(datasetsFormat)) {
+			case "json", "":
+				return output.WriteJSON(cmd.OutOrStdout(), map[string]any{
+					"endpoint": requestURL,
+					"count":    len(datasets),
+					"datasets": datasets,
+				})
+			case "table":
+				fmt.Fprintln(cmd.OutOrStdout(), "ID\tORIGIN\tDESCRIPTION\tREALTIME")
+				for _, dataset := range datasets {
+					fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\t%s\t%t\n", dataset.ID, dataset.Origin, dataset.Description, len(dataset.Realtime) > 0)
+				}
+				return nil
+			default:
+				return fmt.Errorf("unsupported format %q", datasetsFormat)
+			}
+		},
 	}
-	value, err := r.fetchJSONValue(ctx, requestURL)
-	if err != nil {
-		fmt.Fprintln(stderr, err)
-		return 1
-	}
-	datasets := normalizeGTFSDatasets(value)
-	switch strings.ToLower(strings.TrimSpace(*format)) {
-	case "json", "":
-		if err := output.WriteJSON(stdout, map[string]any{
-			"endpoint": requestURL,
-			"count":    len(datasets),
-			"datasets": datasets,
-		}); err != nil {
-			fmt.Fprintln(stderr, err)
-			return 1
-		}
-	case "table":
-		fmt.Fprintln(stdout, "ID\tORIGIN\tDESCRIPTION\tREALTIME")
-		for _, dataset := range datasets {
-			fmt.Fprintf(stdout, "%s\t%s\t%s\t%t\n", dataset.ID, dataset.Origin, dataset.Description, len(dataset.Realtime) > 0)
-		}
-	default:
-		fmt.Fprintf(stderr, "unsupported format %q\n", *format)
-		return 2
-	}
-	return 0
-}
+	datasetsCmd.Flags().StringVar(&datasetsFormat, "format", "json", "output format: json or table")
 
-func (r *Runner) runGTFSRealtime(ctx context.Context, args []string, stdout, stderr io.Writer) int {
-	fs := newFlagSet("gtfs realtime", stderr)
-	dataset := fs.String("dataset", defaultGTFSDataset, "GTFS dataset id")
-	feed := fs.String("feed", "trip-updates", "feed: trip-updates, vehicle-positions, or service-alerts")
-	limit := fs.Int("limit", 20, "maximum entities to include; use 0 for all")
-	tripID := fs.String("trip-id", "", "optional GTFS trip_id filter for trip-updates")
-	routeID := fs.String("route-id", "", "optional route_id filter for trip-updates or vehicle-positions")
-	raw := fs.Bool("raw", false, "write the upstream JSON feed without wrapping or filtering")
-	if err := fs.Parse(args); err != nil {
-		return 2
-	}
-	if fs.NArg() != 0 {
-		fmt.Fprintln(stderr, "gtfs realtime does not accept positional arguments")
-		return 2
-	}
-	if strings.TrimSpace(*dataset) == "" {
-		fmt.Fprintln(stderr, "--dataset is required")
-		return 2
-	}
-	normalizedFeed, err := normalizeGTFSFeed(*feed)
-	if err != nil {
-		fmt.Fprintln(stderr, err)
-		return 2
-	}
-	if *limit < 0 {
-		fmt.Fprintln(stderr, "--limit must not be negative")
-		return 2
-	}
+	var realtimeDataset string
+	var realtimeFeed string
+	var realtimeLimit int
+	var realtimeTripID string
+	var realtimeRouteID string
+	var realtimeRaw bool
+	realtimeCmd := &cobra.Command{
+		Use:   "realtime",
+		Short: "Inspect GTFS-RT realtime feeds",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if strings.TrimSpace(realtimeDataset) == "" {
+				return fmt.Errorf("--dataset is required")
+			}
+			normalizedFeed, err := normalizeGTFSFeed(realtimeFeed)
+			if err != nil {
+				return err
+			}
+			if realtimeLimit < 0 {
+				return fmt.Errorf("--limit must not be negative")
+			}
 
-	api, _ := r.Registry.Find("gtfs")
-	path := fmt.Sprintf("/v1/realtime/%s/%s", url.PathEscape(strings.TrimSpace(*dataset)), normalizedFeed)
-	requestURL, err := BuildURL(api.BaseURL, path, nil)
-	if err != nil {
-		fmt.Fprintln(stderr, err)
-		return 2
+			api, _ := r.Registry.Find("gtfs")
+			path := fmt.Sprintf("/v1/realtime/%s/%s", url.PathEscape(strings.TrimSpace(realtimeDataset)), normalizedFeed)
+			requestURL, err := BuildURL(api.BaseURL, path, nil)
+			if err != nil {
+				return err
+			}
+			if realtimeRaw && strings.TrimSpace(realtimeTripID) == "" && strings.TrimSpace(realtimeRouteID) == "" && realtimeLimit == 0 {
+				return r.fetchJSONCobra(cmd.Context(), requestURL, cmd.OutOrStdout())
+			}
+			value, err := r.fetchJSONValue(cmd.Context(), requestURL)
+			if err != nil {
+				return err
+			}
+			object, _ := value.(map[string]any)
+			entities := mapsFromList(asAnySlice(object["entity"]))
+			entities = filterGTFSRealtimeEntities(entities, realtimeTripID, realtimeRouteID)
+			total := len(entities)
+			if realtimeLimit > 0 && len(entities) > realtimeLimit {
+				entities = entities[:realtimeLimit]
+			}
+			return output.WriteJSON(cmd.OutOrStdout(), map[string]any{
+				"dataset":      strings.TrimSpace(realtimeDataset),
+				"feed":         normalizedFeed,
+				"endpoint":     requestURL,
+				"entity_count": total,
+				"count":        len(entities),
+				"header":       object["header"],
+				"entities":     entities,
+			})
+		},
 	}
-	if *raw && strings.TrimSpace(*tripID) == "" && strings.TrimSpace(*routeID) == "" && *limit == 0 {
-		return r.fetchJSON(ctx, requestURL, stdout, stderr)
-	}
-	value, err := r.fetchJSONValue(ctx, requestURL)
-	if err != nil {
-		fmt.Fprintln(stderr, err)
-		return 1
-	}
-	object, _ := value.(map[string]any)
-	entities := mapsFromList(asAnySlice(object["entity"]))
-	entities = filterGTFSRealtimeEntities(entities, *tripID, *routeID)
-	total := len(entities)
-	if *limit > 0 && len(entities) > *limit {
-		entities = entities[:*limit]
-	}
-	if err := output.WriteJSON(stdout, map[string]any{
-		"dataset":      strings.TrimSpace(*dataset),
-		"feed":         normalizedFeed,
-		"endpoint":     requestURL,
-		"entity_count": total,
-		"count":        len(entities),
-		"header":       object["header"],
-		"entities":     entities,
-	}); err != nil {
-		fmt.Fprintln(stderr, err)
-		return 1
-	}
-	return 0
+	realtimeCmd.Flags().StringVar(&realtimeDataset, "dataset", defaultGTFSDataset, "GTFS dataset id")
+	realtimeCmd.Flags().StringVar(&realtimeFeed, "feed", "trip-updates", "feed: trip-updates, vehicle-positions, or service-alerts")
+	realtimeCmd.Flags().IntVar(&realtimeLimit, "limit", 20, "maximum entities to include; use 0 for all")
+	realtimeCmd.Flags().StringVar(&realtimeTripID, "trip-id", "", "optional GTFS trip_id filter for trip-updates")
+	realtimeCmd.Flags().StringVar(&realtimeRouteID, "route-id", "", "optional route_id filter for trip-updates or vehicle-positions")
+	realtimeCmd.Flags().BoolVar(&realtimeRaw, "raw", false, "write the upstream JSON feed without wrapping or filtering")
+
+	cmd.AddCommand(datasetsCmd)
+	cmd.AddCommand(realtimeCmd)
+	return cmd
 }
 
 func normalizeGTFSDatasets(value any) []gtfsDataset {

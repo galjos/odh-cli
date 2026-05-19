@@ -132,6 +132,8 @@ odh openapi tourism
 
 If the upstream spec is YAML, `odh` converts it to JSON before writing to stdout.
 
+OpenAPI responses are cached locally for 24 hours because they are low-risk discovery metadata.
+
 ## `odh call <api> <path>`
 
 Calls a path under a known API base URL.
@@ -194,6 +196,8 @@ Flags:
 - `--page n` - maps to `pagenumber`; default `1`.
 - `--seed value` - stable randomization seed.
 - `--param key=value` - additional query parameter. Repeatable.
+
+Tourism type responses can be served from the local 24-hour metadata cache.
 
 ## `odh diagnostics`
 
@@ -292,6 +296,8 @@ Flags:
 
 The output wraps the upstream list with `kind`, `count`, and `types` fields so agents can check whether discovery returned data before using it.
 
+This discovery response can be served from the local 24-hour metadata cache.
+
 ## `odh mobility origins`
 
 Summarizes available `sorigin` values for a Mobility station type.
@@ -309,6 +315,8 @@ Flags:
 - `--param key=value` - additional query parameter. Repeatable.
 
 The output wraps discovered origin names with station counts and a few station-code samples. Use an origin from this command with `odh mobility stations --origin ...`, `odh mobility datatypes --origin ...`, or origin-specific Mobility event commands when the upstream feed supports them.
+
+This discovery response can be served from the local 24-hour metadata cache.
 
 ## `odh mobility stations`
 
@@ -332,6 +340,8 @@ Flags:
 
 The output wraps matching records with `station_type`, `origin`, `record_count`, `count`, and `stations`.
 
+This station-metadata response can be served from the local 24-hour metadata cache. Latest measurements are not served from this cache.
+
 ## `odh mobility datatypes`
 
 Summarizes available data types for a Mobility station type.
@@ -352,6 +362,8 @@ Flags:
 - `--param key=value` - additional query parameter. Repeatable.
 
 The output groups records by data type name and includes station counts, units, descriptions, and origins.
+
+This discovery response can be served from the local 24-hour metadata cache.
 
 ## `odh mobility events`
 

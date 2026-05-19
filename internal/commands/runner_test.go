@@ -51,6 +51,48 @@ func TestRunAPIsOutputsJSON(t *testing.T) {
 	}
 }
 
+func TestRunNoArgsReturnsUsageError(t *testing.T) {
+	runner := newTestRunner(t, nil)
+	var stdout, stderr bytes.Buffer
+	code := runner.Run(context.Background(), nil, &stdout, &stderr)
+	if code != 2 {
+		t.Fatalf("Run exit = %d, want 2", code)
+	}
+	if stdout.Len() != 0 {
+		t.Fatalf("expected no stdout, got %s", stdout.String())
+	}
+	if !strings.Contains(stderr.String(), "Usage:") {
+		t.Fatalf("expected usage on stderr, got %s", stderr.String())
+	}
+}
+
+func TestRunParentCommandRequiresSubcommand(t *testing.T) {
+	runner := newTestRunner(t, nil)
+	var stdout, stderr bytes.Buffer
+	code := runner.Run(context.Background(), []string{"mobility"}, &stdout, &stderr)
+	if code != 2 {
+		t.Fatalf("Run exit = %d, want 2", code)
+	}
+	if stdout.Len() != 0 {
+		t.Fatalf("expected no stdout, got %s", stdout.String())
+	}
+	if !strings.Contains(stderr.String(), "usage: odh mobility <subcommand>") {
+		t.Fatalf("unexpected stderr: %s", stderr.String())
+	}
+}
+
+func TestRunHelpDoesNotExposeCompletionCommand(t *testing.T) {
+	runner := newTestRunner(t, nil)
+	var stdout, stderr bytes.Buffer
+	code := runner.Run(context.Background(), []string{"help"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("Run exit = %d, stderr = %s", code, stderr.String())
+	}
+	if strings.Contains(stdout.String(), "completion") {
+		t.Fatalf("completion command leaked into help: %s", stdout.String())
+	}
+}
+
 func TestRunDatasetsSearchFindsParking(t *testing.T) {
 	runner := newTestRunner(t, nil)
 	var stdout, stderr bytes.Buffer

@@ -13,11 +13,16 @@ SPDX-License-Identifier: CC0-1.0
 - Use stdout only for command results.
 - Use stderr for diagnostics.
 - Return nonzero exit codes on errors.
+- Treat exit code `2` as a bad invocation and exit code `1` as a runtime failure.
 - Do not prompt interactively.
 - Emit JSON by default, except `odh traffic` which defaults to table output and supports `--json`.
 - Keep examples public and unauthenticated.
 
 This means agents can call `odh`, parse stdout as JSON, and treat stderr plus exit code as failure context.
+
+Some discovery responses are cached locally for 24 hours to keep repeated agent loops fast. This cache is limited to static-ish metadata such as OpenAPI specs, Tourism taxonomy values, and Mobility type/origin/station/datatype discovery. Do not assume current-data commands are cached: latest measurements, traffic events, diagnostics, and GTFS-RT should be treated as fresh upstream calls unless a command documents an explicit cache.
+
+The HTTP client retries transient `429` and `5xx` failures with bounded exponential backoff. If a command still exits `1`, treat it as a real runtime failure and do not silently invent data.
 
 ## Safe Starter Commands
 

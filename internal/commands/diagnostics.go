@@ -7,13 +7,13 @@ package commands
 import (
 	"context"
 	"fmt"
-	"io"
 	"net/url"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/galjos/odh-cli/internal/output"
+	"github.com/spf13/cobra"
 )
 
 const (
@@ -21,230 +21,218 @@ const (
 	defaultParkingFreshWithin    = "2h"
 )
 
-func (r *Runner) runDiagnostics(ctx context.Context, args []string, stdout, stderr io.Writer) int {
-	if len(args) == 0 {
-		fmt.Fprintln(stderr, "usage: odh diagnostics <ev-charging|parking-forecasts|tourism-events>")
-		return 2
+func (r *Runner) newDiagnosticsCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "diagnostics",
+		Short: "Data quality and reliability checks",
+		RunE:  requireSubcommand,
 	}
-	switch args[0] {
-	case "ev-charging", "ev", "charging":
-		return r.runDiagnosticsEVCharging(ctx, args[1:], stdout, stderr)
-	case "parking-forecasts", "parking-forecast", "parking":
-		return r.runDiagnosticsParkingForecasts(ctx, args[1:], stdout, stderr)
-	case "tourism-events", "events":
-		return r.runDiagnosticsTourismEvents(ctx, args[1:], stdout, stderr)
-	default:
-		fmt.Fprintf(stderr, "unknown diagnostics subcommand %q\n", args[0])
-		return 2
-	}
-}
 
-func (r *Runner) runDiagnosticsEVCharging(ctx context.Context, args []string, stdout, stderr io.Writer) int {
-	fs := newFlagSet("diagnostics ev-charging", stderr)
-	origin := fs.String("origin", "", "optional sorigin filter, for example ALPERIA")
-	freshWithin := fs.String("fresh-within", defaultDiagnosticFreshWithin, "freshness window for current availability rows")
-	limit := fs.Int("limit", 10, "maximum filtered rows to include")
-	requestLimit := fs.Int("request-limit", 10000, "raw upstream rows to inspect before local filtering")
-	if err := fs.Parse(args); err != nil {
-		return 2
+	var evOrigin string
+	var evFreshWithin string
+	var evLimit int
+	var evRequestLimit int
+	evCmd := &cobra.Command{
+		Use:     "ev-charging",
+		Aliases: []string{"ev", "charging"},
+		Short:   "Check EV charging data reliability",
+		Args:    cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			result, err := r.fetchFilteredMobilityLatest(cmd.Context(), mobilityLatestFilter{
+				StationType:  "EChargingStation",
+				DataType:     "number-available",
+				Origin:       evOrigin,
+				ActiveOnly:   true,
+				FreshWithin:  evFreshWithin,
+				Sort:         "newest",
+				Limit:        evLimit,
+				RequestLimit: evRequestLimit,
+			})
+			if err != nil {
+				return err
+			}
+			verdict := "usable"
+			warnings := append([]string{}, result.Warnings...)
+			if result.Count == 0 {
+				verdict = "unavailable"
+				warnings = append(warnings, "no fresh active EV availability rows found in Open Data Hub; do not report stale rows as current charger availability")
+			}
+			if result.RawCount == 0 {
+				warnings = append(warnings, "Open Data Hub returned no EV availability rows from the inspected endpoint")
+			}
+			return output.WriteJSON(cmd.OutOrStdout(), map[string]any{
+				"domain":              "ev-charging",
+				"source":              "Open Data Hub Mobility API",
+				"verdict":             verdict,
+				"station_type":        result.StationType,
+				"data_type":           result.DataType,
+				"origin":              result.Origin,
+				"active_only":         true,
+				"fresh_within":        result.FreshWithin,
+				"raw_count":           result.RawCount,
+				"current_count":       result.Count,
+				"measurements":        result.Measurements,
+				"warnings":            warnings,
+				"recommended_command": recommendedMobilityLatestCommand(result),
+			})
+		},
 	}
-	if fs.NArg() != 0 {
-		fmt.Fprintln(stderr, "diagnostics ev-charging does not accept positional arguments")
-		return 2
-	}
-	result, err := r.fetchFilteredMobilityLatest(ctx, mobilityLatestFilter{
-		StationType:  "EChargingStation",
-		DataType:     "number-available",
-		Origin:       *origin,
-		ActiveOnly:   true,
-		FreshWithin:  *freshWithin,
-		Sort:         "newest",
-		Limit:        *limit,
-		RequestLimit: *requestLimit,
-	})
-	if err != nil {
-		fmt.Fprintln(stderr, err)
-		return 1
-	}
-	verdict := "usable"
-	warnings := append([]string{}, result.Warnings...)
-	if result.Count == 0 {
-		verdict = "unavailable"
-		warnings = append(warnings, "no fresh active EV availability rows found in Open Data Hub; do not report stale rows as current charger availability")
-	}
-	if result.RawCount == 0 {
-		warnings = append(warnings, "Open Data Hub returned no EV availability rows from the inspected endpoint")
-	}
-	if err := output.WriteJSON(stdout, map[string]any{
-		"domain":              "ev-charging",
-		"source":              "Open Data Hub Mobility API",
-		"verdict":             verdict,
-		"station_type":        result.StationType,
-		"data_type":           result.DataType,
-		"origin":              result.Origin,
-		"active_only":         true,
-		"fresh_within":        result.FreshWithin,
-		"raw_count":           result.RawCount,
-		"current_count":       result.Count,
-		"measurements":        result.Measurements,
-		"warnings":            warnings,
-		"recommended_command": recommendedMobilityLatestCommand(result),
-	}); err != nil {
-		fmt.Fprintln(stderr, err)
-		return 1
-	}
-	return 0
-}
+	evCmd.Flags().StringVar(&evOrigin, "origin", "", "optional sorigin filter, for example ALPERIA")
+	evCmd.Flags().StringVar(&evFreshWithin, "fresh-within", defaultDiagnosticFreshWithin, "freshness window for current availability rows")
+	evCmd.Flags().IntVar(&evLimit, "limit", 10, "maximum filtered rows to include")
+	evCmd.Flags().IntVar(&evRequestLimit, "request-limit", 10000, "raw upstream rows to inspect before local filtering")
 
-func (r *Runner) runDiagnosticsParkingForecasts(ctx context.Context, args []string, stdout, stderr io.Writer) int {
-	fs := newFlagSet("diagnostics parking-forecasts", stderr)
-	origin := fs.String("origin", "", "optional sorigin filter, for example Municipality Merano")
-	forecastMinutes := fs.Int("forecast-minutes", 60, "parking forecast horizon in minutes")
-	freshWithin := fs.String("fresh-within", defaultParkingFreshWithin, "freshness window for current and forecast rows")
-	limit := fs.Int("limit", 10, "maximum filtered rows to include per feed")
-	requestLimit := fs.Int("request-limit", 10000, "raw upstream rows to inspect before local filtering")
-	if err := fs.Parse(args); err != nil {
-		return 2
+	var parkOrigin string
+	var parkMinutes int
+	var parkFreshWithin string
+	var parkLimit int
+	var parkRequestLimit int
+	parkCmd := &cobra.Command{
+		Use:     "parking-forecasts",
+		Aliases: []string{"parking-forecast", "parking"},
+		Short:   "Check parking forecast reliability",
+		Args:    cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if parkMinutes <= 0 {
+				return fmt.Errorf("--forecast-minutes must be greater than zero")
+			}
+			current, err := r.fetchFilteredMobilityLatest(cmd.Context(), mobilityLatestFilter{
+				StationType:  "ParkingStation",
+				DataType:     "free",
+				Origin:       parkOrigin,
+				ActiveOnly:   true,
+				FreshWithin:  parkFreshWithin,
+				Sort:         "newest",
+				Limit:        parkLimit,
+				RequestLimit: parkRequestLimit,
+			})
+			if err != nil {
+				return err
+			}
+			forecastType := fmt.Sprintf("parking-forecast-%d", parkMinutes)
+			forecast, err := r.fetchFilteredMobilityLatest(cmd.Context(), mobilityLatestFilter{
+				StationType:  "ParkingStation",
+				DataType:     forecastType,
+				Origin:       parkOrigin,
+				ActiveOnly:   true,
+				FreshWithin:  parkFreshWithin,
+				Sort:         "newest",
+				Limit:        parkLimit,
+				RequestLimit: parkRequestLimit,
+			})
+			if err != nil {
+				return err
+			}
+			var verdict string
+			warnings := make([]string, 0)
+			warnings = appendPrefixedWarnings(warnings, "current occupancy", current.Warnings)
+			warnings = appendPrefixedWarnings(warnings, "forecast", forecast.Warnings)
+			switch {
+			case current.Count == 0:
+				verdict = "unavailable"
+				warnings = append(warnings, "no fresh active parking occupancy rows found; do not report parking availability as current")
+			case forecast.Count == 0:
+				verdict = "current_only"
+				warnings = append(warnings, "no fresh parking forecast rows found; treat forecast values as unavailable instead of stale")
+			default:
+				verdict = "usable_with_forecast"
+			}
+			return output.WriteJSON(cmd.OutOrStdout(), map[string]any{
+				"domain":           "parking-forecasts",
+				"source":           "Open Data Hub Mobility API",
+				"verdict":          verdict,
+				"origin":           strings.TrimSpace(parkOrigin),
+				"fresh_within":     strings.TrimSpace(parkFreshWithin),
+				"forecast_minutes": parkMinutes,
+				"current":          current,
+				"forecast":         forecast,
+				"warnings":         warnings,
+			})
+		},
 	}
-	if fs.NArg() != 0 {
-		fmt.Fprintln(stderr, "diagnostics parking-forecasts does not accept positional arguments")
-		return 2
-	}
-	if *forecastMinutes <= 0 {
-		fmt.Fprintln(stderr, "--forecast-minutes must be greater than zero")
-		return 2
-	}
-	current, err := r.fetchFilteredMobilityLatest(ctx, mobilityLatestFilter{
-		StationType:  "ParkingStation",
-		DataType:     "free",
-		Origin:       *origin,
-		ActiveOnly:   true,
-		FreshWithin:  *freshWithin,
-		Sort:         "newest",
-		Limit:        *limit,
-		RequestLimit: *requestLimit,
-	})
-	if err != nil {
-		fmt.Fprintln(stderr, err)
-		return 1
-	}
-	forecastType := fmt.Sprintf("parking-forecast-%d", *forecastMinutes)
-	forecast, err := r.fetchFilteredMobilityLatest(ctx, mobilityLatestFilter{
-		StationType:  "ParkingStation",
-		DataType:     forecastType,
-		Origin:       *origin,
-		ActiveOnly:   true,
-		FreshWithin:  *freshWithin,
-		Sort:         "newest",
-		Limit:        *limit,
-		RequestLimit: *requestLimit,
-	})
-	if err != nil {
-		fmt.Fprintln(stderr, err)
-		return 1
-	}
-	var verdict string
-	warnings := make([]string, 0)
-	warnings = appendPrefixedWarnings(warnings, "current occupancy", current.Warnings)
-	warnings = appendPrefixedWarnings(warnings, "forecast", forecast.Warnings)
-	switch {
-	case current.Count == 0:
-		verdict = "unavailable"
-		warnings = append(warnings, "no fresh active parking occupancy rows found; do not report parking availability as current")
-	case forecast.Count == 0:
-		verdict = "current_only"
-		warnings = append(warnings, "no fresh parking forecast rows found; treat forecast values as unavailable instead of stale")
-	default:
-		verdict = "usable_with_forecast"
-	}
-	if err := output.WriteJSON(stdout, map[string]any{
-		"domain":           "parking-forecasts",
-		"source":           "Open Data Hub Mobility API",
-		"verdict":          verdict,
-		"origin":           strings.TrimSpace(*origin),
-		"fresh_within":     strings.TrimSpace(*freshWithin),
-		"forecast_minutes": *forecastMinutes,
-		"current":          current,
-		"forecast":         forecast,
-		"warnings":         warnings,
-	}); err != nil {
-		fmt.Fprintln(stderr, err)
-		return 1
-	}
-	return 0
-}
+	parkCmd.Flags().StringVar(&parkOrigin, "origin", "", "optional sorigin filter, for example Municipality Merano")
+	parkCmd.Flags().IntVar(&parkMinutes, "forecast-minutes", 60, "parking forecast horizon in minutes")
+	parkCmd.Flags().StringVar(&parkFreshWithin, "fresh-within", defaultParkingFreshWithin, "freshness window for current and forecast rows")
+	parkCmd.Flags().IntVar(&parkLimit, "limit", 10, "maximum filtered rows to include per feed")
+	parkCmd.Flags().IntVar(&parkRequestLimit, "request-limit", 10000, "raw upstream rows to inspect before local filtering")
 
-func (r *Runner) runDiagnosticsTourismEvents(ctx context.Context, args []string, stdout, stderr io.Writer) int {
-	fs := newFlagSet("diagnostics tourism-events", stderr)
-	dateText := fs.String("date", time.Now().Format("2006-01-02"), "date used for local active-today checks")
-	onlyActive := fs.Bool("only-active", true, "request upstream onlyactive=true")
-	limit := fs.Int("limit", 20, "number of upstream events to inspect")
-	page := fs.Int("page", 1, "page number")
-	params := paramValues{}
-	fs.Var(&params, "param", "additional query parameter as key=value; repeatable")
-	if err := fs.Parse(args); err != nil {
-		return 2
+	var tourDate string
+	var tourOnlyActive bool
+	var tourLimit int
+	var tourPage int
+	var tourParams []string
+	tourCmd := &cobra.Command{
+		Use:     "tourism-events",
+		Aliases: []string{"events"},
+		Short:   "Check tourism event data reliability",
+		Args:    cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			day, err := time.Parse("2006-01-02", strings.TrimSpace(tourDate))
+			if err != nil {
+				return fmt.Errorf("--date must use YYYY-MM-DD")
+			}
+			if tourLimit < 1 {
+				return fmt.Errorf("--limit must be greater than zero")
+			}
+			if tourPage < 1 {
+				return fmt.Errorf("--page must be greater than zero")
+			}
+			api, _ := r.Registry.Find("tourism")
+			values := url.Values{}
+			values.Set("pagenumber", strconv.Itoa(tourPage))
+			values.Set("pagesize", strconv.Itoa(tourLimit))
+			if tourOnlyActive {
+				values.Set("onlyactive", "true")
+			}
+			for _, p := range tourParams {
+				key, value, ok := strings.Cut(p, "=")
+				if !ok {
+					return fmt.Errorf("parameter %q must use key=value", p)
+				}
+				values.Add(key, value)
+			}
+			requestURL, err := BuildURL(api.BaseURL, "/v1/EventShort", values)
+			if err != nil {
+				return err
+			}
+			value, err := r.fetchJSONValue(cmd.Context(), requestURL)
+			if err != nil {
+				return err
+			}
+			events := summarizeTourismEvents(extractItemsMaps(value), day)
+			warnings := tourismEventWarnings(events, tourOnlyActive)
+			verdict := "usable"
+			if len(warnings) > 0 {
+				verdict = "usable_with_caveats"
+			}
+			activeCount := countTourismEventsByStatus(events, "active")
+			if len(events) == 0 || activeCount == 0 {
+				verdict = "unavailable"
+			}
+			return output.WriteJSON(cmd.OutOrStdout(), map[string]any{
+				"domain":       "tourism-events",
+				"source":       "Open Data Hub Tourism API",
+				"verdict":      verdict,
+				"date":         day.Format("2006-01-02"),
+				"only_active":  tourOnlyActive,
+				"endpoint":     requestURL,
+				"count":        len(events),
+				"active_count": activeCount,
+				"events":       events,
+				"warnings":     warnings,
+			})
+		},
 	}
-	if fs.NArg() != 0 {
-		fmt.Fprintln(stderr, "diagnostics tourism-events does not accept positional arguments")
-		return 2
-	}
-	day, err := time.Parse("2006-01-02", strings.TrimSpace(*dateText))
-	if err != nil {
-		fmt.Fprintln(stderr, "--date must use YYYY-MM-DD")
-		return 2
-	}
-	if *limit < 1 {
-		fmt.Fprintln(stderr, "--limit must be greater than zero")
-		return 2
-	}
-	if *page < 1 {
-		fmt.Fprintln(stderr, "--page must be greater than zero")
-		return 2
-	}
-	api, _ := r.Registry.Find("tourism")
-	values := params.Values()
-	values.Set("pagenumber", strconv.Itoa(*page))
-	values.Set("pagesize", strconv.Itoa(*limit))
-	if *onlyActive {
-		values.Set("onlyactive", "true")
-	}
-	requestURL, err := BuildURL(api.BaseURL, "/v1/EventShort", values)
-	if err != nil {
-		fmt.Fprintln(stderr, err)
-		return 2
-	}
-	value, err := r.fetchJSONValue(ctx, requestURL)
-	if err != nil {
-		fmt.Fprintln(stderr, err)
-		return 1
-	}
-	events := summarizeTourismEvents(extractItemsMaps(value), day)
-	warnings := tourismEventWarnings(events, *onlyActive)
-	verdict := "usable"
-	if len(warnings) > 0 {
-		verdict = "usable_with_caveats"
-	}
-	activeCount := countTourismEventsByStatus(events, "active")
-	if len(events) == 0 || activeCount == 0 {
-		verdict = "unavailable"
-	}
-	if err := output.WriteJSON(stdout, map[string]any{
-		"domain":       "tourism-events",
-		"source":       "Open Data Hub Tourism API",
-		"verdict":      verdict,
-		"date":         day.Format("2006-01-02"),
-		"only_active":  *onlyActive,
-		"endpoint":     requestURL,
-		"count":        len(events),
-		"active_count": activeCount,
-		"events":       events,
-		"warnings":     warnings,
-	}); err != nil {
-		fmt.Fprintln(stderr, err)
-		return 1
-	}
-	return 0
+	tourCmd.Flags().StringVar(&tourDate, "date", time.Now().Format("2006-01-02"), "date used for local active-today checks")
+	tourCmd.Flags().BoolVar(&tourOnlyActive, "only-active", true, "request upstream onlyactive=true")
+	tourCmd.Flags().IntVar(&tourLimit, "limit", 20, "number of upstream events to inspect")
+	tourCmd.Flags().IntVar(&tourPage, "page", 1, "page number")
+	tourCmd.Flags().StringSliceVar(&tourParams, "param", nil, "additional query parameter as key=value; repeatable")
+
+	cmd.AddCommand(evCmd)
+	cmd.AddCommand(parkCmd)
+	cmd.AddCommand(tourCmd)
+	return cmd
 }
 
 func (r *Runner) fetchFilteredMobilityLatest(ctx context.Context, filter mobilityLatestFilter) (mobilityLatestResult, error) {

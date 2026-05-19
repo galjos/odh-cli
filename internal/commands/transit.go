@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/galjos/odh-cli/internal/output"
+	"github.com/spf13/cobra"
 )
 
 const (
@@ -107,298 +108,255 @@ type transitStopSelector struct {
 	ID    string
 }
 
-func (r *Runner) runTransit(ctx context.Context, args []string, stdout, stderr io.Writer) int {
-	if len(args) == 0 {
-		fmt.Fprintln(stderr, "usage: odh transit <stops|departures|trip|delay-stats>")
-		return 2
+func (r *Runner) newTransitCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "transit",
+		Short: "GTFS-based transit routing and search",
+		RunE:  requireSubcommand,
 	}
-	switch args[0] {
-	case "stops":
-		return r.runTransitStops(ctx, args[1:], stdout, stderr)
-	case "departures":
-		return r.runTransitDepartures(ctx, args[1:], stdout, stderr)
-	case "trip":
-		return r.runTransitTrip(ctx, args[1:], stdout, stderr)
-	case "delay-stats", "delay-probability":
-		return r.runTransitDelayStats(args[1:], stdout, stderr)
-	default:
-		fmt.Fprintf(stderr, "unknown transit subcommand %q\n", args[0])
-		return 2
-	}
-}
 
-func (r *Runner) runTransitStops(ctx context.Context, args []string, stdout, stderr io.Writer) int {
-	if len(args) == 0 || args[0] != "search" {
-		fmt.Fprintln(stderr, "usage: odh transit stops search <query>")
-		return 2
+	// stops
+	stopsCmd := &cobra.Command{
+		Use:   "stops",
+		Short: "GTFS stop commands",
+		RunE:  requireSubcommand,
 	}
-	flagArgs, queryParts, err := splitTransitStopsSearchArgs(args[1:])
-	if err != nil {
-		fmt.Fprintln(stderr, err)
-		return 2
-	}
-	fs := newFlagSet("transit stops search", stderr)
-	dataset := fs.String("dataset", defaultGTFSDataset, "GTFS dataset id")
-	limit := fs.Int("limit", 20, "maximum stops to return")
-	cacheDir := fs.String("cache-dir", "", "directory for cached GTFS archives")
-	refresh := fs.Bool("refresh", false, "refresh cached GTFS archive")
-	if err := fs.Parse(flagArgs); err != nil {
-		return 2
-	}
-	query := strings.TrimSpace(strings.Join(queryParts, " "))
-	if query == "" {
-		fmt.Fprintln(stderr, "usage: odh transit stops search <query>")
-		return 2
-	}
-	if *limit < 1 {
-		fmt.Fprintln(stderr, "--limit must be greater than zero")
-		return 2
-	}
-	archive, err := r.fetchGTFSArchive(ctx, *dataset, *cacheDir, *refresh)
-	if err != nil {
-		fmt.Fprintln(stderr, err)
-		return 1
-	}
-	stops, err := readGTFSStops(archive.Path)
-	if err != nil {
-		fmt.Fprintln(stderr, err)
-		return 1
-	}
-	matches := searchGTFSStops(stops, query, *limit)
-	if err := output.WriteJSON(stdout, map[string]any{
-		"dataset": *dataset,
-		"query":   query,
-		"archive": archive,
-		"count":   len(matches),
-		"stops":   matches,
-	}); err != nil {
-		fmt.Fprintln(stderr, err)
-		return 1
-	}
-	return 0
-}
-
-func splitTransitStopsSearchArgs(args []string) ([]string, []string, error) {
-	flagArgs := make([]string, 0, len(args))
-	queryParts := make([]string, 0, len(args))
-	for i := 0; i < len(args); i++ {
-		arg := args[i]
-		switch {
-		case arg == "--dataset" || arg == "--limit" || arg == "--cache-dir":
-			if i+1 >= len(args) {
-				return nil, nil, fmt.Errorf("%s requires a value", arg)
+	var searchDataset string
+	var searchLimit int
+	var searchCacheDir string
+	var searchRefresh bool
+	searchCmd := &cobra.Command{
+		Use:   "search <query>",
+		Short: "Search GTFS stops by name",
+		Args:  cobra.MinimumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if searchLimit < 1 {
+				return fmt.Errorf("--limit must be greater than zero")
 			}
-			flagArgs = append(flagArgs, arg, args[i+1])
-			i++
-		case strings.HasPrefix(arg, "--dataset=") || strings.HasPrefix(arg, "--limit=") || strings.HasPrefix(arg, "--cache-dir="):
-			flagArgs = append(flagArgs, arg)
-		case arg == "--refresh":
-			flagArgs = append(flagArgs, arg)
-		case strings.HasPrefix(arg, "-"):
-			return nil, nil, fmt.Errorf("unknown flag %q", arg)
-		default:
-			queryParts = append(queryParts, arg)
-		}
-	}
-	return flagArgs, queryParts, nil
-}
-
-func (r *Runner) runTransitDepartures(ctx context.Context, args []string, stdout, stderr io.Writer) int {
-	fs := newFlagSet("transit departures", stderr)
-	dataset := fs.String("dataset", defaultGTFSDataset, "GTFS dataset id")
-	stopQuery := fs.String("stop", "", "stop search query")
-	stopID := fs.String("stop-id", "", "exact GTFS stop_id or parent_station")
-	dateText := fs.String("date", time.Now().Format("2006-01-02"), "service date YYYY-MM-DD")
-	around := fs.String("around", "", "departure time HH:MM to search around")
-	windowText := fs.String("window", defaultTransitWindow.String(), "time window around --around, for example 15m")
-	mode := fs.String("mode", "all", "mode filter: all, train, bus, or cable-car")
-	limit := fs.Int("limit", 20, "maximum departures to return")
-	cacheDir := fs.String("cache-dir", "", "directory for cached GTFS archives")
-	refresh := fs.Bool("refresh", false, "refresh cached GTFS archive")
-	if err := fs.Parse(args); err != nil {
-		return 2
-	}
-	if fs.NArg() != 0 {
-		fmt.Fprintln(stderr, "transit departures does not accept positional arguments")
-		return 2
-	}
-	selector := transitStopSelector{Query: *stopQuery, ID: *stopID}
-	if err := selector.validate("stop", "stop-id"); err != nil {
-		fmt.Fprintln(stderr, err)
-		return 2
-	}
-	if *limit < 1 {
-		fmt.Fprintln(stderr, "--limit must be greater than zero")
-		return 2
-	}
-	query, err := parseTransitTimeQuery(*dateText, *around, *windowText)
-	if err != nil {
-		fmt.Fprintln(stderr, err)
-		return 2
-	}
-	routeTypes, err := transitModeRouteTypes(*mode)
-	if err != nil {
-		fmt.Fprintln(stderr, err)
-		return 2
-	}
-	archive, err := r.fetchGTFSArchive(ctx, *dataset, *cacheDir, *refresh)
-	if err != nil {
-		fmt.Fprintln(stderr, err)
-		return 1
-	}
-	result, err := findTransitDepartures(archive.Path, selector, query, routeTypes, *limit)
-	if err != nil {
-		fmt.Fprintln(stderr, err)
-		return 1
-	}
-	warnings := appendTransitStopMatchWarning(nil, "stop", "stop-id", selector, result.StopMatchMode, len(result.Stops))
-	if err := output.WriteJSON(stdout, map[string]any{
-		"dataset":         *dataset,
-		"stop_query":      *stopQuery,
-		"stop_id":         *stopID,
-		"stop_match_mode": result.StopMatchMode,
-		"date":            query.Date.Format("2006-01-02"),
-		"around":          query.AroundText,
-		"window":          query.Window.String(),
-		"mode":            normalizeTransitModeName(*mode),
-		"archive":         archive,
-		"matched_stops":   result.Stops,
-		"count":           len(result.Departures),
-		"departures":      result.Departures,
-		"warnings":        warnings,
-	}); err != nil {
-		fmt.Fprintln(stderr, err)
-		return 1
-	}
-	return 0
-}
-
-func (r *Runner) runTransitTrip(ctx context.Context, args []string, stdout, stderr io.Writer) int {
-	fs := newFlagSet("transit trip", stderr)
-	dataset := fs.String("dataset", defaultGTFSDataset, "GTFS dataset id")
-	fromQuery := fs.String("from", "", "origin stop query")
-	fromStopID := fs.String("from-stop-id", "", "exact origin GTFS stop_id or parent_station")
-	toQuery := fs.String("to", "", "destination stop query")
-	toStopID := fs.String("to-stop-id", "", "exact destination GTFS stop_id or parent_station")
-	dateText := fs.String("date", time.Now().Format("2006-01-02"), "service date YYYY-MM-DD")
-	timeText := fs.String("time", "", "origin departure time HH:MM")
-	windowText := fs.String("window", defaultTransitWindow.String(), "time window around --time, for example 15m")
-	mode := fs.String("mode", "all", "mode filter: all, train, bus, or cable-car")
-	limit := fs.Int("limit", 20, "maximum direct trip matches to return")
-	cacheDir := fs.String("cache-dir", "", "directory for cached GTFS archives")
-	refresh := fs.Bool("refresh", false, "refresh cached GTFS archive")
-	if err := fs.Parse(args); err != nil {
-		return 2
-	}
-	if fs.NArg() != 0 {
-		fmt.Fprintln(stderr, "transit trip does not accept positional arguments")
-		return 2
-	}
-	fromSelector := transitStopSelector{Query: *fromQuery, ID: *fromStopID}
-	toSelector := transitStopSelector{Query: *toQuery, ID: *toStopID}
-	if err := fromSelector.validate("from", "from-stop-id"); err != nil {
-		fmt.Fprintln(stderr, err)
-		return 2
-	}
-	if err := toSelector.validate("to", "to-stop-id"); err != nil {
-		fmt.Fprintln(stderr, err)
-		return 2
-	}
-	if strings.TrimSpace(*timeText) == "" {
-		fmt.Fprintln(stderr, "--time is required")
-		return 2
-	}
-	if *limit < 1 {
-		fmt.Fprintln(stderr, "--limit must be greater than zero")
-		return 2
-	}
-	query, err := parseTransitTimeQuery(*dateText, *timeText, *windowText)
-	if err != nil {
-		fmt.Fprintln(stderr, err)
-		return 2
-	}
-	routeTypes, err := transitModeRouteTypes(*mode)
-	if err != nil {
-		fmt.Fprintln(stderr, err)
-		return 2
-	}
-	archive, err := r.fetchGTFSArchive(ctx, *dataset, *cacheDir, *refresh)
-	if err != nil {
-		fmt.Fprintln(stderr, err)
-		return 1
-	}
-	result, err := findTransitTripMatches(archive.Path, fromSelector, toSelector, query, routeTypes, *limit)
-	if err != nil {
-		fmt.Fprintln(stderr, err)
-		return 1
-	}
-	warnings := make([]string, 0)
-	if len(result.Matches) == 0 {
-		warnings = append(warnings, "no direct GTFS trip matched; this command does not perform transfer routing")
-	}
-	warnings = appendTransitStopMatchWarning(warnings, "from", "from-stop-id", fromSelector, result.FromMatchMode, len(result.FromStops))
-	warnings = appendTransitStopMatchWarning(warnings, "to", "to-stop-id", toSelector, result.ToMatchMode, len(result.ToStops))
-	warnings = append(warnings, "historical delay probability is not available from the live GTFS API without an archived GTFS-RT snapshot dataset")
-	if err := output.WriteJSON(stdout, map[string]any{
-		"dataset":         *dataset,
-		"from_query":      *fromQuery,
-		"from_stop_id":    *fromStopID,
-		"from_match_mode": result.FromMatchMode,
-		"to_query":        *toQuery,
-		"to_stop_id":      *toStopID,
-		"to_match_mode":   result.ToMatchMode,
-		"date":            query.Date.Format("2006-01-02"),
-		"time":            query.AroundText,
-		"window":          query.Window.String(),
-		"mode":            normalizeTransitModeName(*mode),
-		"archive":         archive,
-		"from_stops":      result.FromStops,
-		"to_stops":        result.ToStops,
-		"count":           len(result.Matches),
-		"matches":         result.Matches,
-		"warnings":        warnings,
-	}); err != nil {
-		fmt.Fprintln(stderr, err)
-		return 1
-	}
-	return 0
-}
-
-func (r *Runner) runTransitDelayStats(args []string, stdout, stderr io.Writer) int {
-	fs := newFlagSet("transit delay-stats", stderr)
-	fromQuery := fs.String("from", "", "origin stop query")
-	toQuery := fs.String("to", "", "destination stop query")
-	timeText := fs.String("time", "", "origin departure time HH:MM")
-	weekday := fs.String("weekday", "", "weekday filter, for example saturday")
-	since := fs.String("since", "", "archive range, for example 90d")
-	if err := fs.Parse(args); err != nil {
-		return 2
-	}
-	if fs.NArg() != 0 {
-		fmt.Fprintln(stderr, "transit delay-stats does not accept positional arguments")
-		return 2
-	}
-	if err := output.WriteJSON(stdout, map[string]any{
-		"supported": false,
-		"reason":    "Open Data Hub GTFS exposes current static GTFS and live GTFS-RT feeds, but this CLI has no historical GTFS-RT archive to compute probabilities from.",
-		"requested": map[string]string{
-			"from":    strings.TrimSpace(*fromQuery),
-			"to":      strings.TrimSpace(*toQuery),
-			"time":    strings.TrimSpace(*timeText),
-			"weekday": strings.TrimSpace(*weekday),
-			"since":   strings.TrimSpace(*since),
+			query := strings.Join(args, " ")
+			archive, err := r.fetchGTFSArchive(cmd.Context(), searchDataset, searchCacheDir, searchRefresh)
+			if err != nil {
+				return err
+			}
+			stops, err := readGTFSStops(archive.Path)
+			if err != nil {
+				return err
+			}
+			matches := searchGTFSStops(stops, query, searchLimit)
+			return output.WriteJSON(cmd.OutOrStdout(), map[string]any{
+				"dataset": searchDataset,
+				"query":   query,
+				"archive": archive,
+				"count":   len(matches),
+				"stops":   matches,
+			})
 		},
-		"available_now": []string{
-			"odh gtfs realtime --dataset sta-time-tables --feed trip-updates",
-			"odh transit trip --from <stop> --to <stop> --date YYYY-MM-DD --time HH:MM",
-			"odh transit departures --stop <stop> --date YYYY-MM-DD --around HH:MM",
-		},
-		"next_step": "add an explicit archive collector for GTFS-RT trip-updates before reporting delay probability or usual delay minutes",
-	}); err != nil {
-		fmt.Fprintln(stderr, err)
-		return 1
 	}
-	return 0
+	searchCmd.Flags().StringVar(&searchDataset, "dataset", defaultGTFSDataset, "GTFS dataset id")
+	searchCmd.Flags().IntVar(&searchLimit, "limit", 20, "maximum stops to return")
+	searchCmd.Flags().StringVar(&searchCacheDir, "cache-dir", "", "directory for cached GTFS archives")
+	searchCmd.Flags().BoolVar(&searchRefresh, "refresh", false, "refresh cached GTFS archive")
+	stopsCmd.AddCommand(searchCmd)
+
+	// departures
+	var depDataset string
+	var depStopQuery string
+	var depStopID string
+	var depDate string
+	var depAround string
+	var depWindow string
+	var depMode string
+	var depLimit int
+	var depCacheDir string
+	var depRefresh bool
+	departuresCmd := &cobra.Command{
+		Use:   "departures",
+		Short: "List departures from a stop",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			selector := transitStopSelector{Query: depStopQuery, ID: depStopID}
+			if err := selector.validate("stop", "stop-id"); err != nil {
+				return err
+			}
+			if depLimit < 1 {
+				return fmt.Errorf("--limit must be greater than zero")
+			}
+			query, err := parseTransitTimeQuery(depDate, depAround, depWindow)
+			if err != nil {
+				return err
+			}
+			routeTypes, err := transitModeRouteTypes(depMode)
+			if err != nil {
+				return err
+			}
+			archive, err := r.fetchGTFSArchive(cmd.Context(), depDataset, depCacheDir, depRefresh)
+			if err != nil {
+				return err
+			}
+			result, err := findTransitDepartures(archive.Path, selector, query, routeTypes, depLimit)
+			if err != nil {
+				return err
+			}
+			warnings := appendTransitStopMatchWarning(nil, "stop", "stop-id", selector, result.StopMatchMode, len(result.Stops))
+			return output.WriteJSON(cmd.OutOrStdout(), map[string]any{
+				"dataset":         depDataset,
+				"stop_query":      depStopQuery,
+				"stop_id":         depStopID,
+				"stop_match_mode": result.StopMatchMode,
+				"date":            query.Date.Format("2006-01-02"),
+				"around":          query.AroundText,
+				"window":          query.Window.String(),
+				"mode":            normalizeTransitModeName(depMode),
+				"archive":         archive,
+				"matched_stops":   result.Stops,
+				"count":           len(result.Departures),
+				"departures":      result.Departures,
+				"warnings":        warnings,
+			})
+		},
+	}
+	departuresCmd.Flags().StringVar(&depDataset, "dataset", defaultGTFSDataset, "GTFS dataset id")
+	departuresCmd.Flags().StringVar(&depStopQuery, "stop", "", "stop search query")
+	departuresCmd.Flags().StringVar(&depStopID, "stop-id", "", "exact GTFS stop_id or parent_station")
+	departuresCmd.Flags().StringVar(&depDate, "date", time.Now().Format("2006-01-02"), "service date YYYY-MM-DD")
+	departuresCmd.Flags().StringVar(&depAround, "around", "", "departure time HH:MM to search around")
+	departuresCmd.Flags().StringVar(&depWindow, "window", defaultTransitWindow.String(), "time window around --around, for example 15m")
+	departuresCmd.Flags().StringVar(&depMode, "mode", "all", "mode filter: all, train, bus, or cable-car")
+	departuresCmd.Flags().IntVar(&depLimit, "limit", 20, "maximum departures to return")
+	departuresCmd.Flags().StringVar(&depCacheDir, "cache-dir", "", "directory for cached GTFS archives")
+	departuresCmd.Flags().BoolVar(&depRefresh, "refresh", false, "refresh cached GTFS archive")
+
+	// trip
+	var tripDataset string
+	var tripFromQuery string
+	var tripFromStopID string
+	var tripToQuery string
+	var tripToStopID string
+	var tripDate string
+	var tripTime string
+	var tripWindow string
+	var tripMode string
+	var tripLimit int
+	var tripCacheDir string
+	var tripRefresh bool
+	tripCmd := &cobra.Command{
+		Use:   "trip",
+		Short: "Search direct trips between stops",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			fromSelector := transitStopSelector{Query: tripFromQuery, ID: tripFromStopID}
+			toSelector := transitStopSelector{Query: tripToQuery, ID: tripToStopID}
+			if err := fromSelector.validate("from", "from-stop-id"); err != nil {
+				return err
+			}
+			if err := toSelector.validate("to", "to-stop-id"); err != nil {
+				return err
+			}
+			if strings.TrimSpace(tripTime) == "" {
+				return fmt.Errorf("--time is required")
+			}
+			if tripLimit < 1 {
+				return fmt.Errorf("--limit must be greater than zero")
+			}
+			query, err := parseTransitTimeQuery(tripDate, tripTime, tripWindow)
+			if err != nil {
+				return err
+			}
+			routeTypes, err := transitModeRouteTypes(tripMode)
+			if err != nil {
+				return err
+			}
+			archive, err := r.fetchGTFSArchive(cmd.Context(), tripDataset, tripCacheDir, tripRefresh)
+			if err != nil {
+				return err
+			}
+			result, err := findTransitTripMatches(archive.Path, fromSelector, toSelector, query, routeTypes, tripLimit)
+			if err != nil {
+				return err
+			}
+			warnings := make([]string, 0)
+			if len(result.Matches) == 0 {
+				warnings = append(warnings, "no direct GTFS trip matched; this command does not perform transfer routing")
+			}
+			warnings = appendTransitStopMatchWarning(warnings, "from", "from-stop-id", fromSelector, result.FromMatchMode, len(result.FromStops))
+			warnings = appendTransitStopMatchWarning(warnings, "to", "to-stop-id", toSelector, result.ToMatchMode, len(result.ToStops))
+			warnings = append(warnings, "historical delay probability is not available from the live GTFS API without an archived GTFS-RT snapshot dataset")
+			return output.WriteJSON(cmd.OutOrStdout(), map[string]any{
+				"dataset":         tripDataset,
+				"from_query":      tripFromQuery,
+				"from_stop_id":    tripFromStopID,
+				"from_match_mode": result.FromMatchMode,
+				"to_query":        tripToQuery,
+				"to_stop_id":      tripToStopID,
+				"to_match_mode":   result.ToMatchMode,
+				"date":            query.Date.Format("2006-01-02"),
+				"time":            query.AroundText,
+				"window":          query.Window.String(),
+				"mode":            normalizeTransitModeName(tripMode),
+				"archive":         archive,
+				"from_stops":      result.FromStops,
+				"to_stops":        result.ToStops,
+				"count":           len(result.Matches),
+				"matches":         result.Matches,
+				"warnings":        warnings,
+			})
+		},
+	}
+	tripCmd.Flags().StringVar(&tripDataset, "dataset", defaultGTFSDataset, "GTFS dataset id")
+	tripCmd.Flags().StringVar(&tripFromQuery, "from", "", "origin stop query")
+	tripCmd.Flags().StringVar(&tripFromStopID, "from-stop-id", "", "exact origin GTFS stop_id or parent_station")
+	tripCmd.Flags().StringVar(&tripToQuery, "to", "", "destination stop query")
+	tripCmd.Flags().StringVar(&tripToStopID, "to-stop-id", "", "exact destination GTFS stop_id or parent_station")
+	tripCmd.Flags().StringVar(&tripDate, "date", time.Now().Format("2006-01-02"), "service date YYYY-MM-DD")
+	tripCmd.Flags().StringVar(&tripTime, "time", "", "origin departure time HH:MM")
+	tripCmd.Flags().StringVar(&tripWindow, "window", defaultTransitWindow.String(), "time window around --time, for example 15m")
+	tripCmd.Flags().StringVar(&tripMode, "mode", "all", "mode filter: all, train, bus, or cable-car")
+	tripCmd.Flags().IntVar(&tripLimit, "limit", 20, "maximum direct trip matches to return")
+	tripCmd.Flags().StringVar(&tripCacheDir, "cache-dir", "", "directory for cached GTFS archives")
+	tripCmd.Flags().BoolVar(&tripRefresh, "refresh", false, "refresh cached GTFS archive")
+
+	// delay-stats
+	var dsFrom string
+	var depTo string
+	var dsTime string
+	var dsWeekday string
+	var dsSince string
+	delayStatsCmd := &cobra.Command{
+		Use:     "delay-stats",
+		Aliases: []string{"delay-probability"},
+		Short:   "Historical delay statistics",
+		Args:    cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return output.WriteJSON(cmd.OutOrStdout(), map[string]any{
+				"supported": false,
+				"reason":    "Open Data Hub GTFS exposes current static GTFS and live GTFS-RT feeds, but this CLI has no historical GTFS-RT archive to compute probabilities from.",
+				"requested": map[string]string{
+					"from":    strings.TrimSpace(dsFrom),
+					"to":      strings.TrimSpace(depTo),
+					"time":    strings.TrimSpace(dsTime),
+					"weekday": strings.TrimSpace(dsWeekday),
+					"since":   strings.TrimSpace(dsSince),
+				},
+				"available_now": []string{
+					"odh gtfs realtime --dataset sta-time-tables --feed trip-updates",
+					"odh transit trip --from <stop> --to <stop> --date YYYY-MM-DD --time HH:MM",
+					"odh transit departures --stop <stop> --date YYYY-MM-DD --around HH:MM",
+				},
+				"next_step": "add an explicit archive collector for GTFS-RT trip-updates before reporting delay probability or usual delay minutes",
+			})
+		},
+	}
+	delayStatsCmd.Flags().StringVar(&dsFrom, "from", "", "origin stop query")
+	delayStatsCmd.Flags().StringVar(&depTo, "to", "", "destination stop query")
+	delayStatsCmd.Flags().StringVar(&dsTime, "time", "", "origin departure time HH:MM")
+	delayStatsCmd.Flags().StringVar(&dsWeekday, "weekday", "", "weekday filter, for example saturday")
+	delayStatsCmd.Flags().StringVar(&dsSince, "since", "", "archive range, for example 90d")
+
+	cmd.AddCommand(stopsCmd)
+	cmd.AddCommand(departuresCmd)
+	cmd.AddCommand(tripCmd)
+	cmd.AddCommand(delayStatsCmd)
+	return cmd
 }
 
 func (s transitStopSelector) validate(queryFlag, idFlag string) error {

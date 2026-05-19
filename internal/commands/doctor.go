@@ -6,15 +6,17 @@ package commands
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"io"
 	"net/url"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/galjos/odh-cli/internal/client"
 	"github.com/galjos/odh-cli/internal/output"
 	"github.com/galjos/odh-cli/internal/version"
+	"github.com/spf13/cobra"
 )
 
 type doctorCheck struct {
@@ -25,61 +27,84 @@ type doctorCheck struct {
 	Message    string `json:"message,omitempty"`
 }
 
-func (r *Runner) runDoctor(ctx context.Context, args []string, stdout, stderr io.Writer) int {
-	fs := newFlagSet("doctor", stderr)
-	network := fs.Bool("network", true, "run network reachability checks")
-	timeout := fs.Duration("timeout", 10*time.Second, "overall timeout for doctor checks")
-	if err := fs.Parse(args); err != nil {
-		return 2
-	}
-	if fs.NArg() != 0 {
-		fmt.Fprintln(stderr, "doctor does not accept positional arguments")
-		return 2
-	}
-	if *timeout <= 0 {
-		fmt.Fprintln(stderr, "--timeout must be greater than zero")
-		return 2
-	}
-
-	checks := []doctorCheck{
-		{
-			Name:    "version",
-			OK:      true,
-			Message: version.Current().Version,
-		},
-		{
-			Name:    "api_registry",
-			OK:      len(r.Registry.List()) > 0,
-			Message: fmt.Sprintf("%d APIs configured", len(r.Registry.List())),
+func (r *Runner) newVersionCmd() *cobra.Command {
+	var format string
+	cmd := &cobra.Command{
+		Use:   "version",
+		Short: "Print version metadata",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			info := version.Current()
+			switch format {
+			case "json":
+				return output.WriteJSON(cmd.OutOrStdout(), info)
+			case "text":
+				fmt.Fprintf(cmd.OutOrStdout(), "odh %s (%s, %s, %s/%s)\n", info.Version, info.Commit, info.Date, info.GoOS, info.GoArch)
+				return nil
+			default:
+				return fmt.Errorf("unsupported format %q", format)
+			}
 		},
 	}
+	cmd.Flags().StringVar(&format, "format", "json", "output format: json or text")
+	return cmd
+}
 
-	if *network {
-		doctorCtx, cancel := context.WithTimeout(ctx, *timeout)
-		defer cancel()
-		checks = append(checks, r.runNetworkDoctorChecks(doctorCtx)...)
-	}
+func (r *Runner) newDoctorCmd() *cobra.Command {
+	var network bool
+	var timeout time.Duration
+	cmd := &cobra.Command{
+		Use:   "doctor",
+		Short: "Check the local CLI and upstream API reachability",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if timeout <= 0 {
+				return fmt.Errorf("--timeout must be greater than zero")
+			}
 
-	ok := true
-	for _, check := range checks {
-		if !check.OK {
-			ok = false
-			break
-		}
-	}
+			checks := []doctorCheck{
+				{
+					Name:    "version",
+					OK:      true,
+					Message: version.Current().Version,
+				},
+				{
+					Name:    "api_registry",
+					OK:      len(r.Registry.List()) > 0,
+					Message: fmt.Sprintf("%d APIs configured", len(r.Registry.List())),
+				},
+			}
 
-	if err := output.WriteJSON(stdout, map[string]any{
-		"ok":      ok,
-		"version": version.Current(),
-		"checks":  checks,
-	}); err != nil {
-		fmt.Fprintln(stderr, err)
-		return 1
+			if network {
+				doctorCtx, cancel := context.WithTimeout(cmd.Context(), timeout)
+				defer cancel()
+				checks = append(checks, r.runNetworkDoctorChecks(doctorCtx)...)
+			}
+
+			ok := true
+			for _, check := range checks {
+				if !check.OK {
+					ok = false
+					break
+				}
+			}
+
+			if err := output.WriteJSON(cmd.OutOrStdout(), map[string]any{
+				"ok":      ok,
+				"version": version.Current(),
+				"checks":  checks,
+			}); err != nil {
+				return err
+			}
+			if !ok {
+				return fmt.Errorf("doctor checks failed")
+			}
+			return nil
+		},
 	}
-	if !ok {
-		return 1
-	}
-	return 0
+	cmd.Flags().BoolVar(&network, "network", true, "run network reachability checks")
+	cmd.Flags().DurationVar(&timeout, "timeout", 10*time.Second, "overall timeout for doctor checks")
+	return cmd
 }
 
 func (r *Runner) runNetworkDoctorChecks(ctx context.Context) []doctorCheck {
@@ -129,6 +154,10 @@ func (r *Runner) runNetworkDoctorChecks(ctx context.Context) []doctorCheck {
 		if err != nil {
 			check.OK = false
 			check.Message = err.Error()
+			var httpErr *client.HTTPError
+			if errors.As(err, &httpErr) {
+				check.StatusCode = httpErr.StatusCode
+			}
 		} else {
 			check.OK = true
 			check.Message = "HTTP " + strconv.Itoa(resp.StatusCode)
@@ -136,31 +165,4 @@ func (r *Runner) runNetworkDoctorChecks(ctx context.Context) []doctorCheck {
 		checks = append(checks, check)
 	}
 	return checks
-}
-
-func (r *Runner) runVersion(args []string, stdout, stderr io.Writer) int {
-	fs := newFlagSet("version", stderr)
-	format := fs.String("format", "json", "output format: json or text")
-	if err := fs.Parse(args); err != nil {
-		return 2
-	}
-	if fs.NArg() != 0 {
-		fmt.Fprintln(stderr, "version does not accept positional arguments")
-		return 2
-	}
-
-	info := version.Current()
-	switch *format {
-	case "json":
-		if err := output.WriteJSON(stdout, info); err != nil {
-			fmt.Fprintln(stderr, err)
-			return 1
-		}
-	case "text":
-		fmt.Fprintf(stdout, "odh %s (%s, %s, %s/%s)\n", info.Version, info.Commit, info.Date, info.GoOS, info.GoArch)
-	default:
-		fmt.Fprintf(stderr, "unsupported format %q\n", *format)
-		return 2
-	}
-	return 0
 }

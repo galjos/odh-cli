@@ -28,6 +28,8 @@ Use `odh` for public Open Data Hub API work. It is JSON-first, non-interactive, 
 
 Open Data Hub is maintained by NOI Techpark. Most practical Tourism and Mobility tasks are about South Tyrol / the Autonomous Province of Bolzano, but do not claim every returned record is located there unless coordinates, location fields, origin metadata, or official docs support it.
 
+The CLI retries transient `429` and `5xx` HTTP failures. Some low-risk discovery metadata such as OpenAPI specs, Tourism taxonomies, and Mobility station/type discovery can be cached locally for 24 hours. Current-data commands such as traffic, latest measurements, diagnostics, and GTFS-RT should still be treated as fresh upstream calls.
+
 ## First Checks
 
 Run these before relying on the CLI:
@@ -177,6 +179,7 @@ odh a22 status --limit 10
 
 - Parse stdout as JSON for data commands; add `--json` before parsing `odh traffic` output.
 - Treat nonzero exit codes as failures.
+- Treat exit code `2` as a bad invocation and exit code `1` as a runtime/upstream problem.
 - Treat stderr as diagnostics, not data.
 - Prefer `odh` and official OpenAPI specs over scraping Open Data Hub web pages.
 - Treat South Tyrol as the common regional context, not as a universal record-level guarantee.

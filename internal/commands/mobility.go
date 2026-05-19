@@ -5,10 +5,7 @@
 package commands
 
 import (
-	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/url"
 	"sort"
 	"strconv"
@@ -16,52 +13,455 @@ import (
 	"time"
 
 	"github.com/galjos/odh-cli/internal/output"
+	"github.com/spf13/cobra"
 )
 
-func (r *Runner) runMobilityTypes(ctx context.Context, args []string, stdout, stderr io.Writer) int {
-	fs := newFlagSet("mobility types", stderr)
-	kind := fs.String("kind", "station", "type kind: station, event, or edge")
-	limit := fs.Int("limit", 200, "maximum number of types to request")
-	if err := fs.Parse(args); err != nil {
-		return 2
-	}
-	if fs.NArg() != 0 {
-		fmt.Fprintln(stderr, "mobility types does not accept positional arguments")
-		return 2
-	}
-	if *limit < 1 {
-		fmt.Fprintln(stderr, "--limit must be greater than zero")
-		return 2
+func (r *Runner) newMobilityCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "mobility",
+		Short: "Curated Mobility API commands",
+		RunE:  requireSubcommand,
 	}
 
-	path, normalizedKind, err := mobilityTypesPath(*kind)
-	if err != nil {
-		fmt.Fprintln(stderr, err)
-		return 2
+	// types
+	var typesKind string
+	var typesLimit int
+	typesCmd := &cobra.Command{
+		Use:   "types",
+		Short: "Discover Mobility type values",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if typesLimit < 1 {
+				return fmt.Errorf("--limit must be greater than zero")
+			}
+			path, normalizedKind, err := mobilityTypesPath(typesKind)
+			if err != nil {
+				return err
+			}
+			api, _ := r.Registry.Find("mobility")
+			values := url.Values{}
+			values.Set("limit", strconv.Itoa(typesLimit))
+			requestURL, err := BuildURL(api.BaseURL, path, values)
+			if err != nil {
+				return err
+			}
+			value, err := r.fetchJSONValueCached(cmd.Context(), requestURL, 24*time.Hour)
+			if err != nil {
+				return err
+			}
+			items := extractDataList(value)
+			return output.WriteJSON(cmd.OutOrStdout(), map[string]any{
+				"kind":  normalizedKind,
+				"count": len(items),
+				"types": items,
+			})
+		},
 	}
-	api, _ := r.Registry.Find("mobility")
-	values := url.Values{}
-	values.Set("limit", strconv.Itoa(*limit))
-	requestURL, err := BuildURL(api.BaseURL, path, values)
-	if err != nil {
-		fmt.Fprintln(stderr, err)
-		return 2
+	typesCmd.Flags().StringVar(&typesKind, "kind", "station", "type kind: station, event, or edge")
+	typesCmd.Flags().IntVar(&typesLimit, "limit", 200, "maximum number of types to request")
+
+	// origins
+	var originsStationType string
+	var originsRepresentation string
+	var originsLimit int
+	var originsParams []string
+	originsCmd := &cobra.Command{
+		Use:   "origins",
+		Short: "Discover Mobility station origins",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if strings.TrimSpace(originsStationType) == "" {
+				return fmt.Errorf("--station-type is required")
+			}
+			if originsLimit < 1 {
+				return fmt.Errorf("--limit must be greater than zero")
+			}
+			api, _ := r.Registry.Find("mobility")
+			path := fmt.Sprintf("/v2/%s/%s", url.PathEscape(originsRepresentation), url.PathEscape(originsStationType))
+			path = strings.ReplaceAll(path, "%2C", ",")
+			values := url.Values{}
+			for _, p := range originsParams {
+				key, value, ok := strings.Cut(p, "=")
+				if !ok {
+					return fmt.Errorf("parameter %q must use key=value", p)
+				}
+				values.Add(key, value)
+			}
+			values.Set("limit", strconv.Itoa(originsLimit))
+			requestURL, err := BuildURL(api.BaseURL, path, values)
+			if err != nil {
+				return err
+			}
+			value, err := r.fetchJSONValueCached(cmd.Context(), requestURL, 24*time.Hour)
+			if err != nil {
+				return err
+			}
+			records := extractDataList(value)
+			origins := summarizeOrigins(records)
+			return output.WriteJSON(cmd.OutOrStdout(), map[string]any{
+				"station_type": originsStationType,
+				"endpoint":     requestURL,
+				"record_count": len(records),
+				"count":        len(origins),
+				"origins":      origins,
+			})
+		},
 	}
-	value, err := r.fetchJSONValue(ctx, requestURL)
-	if err != nil {
-		fmt.Fprintln(stderr, err)
-		return 1
+	originsCmd.Flags().StringVar(&originsStationType, "station-type", "", "station type, for example TrafficSensor")
+	originsCmd.Flags().StringVar(&originsRepresentation, "representation", "flat", "API representation")
+	originsCmd.Flags().IntVar(&originsLimit, "limit", 1000, "maximum station records to inspect")
+	originsCmd.Flags().StringSliceVar(&originsParams, "param", nil, "additional query parameter as key=value; repeatable")
+
+	// stations
+	var stationsStationType string
+	var stationsRepresentation string
+	var stationsOrigin string
+	var stationsLimit int
+	var stationsOffset int
+	var stationsWhere string
+	var stationsParams []string
+	stationsCmd := &cobra.Command{
+		Use:   "stations",
+		Short: "List Mobility stations",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if strings.TrimSpace(stationsStationType) == "" {
+				return fmt.Errorf("--station-type is required")
+			}
+			if stationsLimit < 1 {
+				return fmt.Errorf("--limit must be greater than zero")
+			}
+			if stationsOffset < 0 {
+				return fmt.Errorf("--offset must not be negative")
+			}
+			api, _ := r.Registry.Find("mobility")
+			path := fmt.Sprintf("/v2/%s/%s", url.PathEscape(stationsRepresentation), url.PathEscape(stationsStationType))
+			path = strings.ReplaceAll(path, "%2C", ",")
+			values := url.Values{}
+			for _, p := range stationsParams {
+				key, value, ok := strings.Cut(p, "=")
+				if !ok {
+					return fmt.Errorf("parameter %q must use key=value", p)
+				}
+				values.Add(key, value)
+			}
+			values.Set("limit", strconv.Itoa(stationsLimit))
+			values.Set("offset", strconv.Itoa(stationsOffset))
+			if strings.TrimSpace(stationsWhere) != "" {
+				values.Set("where", stationsWhere)
+			}
+			requestURL, err := BuildURL(api.BaseURL, path, values)
+			if err != nil {
+				return err
+			}
+			value, err := r.fetchJSONValueCached(cmd.Context(), requestURL, 24*time.Hour)
+			if err != nil {
+				return err
+			}
+			records := extractDataList(value)
+			stations := filterStationsByOrigin(records, stationsOrigin)
+			return output.WriteJSON(cmd.OutOrStdout(), map[string]any{
+				"station_type": stationsStationType,
+				"origin":       strings.TrimSpace(stationsOrigin),
+				"record_count": len(records),
+				"count":        len(stations),
+				"stations":     stations,
+			})
+		},
 	}
-	items := extractDataList(value)
-	if err := output.WriteJSON(stdout, map[string]any{
-		"kind":  normalizedKind,
-		"count": len(items),
-		"types": items,
-	}); err != nil {
-		fmt.Fprintln(stderr, err)
-		return 1
+	stationsCmd.Flags().StringVar(&stationsStationType, "station-type", "", "station type, for example ParkingStation")
+	stationsCmd.Flags().StringVar(&stationsRepresentation, "representation", "flat", "API representation")
+	stationsCmd.Flags().StringVar(&stationsOrigin, "origin", "", "optional sorigin filter, for example A22")
+	stationsCmd.Flags().IntVar(&stationsLimit, "limit", 20, "maximum stations to request")
+	stationsCmd.Flags().IntVar(&stationsOffset, "offset", 0, "pagination offset")
+	stationsCmd.Flags().StringVar(&stationsWhere, "where", "", "Open Data Hub where filter")
+	stationsCmd.Flags().StringSliceVar(&stationsParams, "param", nil, "additional query parameter as key=value; repeatable")
+
+	// datatypes
+	var datatypesStationType string
+	var datatypesRepresentation string
+	var datatypesOrigin string
+	var datatypesLimit int
+	var datatypesParams []string
+	datatypesCmd := &cobra.Command{
+		Use:   "datatypes",
+		Short: "Summarize Mobility data types",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if strings.TrimSpace(datatypesStationType) == "" {
+				return fmt.Errorf("--station-type is required")
+			}
+			if datatypesLimit < 1 {
+				return fmt.Errorf("--limit must be greater than zero")
+			}
+			api, _ := r.Registry.Find("mobility")
+			path := fmt.Sprintf("/v2/%s/%s/*", url.PathEscape(datatypesRepresentation), url.PathEscape(datatypesStationType))
+			path = strings.ReplaceAll(path, "%2C", ",")
+			values := url.Values{}
+			for _, p := range datatypesParams {
+				key, value, ok := strings.Cut(p, "=")
+				if !ok {
+					return fmt.Errorf("parameter %q must use key=value", p)
+				}
+				values.Add(key, value)
+			}
+			values.Set("limit", strconv.Itoa(datatypesLimit))
+			requestURL, err := BuildURL(api.BaseURL, path, values)
+			if err != nil {
+				return err
+			}
+			value, err := r.fetchJSONValueCached(cmd.Context(), requestURL, 24*time.Hour)
+			if err != nil {
+				return err
+			}
+			records := extractDataList(value)
+			summary := summarizeDatatypes(records, datatypesOrigin)
+			return output.WriteJSON(cmd.OutOrStdout(), map[string]any{
+				"station_type": datatypesStationType,
+				"origin":       strings.TrimSpace(datatypesOrigin),
+				"record_count": len(records),
+				"count":        len(summary),
+				"datatypes":    summary,
+			})
+		},
 	}
-	return 0
+	datatypesCmd.Flags().StringVar(&datatypesStationType, "station-type", "", "station type, for example TrafficSensor")
+	datatypesCmd.Flags().StringVar(&datatypesRepresentation, "representation", "flat", "API representation")
+	datatypesCmd.Flags().StringVar(&datatypesOrigin, "origin", "", "optional sorigin filter, for example A22")
+	datatypesCmd.Flags().IntVar(&datatypesLimit, "limit", 1000, "maximum station/datatype records to inspect")
+	datatypesCmd.Flags().StringSliceVar(&datatypesParams, "param", nil, "additional query parameter as key=value; repeatable")
+
+	// events
+	var eventsOrigin string
+	var eventsLatest bool
+	var eventsRepresentation string
+	var eventsLimit int
+	var eventsParams []string
+	eventsCmd := &cobra.Command{
+		Use:   "events",
+		Short: "List Mobility events",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if strings.TrimSpace(eventsOrigin) == "" {
+				return fmt.Errorf("--origin is required")
+			}
+			if eventsLimit < 1 {
+				return fmt.Errorf("--limit must be greater than zero")
+			}
+			api, _ := r.Registry.Find("mobility")
+			path := fmt.Sprintf("/v2/%s,event/%s", url.PathEscape(eventsRepresentation), url.PathEscape(eventsOrigin))
+			path = strings.ReplaceAll(path, "%2C", ",")
+			if eventsLatest {
+				path += "/latest"
+			}
+			values := url.Values{}
+			for _, p := range eventsParams {
+				key, value, ok := strings.Cut(p, "=")
+				if !ok {
+					return fmt.Errorf("parameter %q must use key=value", p)
+				}
+				values.Add(key, value)
+			}
+			values.Set("limit", strconv.Itoa(eventsLimit))
+			requestURL, err := BuildURL(api.BaseURL, path, values)
+			if err != nil {
+				return err
+			}
+			value, err := r.fetchJSONValue(cmd.Context(), requestURL)
+			if err != nil {
+				return err
+			}
+			events := extractDataList(value)
+			return output.WriteJSON(cmd.OutOrStdout(), map[string]any{
+				"origin": eventsOrigin,
+				"latest": eventsLatest,
+				"count":  len(events),
+				"events": events,
+			})
+		},
+	}
+	eventsCmd.Flags().StringVar(&eventsOrigin, "origin", "", "event origin, for example A22")
+	eventsCmd.Flags().BoolVar(&eventsLatest, "latest", true, "request latest events")
+	eventsCmd.Flags().StringVar(&eventsRepresentation, "representation", "flat", "API representation")
+	eventsCmd.Flags().IntVar(&eventsLimit, "limit", 20, "maximum events to request")
+	eventsCmd.Flags().StringSliceVar(&eventsParams, "param", nil, "additional query parameter as key=value; repeatable")
+
+	// latest
+	var latestStationType string
+	var latestDataType string
+	var latestRepresentation string
+	var latestLimit int
+	var latestRequestLimit int
+	var latestOffset int
+	var latestOrigin string
+	var latestActive bool
+	var latestFreshWithin string
+	var latestSortMode string
+	var latestWhere string
+	var latestParams []string
+	latestCmd := &cobra.Command{
+		Use:   "latest",
+		Short: "Query latest Mobility time-series measurements",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if strings.TrimSpace(latestStationType) == "" {
+				return fmt.Errorf("--station-type is required")
+			}
+			if strings.TrimSpace(latestDataType) == "" {
+				return fmt.Errorf("--data-type is required")
+			}
+			if latestLimit < 1 {
+				return fmt.Errorf("--limit must be greater than zero")
+			}
+			if latestOffset < 0 {
+				return fmt.Errorf("--offset must not be negative")
+			}
+			if latestRequestLimit < 0 {
+				return fmt.Errorf("--request-limit must not be negative")
+			}
+			sortModeValue, err := normalizeMobilityLatestSort(latestSortMode)
+			if err != nil {
+				return err
+			}
+			freshDuration, err := parseFreshWithin(latestFreshWithin)
+			if err != nil {
+				return err
+			}
+			api, _ := r.Registry.Find("mobility")
+			path := fmt.Sprintf("/v2/%s/%s/%s/latest", url.PathEscape(latestRepresentation), url.PathEscape(latestStationType), url.PathEscape(latestDataType))
+			path = strings.ReplaceAll(path, "%2C", ",")
+			values := url.Values{}
+			for _, p := range latestParams {
+				key, value, ok := strings.Cut(p, "=")
+				if !ok {
+					return fmt.Errorf("parameter %q must use key=value", p)
+				}
+				values.Add(key, value)
+			}
+			localProcessing := mobilityLatestNeedsLocalProcessing(latestOrigin, latestActive, freshDuration, sortModeValue)
+			upstreamLimit := latestLimit
+			if localProcessing {
+				upstreamLimit = latestRequestLimit
+				if upstreamLimit == 0 {
+					upstreamLimit = max(latestLimit, 1000)
+				}
+				if upstreamLimit < latestLimit {
+					upstreamLimit = latestLimit
+				}
+			}
+			values.Set("limit", strconv.Itoa(upstreamLimit))
+			values.Set("offset", strconv.Itoa(latestOffset))
+			if strings.TrimSpace(latestWhere) != "" {
+				values.Set("where", latestWhere)
+			}
+			requestURL, err := BuildURL(api.BaseURL, path, values)
+			if err != nil {
+				return err
+			}
+			if localProcessing {
+				value, err := r.fetchJSONValue(cmd.Context(), requestURL)
+				if err != nil {
+					return err
+				}
+				records := extractDataList(value)
+				result := filterMobilityLatest(records, mobilityLatestFilter{
+					StationType:   latestStationType,
+					DataType:      latestDataType,
+					Origin:        latestOrigin,
+					ActiveOnly:    latestActive,
+					FreshWithin:   latestFreshWithin,
+					FreshDuration: freshDuration,
+					Sort:          sortModeValue,
+					Limit:         latestLimit,
+					RequestLimit:  upstreamLimit,
+					Endpoint:      requestURL,
+					Now:           time.Now(),
+				})
+				return output.WriteJSON(cmd.OutOrStdout(), result)
+			}
+			return r.fetchJSONCobra(cmd.Context(), requestURL, cmd.OutOrStdout())
+		},
+	}
+	latestCmd.Flags().StringVar(&latestStationType, "station-type", "", "station type, for example EChargingStation")
+	latestCmd.Flags().StringVar(&latestDataType, "data-type", "", "data type, for example number-available")
+	latestCmd.Flags().StringVar(&latestRepresentation, "representation", "flat,node", "API representation")
+	latestCmd.Flags().IntVar(&latestLimit, "limit", 5, "number of measurements to request")
+	latestCmd.Flags().IntVar(&latestRequestLimit, "request-limit", 0, "raw upstream rows to request before local filtering")
+	latestCmd.Flags().IntVar(&latestOffset, "offset", 0, "pagination offset")
+	latestCmd.Flags().StringVar(&latestOrigin, "origin", "", "optional sorigin filter, for example ALPERIA")
+	latestCmd.Flags().BoolVar(&latestActive, "active", false, "keep only active stations")
+	latestCmd.Flags().StringVar(&latestFreshWithin, "fresh-within", "", "keep only rows with mvalidtime within this age, for example 24h or 7d")
+	latestCmd.Flags().StringVar(&latestSortMode, "sort", "upstream", "local sort: upstream, newest, oldest, or station")
+	latestCmd.Flags().StringVar(&latestWhere, "where", "", "Open Data Hub where filter")
+	latestCmd.Flags().StringSliceVar(&latestParams, "param", nil, "additional query parameter as key=value; repeatable")
+
+	cmd.AddCommand(typesCmd)
+	cmd.AddCommand(originsCmd)
+	cmd.AddCommand(stationsCmd)
+	cmd.AddCommand(datatypesCmd)
+	cmd.AddCommand(eventsCmd)
+	cmd.AddCommand(latestCmd)
+	return cmd
+}
+
+func (r *Runner) newA22Cmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "a22",
+		Short: "A22 Mobility commands",
+		RunE:  requireSubcommand,
+	}
+
+	var statusLimit int
+	statusCmd := &cobra.Command{
+		Use:   "status",
+		Short: "Check A22 status",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if statusLimit < 1 {
+				return fmt.Errorf("--limit must be greater than zero")
+			}
+			api, _ := r.Registry.Find("mobility")
+			events, eventsURL, err := r.fetchListFromMobility(cmd.Context(), api.BaseURL, "/v2/flat,event/A22/latest", statusLimit)
+			if err != nil {
+				return err
+			}
+			forecasts, forecastsURL, err := r.fetchListFromMobility(cmd.Context(), api.BaseURL, "/v2/flat/TrafficForecast/forecast/latest", statusLimit)
+			if err != nil {
+				return err
+			}
+
+			warnings := make([]string, 0)
+			if len(events) == 0 {
+				warnings = append(warnings, "Open Data Hub returned no current A22 events.")
+			}
+			for _, forecast := range forecasts {
+				validTime := parseODHTime(asString(forecast["mvalidtime"]))
+				if validTime != nil && validTime.After(time.Now().Add(24*time.Hour)) {
+					warnings = append(warnings, "A22 forecast contains future valid_time values; treat it as forecast data, not current incident data.")
+					break
+				}
+			}
+
+			return output.WriteJSON(cmd.OutOrStdout(), map[string]any{
+				"source": "Open Data Hub Mobility API",
+				"events": map[string]any{
+					"endpoint": eventsURL,
+					"count":    len(events),
+					"items":    events,
+				},
+				"forecast": map[string]any{
+					"endpoint": forecastsURL,
+					"count":    len(forecasts),
+					"items":    forecasts,
+				},
+				"warnings": warnings,
+			})
+		},
+	}
+	statusCmd.Flags().IntVar(&statusLimit, "limit", 20, "maximum records to request from each A22 feed")
+
+	cmd.AddCommand(statusCmd)
+	return cmd
 }
 
 func mobilityTypesPath(kind string) (string, string, error) {
@@ -75,331 +475,6 @@ func mobilityTypesPath(kind string) (string, string, error) {
 	default:
 		return "", "", fmt.Errorf("unsupported mobility type kind %q", kind)
 	}
-}
-
-func (r *Runner) runMobilityDatatypes(ctx context.Context, args []string, stdout, stderr io.Writer) int {
-	fs := newFlagSet("mobility datatypes", stderr)
-	stationType := fs.String("station-type", "", "station type, for example TrafficSensor")
-	representation := fs.String("representation", "flat", "API representation")
-	origin := fs.String("origin", "", "optional sorigin filter, for example A22")
-	limit := fs.Int("limit", 1000, "maximum station/datatype records to inspect")
-	params := paramValues{}
-	fs.Var(&params, "param", "additional query parameter as key=value; repeatable")
-	if err := fs.Parse(args); err != nil {
-		return 2
-	}
-	if fs.NArg() != 0 {
-		fmt.Fprintln(stderr, "mobility datatypes does not accept positional arguments")
-		return 2
-	}
-	if strings.TrimSpace(*stationType) == "" {
-		fmt.Fprintln(stderr, "--station-type is required")
-		return 2
-	}
-	if *limit < 1 {
-		fmt.Fprintln(stderr, "--limit must be greater than zero")
-		return 2
-	}
-
-	api, _ := r.Registry.Find("mobility")
-	path := fmt.Sprintf("/v2/%s/%s/*", url.PathEscape(*representation), url.PathEscape(*stationType))
-	path = strings.ReplaceAll(path, "%2C", ",")
-	values := params.Values()
-	values.Set("limit", strconv.Itoa(*limit))
-	requestURL, err := BuildURL(api.BaseURL, path, values)
-	if err != nil {
-		fmt.Fprintln(stderr, err)
-		return 2
-	}
-	value, err := r.fetchJSONValue(ctx, requestURL)
-	if err != nil {
-		fmt.Fprintln(stderr, err)
-		return 1
-	}
-	records := extractDataList(value)
-	summary := summarizeDatatypes(records, *origin)
-	if err := output.WriteJSON(stdout, map[string]any{
-		"station_type": *stationType,
-		"origin":       strings.TrimSpace(*origin),
-		"record_count": len(records),
-		"count":        len(summary),
-		"datatypes":    summary,
-	}); err != nil {
-		fmt.Fprintln(stderr, err)
-		return 1
-	}
-	return 0
-}
-
-func (r *Runner) runMobilityOrigins(ctx context.Context, args []string, stdout, stderr io.Writer) int {
-	fs := newFlagSet("mobility origins", stderr)
-	stationType := fs.String("station-type", "", "station type, for example TrafficSensor")
-	representation := fs.String("representation", "flat", "API representation")
-	limit := fs.Int("limit", 1000, "maximum station records to inspect")
-	params := paramValues{}
-	fs.Var(&params, "param", "additional query parameter as key=value; repeatable")
-	if err := fs.Parse(args); err != nil {
-		return 2
-	}
-	if fs.NArg() != 0 {
-		fmt.Fprintln(stderr, "mobility origins does not accept positional arguments")
-		return 2
-	}
-	if strings.TrimSpace(*stationType) == "" {
-		fmt.Fprintln(stderr, "--station-type is required")
-		return 2
-	}
-	if *limit < 1 {
-		fmt.Fprintln(stderr, "--limit must be greater than zero")
-		return 2
-	}
-
-	api, _ := r.Registry.Find("mobility")
-	path := fmt.Sprintf("/v2/%s/%s", url.PathEscape(*representation), url.PathEscape(*stationType))
-	path = strings.ReplaceAll(path, "%2C", ",")
-	values := params.Values()
-	values.Set("limit", strconv.Itoa(*limit))
-	requestURL, err := BuildURL(api.BaseURL, path, values)
-	if err != nil {
-		fmt.Fprintln(stderr, err)
-		return 2
-	}
-	value, err := r.fetchJSONValue(ctx, requestURL)
-	if err != nil {
-		fmt.Fprintln(stderr, err)
-		return 1
-	}
-	records := extractDataList(value)
-	origins := summarizeOrigins(records)
-	if err := output.WriteJSON(stdout, map[string]any{
-		"station_type": *stationType,
-		"endpoint":     requestURL,
-		"record_count": len(records),
-		"count":        len(origins),
-		"origins":      origins,
-	}); err != nil {
-		fmt.Fprintln(stderr, err)
-		return 1
-	}
-	return 0
-}
-
-func (r *Runner) runMobilityStations(ctx context.Context, args []string, stdout, stderr io.Writer) int {
-	fs := newFlagSet("mobility stations", stderr)
-	stationType := fs.String("station-type", "", "station type, for example ParkingStation")
-	representation := fs.String("representation", "flat", "API representation")
-	origin := fs.String("origin", "", "optional sorigin filter, for example A22")
-	limit := fs.Int("limit", 20, "maximum stations to request")
-	offset := fs.Int("offset", 0, "pagination offset")
-	where := fs.String("where", "", "Open Data Hub where filter")
-	params := paramValues{}
-	fs.Var(&params, "param", "additional query parameter as key=value; repeatable")
-	if err := fs.Parse(args); err != nil {
-		return 2
-	}
-	if fs.NArg() != 0 {
-		fmt.Fprintln(stderr, "mobility stations does not accept positional arguments")
-		return 2
-	}
-	if strings.TrimSpace(*stationType) == "" {
-		fmt.Fprintln(stderr, "--station-type is required")
-		return 2
-	}
-	if *limit < 1 {
-		fmt.Fprintln(stderr, "--limit must be greater than zero")
-		return 2
-	}
-	if *offset < 0 {
-		fmt.Fprintln(stderr, "--offset must not be negative")
-		return 2
-	}
-
-	api, _ := r.Registry.Find("mobility")
-	path := fmt.Sprintf("/v2/%s/%s", url.PathEscape(*representation), url.PathEscape(*stationType))
-	path = strings.ReplaceAll(path, "%2C", ",")
-	values := params.Values()
-	values.Set("limit", strconv.Itoa(*limit))
-	values.Set("offset", strconv.Itoa(*offset))
-	if strings.TrimSpace(*where) != "" {
-		values.Set("where", *where)
-	}
-	requestURL, err := BuildURL(api.BaseURL, path, values)
-	if err != nil {
-		fmt.Fprintln(stderr, err)
-		return 2
-	}
-	value, err := r.fetchJSONValue(ctx, requestURL)
-	if err != nil {
-		fmt.Fprintln(stderr, err)
-		return 1
-	}
-	records := extractDataList(value)
-	stations := filterStationsByOrigin(records, *origin)
-	if err := output.WriteJSON(stdout, map[string]any{
-		"station_type": *stationType,
-		"origin":       strings.TrimSpace(*origin),
-		"record_count": len(records),
-		"count":        len(stations),
-		"stations":     stations,
-	}); err != nil {
-		fmt.Fprintln(stderr, err)
-		return 1
-	}
-	return 0
-}
-
-func (r *Runner) runMobilityEvents(ctx context.Context, args []string, stdout, stderr io.Writer) int {
-	fs := newFlagSet("mobility events", stderr)
-	origin := fs.String("origin", "", "event origin, for example A22")
-	latest := fs.Bool("latest", true, "request latest events")
-	representation := fs.String("representation", "flat", "API representation")
-	limit := fs.Int("limit", 20, "maximum events to request")
-	params := paramValues{}
-	fs.Var(&params, "param", "additional query parameter as key=value; repeatable")
-	if err := fs.Parse(args); err != nil {
-		return 2
-	}
-	if fs.NArg() != 0 {
-		fmt.Fprintln(stderr, "mobility events does not accept positional arguments")
-		return 2
-	}
-	if strings.TrimSpace(*origin) == "" {
-		fmt.Fprintln(stderr, "--origin is required")
-		return 2
-	}
-	if *limit < 1 {
-		fmt.Fprintln(stderr, "--limit must be greater than zero")
-		return 2
-	}
-
-	api, _ := r.Registry.Find("mobility")
-	path := fmt.Sprintf("/v2/%s,event/%s", url.PathEscape(*representation), url.PathEscape(*origin))
-	path = strings.ReplaceAll(path, "%2C", ",")
-	if *latest {
-		path += "/latest"
-	}
-	values := params.Values()
-	values.Set("limit", strconv.Itoa(*limit))
-	requestURL, err := BuildURL(api.BaseURL, path, values)
-	if err != nil {
-		fmt.Fprintln(stderr, err)
-		return 2
-	}
-	value, err := r.fetchJSONValue(ctx, requestURL)
-	if err != nil {
-		fmt.Fprintln(stderr, err)
-		return 1
-	}
-	events := extractDataList(value)
-	if err := output.WriteJSON(stdout, map[string]any{
-		"origin": *origin,
-		"latest": *latest,
-		"count":  len(events),
-		"events": events,
-	}); err != nil {
-		fmt.Fprintln(stderr, err)
-		return 1
-	}
-	return 0
-}
-
-func (r *Runner) runA22(ctx context.Context, args []string, stdout, stderr io.Writer) int {
-	if len(args) == 0 {
-		fmt.Fprintln(stderr, "usage: odh a22 <subcommand>")
-		return 2
-	}
-	switch args[0] {
-	case "status":
-		return r.runA22Status(ctx, args[1:], stdout, stderr)
-	default:
-		fmt.Fprintf(stderr, "unknown a22 subcommand %q\n", args[0])
-		return 2
-	}
-}
-
-func (r *Runner) runA22Status(ctx context.Context, args []string, stdout, stderr io.Writer) int {
-	fs := newFlagSet("a22 status", stderr)
-	limit := fs.Int("limit", 20, "maximum records to request from each A22 feed")
-	if err := fs.Parse(args); err != nil {
-		return 2
-	}
-	if fs.NArg() != 0 {
-		fmt.Fprintln(stderr, "a22 status does not accept positional arguments")
-		return 2
-	}
-	if *limit < 1 {
-		fmt.Fprintln(stderr, "--limit must be greater than zero")
-		return 2
-	}
-
-	api, _ := r.Registry.Find("mobility")
-	events, eventsURL, err := r.fetchListFromMobility(ctx, api.BaseURL, "/v2/flat,event/A22/latest", *limit)
-	if err != nil {
-		fmt.Fprintln(stderr, err)
-		return 1
-	}
-	forecasts, forecastsURL, err := r.fetchListFromMobility(ctx, api.BaseURL, "/v2/flat/TrafficForecast/forecast/latest", *limit)
-	if err != nil {
-		fmt.Fprintln(stderr, err)
-		return 1
-	}
-
-	warnings := make([]string, 0)
-	if len(events) == 0 {
-		warnings = append(warnings, "Open Data Hub returned no current A22 events.")
-	}
-	for _, forecast := range forecasts {
-		validTime := parseODHTime(asString(forecast["mvalidtime"]))
-		if validTime != nil && validTime.After(time.Now().Add(24*time.Hour)) {
-			warnings = append(warnings, "A22 forecast contains future valid_time values; treat it as forecast data, not current incident data.")
-			break
-		}
-	}
-
-	if err := output.WriteJSON(stdout, map[string]any{
-		"source": "Open Data Hub Mobility API",
-		"events": map[string]any{
-			"endpoint": eventsURL,
-			"count":    len(events),
-			"items":    events,
-		},
-		"forecast": map[string]any{
-			"endpoint": forecastsURL,
-			"count":    len(forecasts),
-			"items":    forecasts,
-		},
-		"warnings": warnings,
-	}); err != nil {
-		fmt.Fprintln(stderr, err)
-		return 1
-	}
-	return 0
-}
-
-func (r *Runner) fetchListFromMobility(ctx context.Context, baseURL, path string, limit int) ([]map[string]any, string, error) {
-	values := url.Values{}
-	values.Set("limit", strconv.Itoa(limit))
-	requestURL, err := BuildURL(baseURL, path, values)
-	if err != nil {
-		return nil, "", err
-	}
-	value, err := r.fetchJSONValue(ctx, requestURL)
-	if err != nil {
-		return nil, requestURL, err
-	}
-	return extractDataList(value), requestURL, nil
-}
-
-func (r *Runner) fetchJSONValue(ctx context.Context, requestURL string) (any, error) {
-	resp, err := r.Client.Get(ctx, requestURL)
-	if err != nil {
-		return nil, err
-	}
-	var value any
-	if err := json.Unmarshal(resp.Body, &value); err != nil {
-		return nil, fmt.Errorf("response is not valid JSON: %w", err)
-	}
-	return value, nil
 }
 
 type datatypeSummary struct {

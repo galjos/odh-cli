@@ -10,8 +10,9 @@ SPDX-License-Identifier: CC0-1.0
 
 - `cmd/odh` - executable entrypoint.
 - `internal/apis` - typed registry of known API surfaces.
+- `internal/cache` - small TTL file cache for low-risk discovery responses.
 - `internal/client` - context-aware HTTP client.
-- `internal/commands` - CLI parsing and command execution.
+- `internal/commands` - Cobra command tree, validation, and command execution.
 - `internal/openapi` - OpenAPI JSON/YAML normalization.
 - `internal/output` - deterministic JSON output helpers.
 - `docs` - user, API, agent, data-quality, and development docs.
@@ -57,6 +58,18 @@ Set `ODH_EVAL_BIN=odh` to test an installed binary instead of the local source t
 The task set and scoring rubric are documented in [evaluation.md](evaluation.md).
 
 Use [data-quality.md](data-quality.md) when deciding whether a repeated agent failure should be handled as a diagnostic warning rather than a new natural-language command.
+
+## CLI Contract
+
+The CLI uses Cobra internally, but the automation contract stays stable:
+
+- data commands write results to stdout,
+- diagnostics and errors go to stderr,
+- usage errors return exit code `2`,
+- runtime failures return exit code `1`,
+- current-data commands must not be served from the generic HTTP cache.
+
+The generic HTTP cache is only for low-risk discovery surfaces such as OpenAPI specs, Tourism taxonomy values, Mobility type/origin/station/datatype discovery, and similar static-ish metadata. Live feeds, latest measurements, traffic events, diagnostics, and GTFS-RT responses should remain fresh unless a command has an explicit domain-specific cache contract such as the static GTFS archive cache.
 
 ## Build Metadata
 
