@@ -5,7 +5,11 @@
 
 set -euo pipefail
 
-ODH_BIN="${ODH_BIN:-odh}"
+if [[ -z "${ODH_BIN:-}" && -x ./odh ]]; then
+  ODH_BIN="./odh"
+else
+  ODH_BIN="${ODH_BIN:-odh}"
+fi
 
 "$ODH_BIN" traffic today \
   --area ueberetsch-unterland \
