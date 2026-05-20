@@ -36,7 +36,7 @@ Example output with `--network=false`:
 {
   "ok": true,
   "version": {
-    "version": "0.1.9-dev",
+    "version": "0.1.10-dev",
     "commit": "unknown",
     "date": "unknown",
     "goos": "darwin",
@@ -46,7 +46,7 @@ Example output with `--network=false`:
     {
       "name": "version",
       "ok": true,
-      "message": "0.1.9-dev"
+      "message": "0.1.10-dev"
     },
     {
       "name": "api_registry",
@@ -170,7 +170,7 @@ Flags:
 
 ## `odh tourism types`
 
-Fetches common Tourism taxonomy/type datasets and wraps the upstream `Items` list with `dataset`, `endpoint`, and `count` fields.
+Fetches common Tourism taxonomy/type datasets. The default table output is compact enough for discovery; use `--json` when an agent needs the wrapped upstream `Items` list with `dataset`, `endpoint`, and `count` fields.
 
 ```bash
 odh tourism types --dataset poi --limit 20
@@ -196,6 +196,8 @@ Flags:
 - `--page n` - maps to `pagenumber`; default `1`.
 - `--seed value` - stable randomization seed.
 - `--param key=value` - additional query parameter. Repeatable.
+- `--format json|table|markdown` - output format; default `table`.
+- `--json` - shortcut for `--format json`.
 
 Tourism type responses can be served from the local 24-hour metadata cache.
 
@@ -276,8 +278,10 @@ Flags:
 - `--sort upstream|newest|oldest|station` - local sort mode; default `upstream`.
 - `--where expr` - Open Data Hub where filter.
 - `--param key=value` - additional query parameter. Repeatable.
+- `--format json|table|markdown` - output format; default `json`.
+- `--json` - shortcut for `--format json`.
 
-Without local flags, output is the raw upstream JSON response. With `--origin`, `--active`, `--fresh-within`, or a local `--sort`, the command returns a wrapper containing `station_type`, `data_type`, `raw_count`, `count`, `measurements`, and optional `warnings`. This keeps the raw command lightweight while allowing agents to avoid stale or inactive availability rows.
+Without local flags and with JSON output, output is the raw upstream JSON response. With `--origin`, `--active`, `--fresh-within`, a local `--sort`, or a human output format, the command returns a wrapper containing `station_type`, `data_type`, `raw_count`, `count`, `measurements`, and optional `warnings`. Table/markdown output shows station, value, valid time, origin, active state, and warnings. Common datatype mistakes can produce hints; for example, `ParkingStation/number-free` points agents toward the usual `free` data type.
 
 ## `odh mobility types`
 
@@ -293,8 +297,10 @@ Flags:
 
 - `--kind station|event|edge` - default `station`.
 - `--limit n` - maximum records to request; default `200`.
+- `--format json|table|markdown` - output format; default `table`.
+- `--json` - shortcut for `--format json`.
 
-The output wraps the upstream list with `kind`, `count`, and `types` fields so agents can check whether discovery returned data before using it.
+JSON output wraps the upstream list with `kind`, `count`, and `types` fields so agents can check whether discovery returned data before using it.
 
 This discovery response can be served from the local 24-hour metadata cache.
 
@@ -360,6 +366,8 @@ Flags:
 - `--representation value` - default `flat`.
 - `--limit n` - maximum station/data-type records to inspect; default `1000`.
 - `--param key=value` - additional query parameter. Repeatable.
+- `--format json|table|markdown` - output format; default `table`.
+- `--json` - shortcut for `--format json`.
 
 The output groups records by data type name and includes station counts, units, descriptions, and origins.
 
@@ -431,6 +439,8 @@ Flags:
 - `--limit n` - maximum stops to return; default `20`.
 - `--cache-dir dir` - directory for cached GTFS archives.
 - `--refresh` - force a new archive download.
+- `--format json|table|markdown` - output format; default `table`.
+- `--json` - shortcut for `--format json`.
 
 Stop search supports common German/Italian place aliases such as `auer` / `ora`, `brenner` / `brennero`, `bozen` / `bolzano`, and `meran` / `merano`.
 
@@ -456,8 +466,10 @@ Flags:
 - `--limit n` - maximum departures to return; default `20`.
 - `--cache-dir dir` - directory for cached GTFS archives.
 - `--refresh` - force a new archive download.
+- `--format json|table|markdown` - output format; default `table`.
+- `--json` - shortcut for `--format json`.
 
-The command reads static GTFS. It is useful for timetable evidence, not for live delay probability. Use `--stop-id` after `odh transit stops search` when a broad stop name matches many platforms, bus bays, or nearby stops. If the selected ID is a GTFS parent station, the CLI expands it to its child platform stops. Output includes `stop_match_mode` so agents can tell whether matching used a fuzzy query, exact stop id, or parent station.
+The command reads static GTFS. It is useful for timetable evidence, not for live delay probability. Use `--stop-id` after `odh transit stops search` when a broad stop name matches many platforms, bus bays, or nearby stops. If the selected ID is a GTFS parent station, the CLI expands it to its child platform stops. JSON output includes `stop_match_mode` so agents can tell whether matching used a fuzzy query, exact stop id, or parent station.
 
 ## `odh transit trip`
 
@@ -482,8 +494,10 @@ Flags:
 - `--limit n` - maximum direct trip matches to return; default `20`.
 - `--cache-dir dir` - directory for cached GTFS archives.
 - `--refresh` - force a new archive download.
+- `--format json|table|markdown` - output format; default `table`.
+- `--json` - shortcut for `--format json`.
 
-This command does not perform transfer routing. If no direct trip matches, the JSON output includes a warning. Output includes `from_match_mode` and `to_match_mode`; use stop-id or parent-station mode for agent workflows where names like Merano or Bolzano return many matches.
+This command does not perform transfer routing. If no direct trip matches, the output includes a warning. JSON output includes `from_match_mode`, `to_match_mode`, `from_stops`, and `to_stops`; use stop-id or parent-station mode for agent workflows where names like Merano or Bolzano return many matches.
 
 ## `odh transit delay-stats`
 
@@ -500,6 +514,8 @@ Flags:
 - `--time HH:MM` - origin departure time.
 - `--weekday value` - weekday filter, for example `saturday`.
 - `--since value` - requested archive range, for example `90d`.
+- `--format json|table|markdown` - output format; default `table`.
+- `--json` - shortcut for `--format json`.
 
 The current implementation returns `supported: false` because Open Data Hub GTFS exposes current static GTFS and live GTFS-RT, not an archived GTFS-RT history. The CLI intentionally does not guess delay probability from one live feed snapshot.
 
@@ -591,11 +607,14 @@ Diagnostic wrapper for A22 traffic-related Mobility feeds.
 odh a22 status --limit 10
 ```
 
-It checks current A22 events and the `TrafficForecast/forecast/latest` feed. The command returns JSON with `events`, `forecast`, and `warnings`. Warnings are part of the contract: for example, the command explicitly reports when Open Data Hub returns no current A22 events or when forecast timestamps are future-dated.
+It checks current A22 events and the `TrafficForecast/forecast/latest` feed. The default table separates current events from forecast rows so agents do not mistake forecasts for incidents. JSON output contains `events`, `forecast`, and `warnings`; pass `--raw` with JSON to include raw upstream rows. Warnings are part of the contract: for example, the command explicitly reports when Open Data Hub returns no current A22 events or when forecast timestamps are future-dated.
 
 Flags:
 
 - `--limit n` - maximum records to request from each feed; default `20`.
+- `--format json|table|markdown` - output format; default `table`.
+- `--json` - shortcut for `--format json`.
+- `--raw` - include raw upstream event and forecast rows in JSON output.
 
 ## Exit Codes
 

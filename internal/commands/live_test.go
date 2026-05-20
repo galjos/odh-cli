@@ -33,7 +33,7 @@ func TestLiveTourismTypes(t *testing.T) {
 	}
 	runner := NewDefaultRunner()
 	var stdout, stderr bytes.Buffer
-	code := runner.Run(context.Background(), []string{"tourism", "types", "--dataset", "event", "--limit", "3"}, &stdout, &stderr)
+	code := runner.Run(context.Background(), []string{"tourism", "types", "--dataset", "event", "--limit", "3", "--json"}, &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("Run exit = %d, stderr = %s", code, stderr.String())
 	}
@@ -78,7 +78,7 @@ func TestLiveMobilityDiscovery(t *testing.T) {
 	}
 	runner := NewDefaultRunner()
 	var stdout, stderr bytes.Buffer
-	code := runner.Run(context.Background(), []string{"mobility", "datatypes", "--station-type", "TrafficSensor", "--origin", "A22", "--limit", "100"}, &stdout, &stderr)
+	code := runner.Run(context.Background(), []string{"mobility", "datatypes", "--station-type", "TrafficSensor", "--origin", "A22", "--limit", "100", "--json"}, &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("Run exit = %d, stderr = %s", code, stderr.String())
 	}
@@ -93,7 +93,7 @@ func TestLiveA22Status(t *testing.T) {
 	}
 	runner := NewDefaultRunner()
 	var stdout, stderr bytes.Buffer
-	code := runner.Run(context.Background(), []string{"a22", "status", "--limit", "10"}, &stdout, &stderr)
+	code := runner.Run(context.Background(), []string{"a22", "status", "--limit", "10", "--json"}, &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("Run exit = %d, stderr = %s", code, stderr.String())
 	}

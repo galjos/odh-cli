@@ -6,10 +6,12 @@ package commands
 
 import (
 	"fmt"
+	"io"
 	"net/url"
 	"sort"
 	"strconv"
 	"strings"
+	"text/tabwriter"
 	"time"
 
 	"github.com/galjos/odh-cli/internal/output"
@@ -26,11 +28,18 @@ func (r *Runner) newMobilityCmd() *cobra.Command {
 	// types
 	var typesKind string
 	var typesLimit int
+	var typesFormat string
+	var typesJSON bool
 	typesCmd := &cobra.Command{
 		Use:   "types",
 		Short: "Discover Mobility type values",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			applyJSONShortcut(&typesFormat, typesJSON)
+			format, err := normalizeOutputFormat(typesFormat)
+			if err != nil {
+				return err
+			}
 			if typesLimit < 1 {
 				return fmt.Errorf("--limit must be greater than zero")
 			}
@@ -50,15 +59,18 @@ func (r *Runner) newMobilityCmd() *cobra.Command {
 				return err
 			}
 			items := extractDataList(value)
-			return output.WriteJSON(cmd.OutOrStdout(), map[string]any{
-				"kind":  normalizedKind,
-				"count": len(items),
-				"types": items,
+			return writeMobilityTypesOutput(cmd.OutOrStdout(), mobilityTypesOutput{
+				Kind:   normalizedKind,
+				Count:  len(items),
+				Types:  items,
+				Format: format,
 			})
 		},
 	}
 	typesCmd.Flags().StringVar(&typesKind, "kind", "station", "type kind: station, event, or edge")
 	typesCmd.Flags().IntVar(&typesLimit, "limit", 200, "maximum number of types to request")
+	typesCmd.Flags().StringVar(&typesFormat, "format", "table", "output format: json, table, or markdown")
+	typesCmd.Flags().BoolVar(&typesJSON, "json", false, "shortcut for --format json")
 
 	// origins
 	var originsStationType string
@@ -183,11 +195,18 @@ func (r *Runner) newMobilityCmd() *cobra.Command {
 	var datatypesOrigin string
 	var datatypesLimit int
 	var datatypesParams []string
+	var datatypesFormat string
+	var datatypesJSON bool
 	datatypesCmd := &cobra.Command{
 		Use:   "datatypes",
 		Short: "Summarize Mobility data types",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			applyJSONShortcut(&datatypesFormat, datatypesJSON)
+			format, err := normalizeOutputFormat(datatypesFormat)
+			if err != nil {
+				return err
+			}
 			if strings.TrimSpace(datatypesStationType) == "" {
 				return fmt.Errorf("--station-type is required")
 			}
@@ -216,12 +235,14 @@ func (r *Runner) newMobilityCmd() *cobra.Command {
 			}
 			records := extractDataList(value)
 			summary := summarizeDatatypes(records, datatypesOrigin)
-			return output.WriteJSON(cmd.OutOrStdout(), map[string]any{
-				"station_type": datatypesStationType,
-				"origin":       strings.TrimSpace(datatypesOrigin),
-				"record_count": len(records),
-				"count":        len(summary),
-				"datatypes":    summary,
+			return writeMobilityDatatypesOutput(cmd.OutOrStdout(), mobilityDatatypesOutput{
+				StationType: datatypesStationType,
+				Origin:      strings.TrimSpace(datatypesOrigin),
+				RecordCount: len(records),
+				Count:       len(summary),
+				Datatypes:   summary,
+				Warnings:    mobilityDatatypeDiscoveryWarnings(datatypesStationType, summary),
+				Format:      format,
 			})
 		},
 	}
@@ -230,6 +251,8 @@ func (r *Runner) newMobilityCmd() *cobra.Command {
 	datatypesCmd.Flags().StringVar(&datatypesOrigin, "origin", "", "optional sorigin filter, for example A22")
 	datatypesCmd.Flags().IntVar(&datatypesLimit, "limit", 1000, "maximum station/datatype records to inspect")
 	datatypesCmd.Flags().StringSliceVar(&datatypesParams, "param", nil, "additional query parameter as key=value; repeatable")
+	datatypesCmd.Flags().StringVar(&datatypesFormat, "format", "table", "output format: json, table, or markdown")
+	datatypesCmd.Flags().BoolVar(&datatypesJSON, "json", false, "shortcut for --format json")
 
 	// events
 	var eventsOrigin string
@@ -299,11 +322,18 @@ func (r *Runner) newMobilityCmd() *cobra.Command {
 	var latestSortMode string
 	var latestWhere string
 	var latestParams []string
+	var latestFormat string
+	var latestJSON bool
 	latestCmd := &cobra.Command{
 		Use:   "latest",
 		Short: "Query latest Mobility time-series measurements",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			applyJSONShortcut(&latestFormat, latestJSON)
+			format, err := normalizeOutputFormat(latestFormat)
+			if err != nil {
+				return err
+			}
 			if strings.TrimSpace(latestStationType) == "" {
 				return fmt.Errorf("--station-type is required")
 			}
@@ -358,12 +388,16 @@ func (r *Runner) newMobilityCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if localProcessing {
+			if localProcessing || format != "json" {
 				value, err := r.fetchJSONValue(cmd.Context(), requestURL)
 				if err != nil {
 					return err
 				}
 				records := extractDataList(value)
+				resultRequestLimit := 0
+				if localProcessing {
+					resultRequestLimit = upstreamLimit
+				}
 				result := filterMobilityLatest(records, mobilityLatestFilter{
 					StationType:   latestStationType,
 					DataType:      latestDataType,
@@ -373,11 +407,11 @@ func (r *Runner) newMobilityCmd() *cobra.Command {
 					FreshDuration: freshDuration,
 					Sort:          sortModeValue,
 					Limit:         latestLimit,
-					RequestLimit:  upstreamLimit,
+					RequestLimit:  resultRequestLimit,
 					Endpoint:      requestURL,
 					Now:           time.Now(),
 				})
-				return output.WriteJSON(cmd.OutOrStdout(), result)
+				return writeMobilityLatestOutput(cmd.OutOrStdout(), result, format)
 			}
 			return r.fetchJSONCobra(cmd.Context(), requestURL, cmd.OutOrStdout())
 		},
@@ -394,6 +428,8 @@ func (r *Runner) newMobilityCmd() *cobra.Command {
 	latestCmd.Flags().StringVar(&latestSortMode, "sort", "upstream", "local sort: upstream, newest, oldest, or station")
 	latestCmd.Flags().StringVar(&latestWhere, "where", "", "Open Data Hub where filter")
 	latestCmd.Flags().StringSliceVar(&latestParams, "param", nil, "additional query parameter as key=value; repeatable")
+	latestCmd.Flags().StringVar(&latestFormat, "format", "json", "output format: json, table, or markdown")
+	latestCmd.Flags().BoolVar(&latestJSON, "json", false, "shortcut for --format json")
 
 	cmd.AddCommand(typesCmd)
 	cmd.AddCommand(originsCmd)
@@ -412,11 +448,19 @@ func (r *Runner) newA22Cmd() *cobra.Command {
 	}
 
 	var statusLimit int
+	var statusFormat string
+	var statusJSON bool
+	var statusRaw bool
 	statusCmd := &cobra.Command{
 		Use:   "status",
 		Short: "Check A22 status",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			applyJSONShortcut(&statusFormat, statusJSON)
+			format, err := normalizeOutputFormat(statusFormat)
+			if err != nil {
+				return err
+			}
 			if statusLimit < 1 {
 				return fmt.Errorf("--limit must be greater than zero")
 			}
@@ -442,23 +486,29 @@ func (r *Runner) newA22Cmd() *cobra.Command {
 				}
 			}
 
-			return output.WriteJSON(cmd.OutOrStdout(), map[string]any{
-				"source": "Open Data Hub Mobility API",
-				"events": map[string]any{
-					"endpoint": eventsURL,
-					"count":    len(events),
-					"items":    events,
+			return writeA22StatusOutput(cmd.OutOrStdout(), a22StatusOutput{
+				Source: "Open Data Hub Mobility API",
+				Events: a22FeedOutput{
+					Endpoint: eventsURL,
+					Count:    len(events),
+					Summary:  summarizeA22Records(events),
+					Items:    rawItemsWhen(statusRaw, events),
 				},
-				"forecast": map[string]any{
-					"endpoint": forecastsURL,
-					"count":    len(forecasts),
-					"items":    forecasts,
+				Forecast: a22FeedOutput{
+					Endpoint: forecastsURL,
+					Count:    len(forecasts),
+					Summary:  summarizeA22Records(forecasts),
+					Items:    rawItemsWhen(statusRaw, forecasts),
 				},
-				"warnings": warnings,
+				Warnings: warnings,
+				Format:   format,
 			})
 		},
 	}
 	statusCmd.Flags().IntVar(&statusLimit, "limit", 20, "maximum records to request from each A22 feed")
+	statusCmd.Flags().StringVar(&statusFormat, "format", "table", "output format: json, table, or markdown")
+	statusCmd.Flags().BoolVar(&statusJSON, "json", false, "shortcut for --format json")
+	statusCmd.Flags().BoolVar(&statusRaw, "raw", false, "include raw upstream event and forecast rows in JSON output")
 
 	cmd.AddCommand(statusCmd)
 	return cmd
@@ -517,6 +567,252 @@ type mobilityLatestResult struct {
 	Count        int              `json:"count"`
 	Measurements []map[string]any `json:"measurements"`
 	Warnings     []string         `json:"warnings,omitempty"`
+}
+
+type mobilityTypesOutput struct {
+	Kind   string           `json:"kind"`
+	Count  int              `json:"count"`
+	Types  []map[string]any `json:"types"`
+	Format string           `json:"-"`
+}
+
+type mobilityDatatypesOutput struct {
+	StationType string            `json:"station_type"`
+	Origin      string            `json:"origin,omitempty"`
+	RecordCount int               `json:"record_count"`
+	Count       int               `json:"count"`
+	Datatypes   []datatypeSummary `json:"datatypes"`
+	Warnings    []string          `json:"warnings,omitempty"`
+	Format      string            `json:"-"`
+}
+
+type a22RecordSummary struct {
+	Name      string `json:"name,omitempty"`
+	Value     string `json:"value,omitempty"`
+	ValidTime string `json:"valid_time,omitempty"`
+	Timestamp string `json:"timestamp,omitempty"`
+}
+
+type a22FeedOutput struct {
+	Endpoint string             `json:"endpoint"`
+	Count    int                `json:"count"`
+	Summary  []a22RecordSummary `json:"summary,omitempty"`
+	Items    []map[string]any   `json:"items,omitempty"`
+}
+
+type a22StatusOutput struct {
+	Source   string        `json:"source"`
+	Events   a22FeedOutput `json:"events"`
+	Forecast a22FeedOutput `json:"forecast"`
+	Warnings []string      `json:"warnings,omitempty"`
+	Format   string        `json:"-"`
+}
+
+func writeA22StatusOutput(stdout io.Writer, result a22StatusOutput) error {
+	switch result.Format {
+	case "", "json":
+		return output.WriteJSON(stdout, result)
+	case "table":
+		tw := tabwriter.NewWriter(stdout, 0, 0, 2, ' ', 0)
+		fmt.Fprintln(tw, "FEED\tNAME\tVALUE\tVALID_TIME")
+		if len(result.Events.Summary) == 0 {
+			fmt.Fprintln(tw, "events\t-\tno current events\t-")
+		}
+		for _, item := range result.Events.Summary {
+			fmt.Fprintf(tw, "events\t%s\t%s\t%s\n", item.Name, item.Value, item.ValidTime)
+		}
+		for _, item := range result.Forecast.Summary {
+			fmt.Fprintf(tw, "forecast\t%s\t%s\t%s\n", item.Name, item.Value, item.ValidTime)
+		}
+		if err := tw.Flush(); err != nil {
+			return err
+		}
+		writePlainWarnings(stdout, result.Warnings)
+		return nil
+	case "markdown":
+		fmt.Fprintln(stdout, "| feed | name | value | valid_time |")
+		fmt.Fprintln(stdout, "| --- | --- | --- | --- |")
+		if len(result.Events.Summary) == 0 {
+			fmt.Fprintln(stdout, "| events | - | no current events | - |")
+		}
+		for _, item := range result.Events.Summary {
+			fmt.Fprintf(stdout, "| events | %s | %s | %s |\n",
+				escapeMarkdown(item.Name),
+				escapeMarkdown(item.Value),
+				escapeMarkdown(item.ValidTime),
+			)
+		}
+		for _, item := range result.Forecast.Summary {
+			fmt.Fprintf(stdout, "| forecast | %s | %s | %s |\n",
+				escapeMarkdown(item.Name),
+				escapeMarkdown(item.Value),
+				escapeMarkdown(item.ValidTime),
+			)
+		}
+		writeMarkdownWarnings(stdout, result.Warnings)
+		return nil
+	default:
+		return fmt.Errorf("unsupported format %q", result.Format)
+	}
+}
+
+func summarizeA22Records(records []map[string]any) []a22RecordSummary {
+	summaries := make([]a22RecordSummary, 0, len(records))
+	for _, record := range records {
+		summaries = append(summaries, a22RecordSummary{
+			Name:      firstNonEmpty(asString(record["sname"]), asString(record["scode"])),
+			Value:     anyToString(record["mvalue"]),
+			ValidTime: asString(record["mvalidtime"]),
+			Timestamp: asString(record["_timestamp"]),
+		})
+	}
+	return summaries
+}
+
+func rawItemsWhen(enabled bool, records []map[string]any) []map[string]any {
+	if !enabled {
+		return nil
+	}
+	return records
+}
+
+func writeMobilityTypesOutput(stdout io.Writer, result mobilityTypesOutput) error {
+	switch result.Format {
+	case "", "json":
+		return output.WriteJSON(stdout, result)
+	case "table":
+		tw := tabwriter.NewWriter(stdout, 0, 0, 2, ' ', 0)
+		fmt.Fprintln(tw, "ID\tDESCRIPTION")
+		for _, item := range result.Types {
+			fmt.Fprintf(tw, "%s\t%s\n", asString(item["id"]), compactText(asString(item["description"]), 80))
+		}
+		return tw.Flush()
+	case "markdown":
+		fmt.Fprintln(stdout, "| id | description |")
+		fmt.Fprintln(stdout, "| --- | --- |")
+		for _, item := range result.Types {
+			fmt.Fprintf(stdout, "| %s | %s |\n",
+				escapeMarkdown(asString(item["id"])),
+				escapeMarkdown(compactText(asString(item["description"]), 80)),
+			)
+		}
+		return nil
+	default:
+		return fmt.Errorf("unsupported format %q", result.Format)
+	}
+}
+
+func writeMobilityDatatypesOutput(stdout io.Writer, result mobilityDatatypesOutput) error {
+	switch result.Format {
+	case "", "json":
+		return output.WriteJSON(stdout, result)
+	case "table":
+		tw := tabwriter.NewWriter(stdout, 0, 0, 2, ' ', 0)
+		fmt.Fprintln(tw, "NAME\tDESCRIPTION\tUNIT\tSTATIONS\tORIGINS")
+		for _, item := range result.Datatypes {
+			fmt.Fprintf(tw, "%s\t%s\t%s\t%d\t%s\n",
+				item.Name,
+				compactText(item.Description, 72),
+				item.Unit,
+				item.StationCount,
+				compactText(strings.Join(item.Origins, ","), 72),
+			)
+		}
+		if err := tw.Flush(); err != nil {
+			return err
+		}
+		writePlainWarnings(stdout, result.Warnings)
+		return nil
+	case "markdown":
+		fmt.Fprintln(stdout, "| name | description | unit | stations | origins |")
+		fmt.Fprintln(stdout, "| --- | --- | --- | --- | --- |")
+		for _, item := range result.Datatypes {
+			fmt.Fprintf(stdout, "| %s | %s | %s | %d | %s |\n",
+				escapeMarkdown(item.Name),
+				escapeMarkdown(compactText(item.Description, 72)),
+				escapeMarkdown(item.Unit),
+				item.StationCount,
+				escapeMarkdown(compactText(strings.Join(item.Origins, ", "), 72)),
+			)
+		}
+		writeMarkdownWarnings(stdout, result.Warnings)
+		return nil
+	default:
+		return fmt.Errorf("unsupported format %q", result.Format)
+	}
+}
+
+func writeMobilityLatestOutput(stdout io.Writer, result mobilityLatestResult, format string) error {
+	switch format {
+	case "", "json":
+		return output.WriteJSON(stdout, result)
+	case "table":
+		tw := tabwriter.NewWriter(stdout, 0, 0, 2, ' ', 0)
+		fmt.Fprintln(tw, "STATION\tVALUE\tVALID_TIME\tORIGIN\tACTIVE")
+		for _, record := range result.Measurements {
+			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%t\n",
+				firstNonEmpty(asString(record["sname"]), asString(record["scode"])),
+				compactText(anyToString(record["mvalue"]), 40),
+				firstNonEmpty(asString(record["mvalidtime"]), asString(record["_timestamp"])),
+				asString(record["sorigin"]),
+				asBool(record["sactive"]),
+			)
+		}
+		if err := tw.Flush(); err != nil {
+			return err
+		}
+		writePlainWarnings(stdout, result.Warnings)
+		return nil
+	case "markdown":
+		fmt.Fprintln(stdout, "| station | value | valid_time | origin | active |")
+		fmt.Fprintln(stdout, "| --- | --- | --- | --- | --- |")
+		for _, record := range result.Measurements {
+			fmt.Fprintf(stdout, "| %s | %s | %s | %s | %t |\n",
+				escapeMarkdown(firstNonEmpty(asString(record["sname"]), asString(record["scode"]))),
+				escapeMarkdown(compactText(anyToString(record["mvalue"]), 40)),
+				escapeMarkdown(firstNonEmpty(asString(record["mvalidtime"]), asString(record["_timestamp"]))),
+				escapeMarkdown(asString(record["sorigin"])),
+				asBool(record["sactive"]),
+			)
+		}
+		writeMarkdownWarnings(stdout, result.Warnings)
+		return nil
+	default:
+		return fmt.Errorf("unsupported format %q", format)
+	}
+}
+
+func mobilityDatatypeDiscoveryWarnings(stationType string, summaries []datatypeSummary) []string {
+	if len(summaries) > 0 {
+		return nil
+	}
+	return []string{fmt.Sprintf("no datatype rows matched; inspect raw station records with odh mobility stations --station-type %s --limit 5 --json", strings.TrimSpace(stationType))}
+}
+
+func mobilityLatestDatatypeHints(stationType, dataType string) []string {
+	stationType = strings.ToLower(strings.TrimSpace(stationType))
+	dataType = strings.ToLower(strings.TrimSpace(dataType))
+	switch {
+	case stationType == "parkingstation" && (dataType == "number-free" || dataType == "number-available" || dataType == "free-slots" || dataType == "available"):
+		return []string{`ParkingStation current availability is usually data type "free"; discover valid names with odh mobility datatypes --station-type ParkingStation --format table`}
+	case stationType == "echargingstation" && (dataType == "free" || dataType == "available"):
+		return []string{`EChargingStation availability is usually data type "number-available"; discover valid names with odh mobility datatypes --station-type EChargingStation --format table`}
+	default:
+		return nil
+	}
+}
+
+func anyToString(value any) string {
+	switch typed := value.(type) {
+	case nil:
+		return ""
+	case string:
+		return typed
+	case fmt.Stringer:
+		return typed.String()
+	default:
+		return fmt.Sprintf("%v", typed)
+	}
 }
 
 func summarizeDatatypes(records []map[string]any, originFilter string) []datatypeSummary {
@@ -619,6 +915,9 @@ func filterMobilityLatest(records []map[string]any, filter mobilityLatestFilter)
 	}
 	if len(matched) == 0 && len(warnings) > 0 {
 		warnings = append(warnings, "local filters matched no rows from the inspected upstream response")
+	}
+	if len(matched) == 0 {
+		warnings = append(warnings, mobilityLatestDatatypeHints(filter.StationType, filter.DataType)...)
 	}
 	return mobilityLatestResult{
 		StationType:  filter.StationType,

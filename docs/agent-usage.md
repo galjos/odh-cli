@@ -15,10 +15,11 @@ SPDX-License-Identifier: CC0-1.0
 - Return nonzero exit codes on errors.
 - Treat exit code `2` as a bad invocation and exit code `1` as a runtime failure.
 - Do not prompt interactively.
-- Emit JSON by default, except `odh traffic` which defaults to table output and supports `--json`.
+- Support JSON on data commands through `--json` or `--format json`.
+- Default to compact table output for curated answer/discovery commands where raw JSON is usually too noisy: `odh traffic`, `odh a22 status`, `odh transit stops/departures/trip/delay-stats`, `odh tourism types`, and `odh mobility types` / `odh mobility datatypes`.
 - Keep examples public and unauthenticated.
 
-This means agents can call `odh`, parse stdout as JSON, and treat stderr plus exit code as failure context.
+This means agents can call `odh`, add `--json` when they need to parse stdout structurally, and treat stderr plus exit code as failure context.
 
 Some discovery responses are cached locally for 24 hours to keep repeated agent loops fast. This cache is limited to static-ish metadata such as OpenAPI specs, Tourism taxonomy values, and Mobility type/origin/station/datatype discovery. Do not assume current-data commands are cached: latest measurements, traffic events, diagnostics, and GTFS-RT should be treated as fresh upstream calls unless a command documents an explicit cache.
 
@@ -33,11 +34,13 @@ odh apis
 odh datasets search parking
 odh openapi mobility
 odh tourism types --dataset event --limit 10
+odh tourism types --dataset event --limit 10 --json
 odh tourism poi --limit 1 --seed 42 --fields Detail.en.Title,GpsInfo
 odh mobility types --kind event
 odh mobility origins --station-type TrafficSensor
 odh mobility stations --station-type ParkingStation --limit 5
 odh mobility datatypes --station-type TrafficSensor --origin A22 --limit 100
+odh mobility datatypes --station-type TrafficSensor --origin A22 --limit 100 --json
 odh mobility events --origin A22 --latest --limit 20
 odh gtfs datasets
 odh gtfs realtime --dataset sta-time-tables --feed trip-updates --limit 5
@@ -48,7 +51,7 @@ odh transit delay-stats --from auer --to brenner --time 14:05 --weekday saturday
 odh traffic today --area ueberetsch-unterland --type roadworks --format table
 odh traffic events --area bozen-unterland --from 2026-05-16 --to 2026-05-16 --json
 odh traffic today --near 46.42,11.25 --radius 15km --json
-odh mobility latest --station-type EChargingStation --data-type number-available --origin ALPERIA --active --fresh-within 24h --sort newest --request-limit 1000 --limit 5
+odh mobility latest --station-type EChargingStation --data-type number-available --origin ALPERIA --active --fresh-within 24h --sort newest --request-limit 1000 --limit 5 --format table
 odh diagnostics ev-charging --origin ALPERIA --fresh-within 24h
 odh diagnostics parking-forecasts --origin "Municipality Merano" --fresh-within 2h
 odh diagnostics tourism-events --date 2026-05-18
@@ -96,10 +99,10 @@ Use discovery first, then filtered latest measurements:
 ```bash
 odh mobility origins --station-type EChargingStation --limit 1000
 odh mobility datatypes --station-type EChargingStation --origin ALPERIA --limit 1000
-odh mobility latest --station-type EChargingStation --data-type number-available --origin ALPERIA --active --fresh-within 24h --sort newest --request-limit 1000 --limit 10
+odh mobility latest --station-type EChargingStation --data-type number-available --origin ALPERIA --active --fresh-within 24h --sort newest --request-limit 1000 --limit 10 --format table
 ```
 
-The filtered `mobility latest` output wraps measurements with `raw_count`, `count`, and `warnings`. Report warnings when filters hide stale or inactive rows, and increase `--request-limit` when a question needs broader coverage than the inspected upstream rows.
+The filtered `mobility latest` JSON output wraps measurements with `raw_count`, `count`, and `warnings`; the table/markdown output shows station, value, valid time, origin, and warnings. Report warnings when filters hide stale or inactive rows, and increase `--request-limit` when a question needs broader coverage than the inspected upstream rows. If a common datatype guess is wrong, for example `ParkingStation/number-free`, the CLI may print a hint such as using `free`.
 
 ## Data Quality Diagnostics
 
@@ -136,6 +139,8 @@ odh transit trip --from-stop-id <origin-stop-id> --to-stop-id <destination-stop-
 ```
 
 The transit layer reads the static STA GTFS archive and caches it locally for 24 hours. A cold cache download can be large, so transit commands allow a longer archive-download timeout than normal API calls. Stop search supports common German/Italian aliases such as `auer` / `ora`, `brenner` / `brennero`, and `bozen` / `bolzano`.
+
+Transit commands default to compact table output. Add `--json` when you need `matched_stops`, `from_stops`, `to_stops`, `archive`, or exact match-mode fields as structured data.
 
 If `transit departures` or `transit trip` returns a warning that a stop query matched many stops, narrow the stop wording with `odh transit stops search <query> --limit 5` and rerun with the returned `stop_id`: `--stop-id` for departures, or `--from-stop-id` / `--to-stop-id` for trip matching. Parent station IDs are valid and expand to their child platform stops. This is the preferred agent pattern for ambiguous station names such as Merano or Bolzano.
 
@@ -175,7 +180,7 @@ Use `odh traffic search <text>` for towns, roads, place names, and natural-langu
 
 If a user needs an exact public traffic bulletin, compare the Open Data Hub result with the official traffic service outside this CLI and state both the source and timestamp used. Do not imply that `odh traffic` silently switched to another upstream feed.
 
-Agents should not infer live A22 traffic solely from `TrafficForecast` rows. Prefer `odh a22 status` when checking A22 because it reports current-event availability and warns when forecast timestamps indicate non-current data.
+Agents should not infer live A22 traffic solely from `TrafficForecast` rows. Prefer `odh a22 status` when checking A22 because it reports current-event availability and warns when forecast timestamps indicate non-current data. It defaults to a compact table; add `--json --raw` when raw upstream rows are needed.
 
 If the user asks for current traffic conditions, report the timestamp and feed type used. If Open Data Hub has no current A22 event rows, say that directly instead of converting forecast rows into live incidents.
 

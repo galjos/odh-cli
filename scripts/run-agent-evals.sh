@@ -77,7 +77,7 @@ assert_json_filter "traffic search keeps ODH caveat visible" "$tmpdir/traffic-ba
 run_odh mobility origins --station-type TrafficSensor --limit 1000 >"$tmpdir/traffic-sensor-origins.json"
 assert_json_filter "mobility origins discovers A22 traffic sensors" "$tmpdir/traffic-sensor-origins.json" '.origins[] | select(.name == "A22" and .station_count > 0)'
 
-run_odh mobility datatypes --station-type TrafficSensor --origin A22 --limit 1000 >"$tmpdir/a22-datatypes.json"
+run_odh mobility datatypes --station-type TrafficSensor --origin A22 --limit 1000 --json >"$tmpdir/a22-datatypes.json"
 assert_json_filter "mobility datatypes summarizes A22 measurements" "$tmpdir/a22-datatypes.json" '.origin == "A22" and .count > 0 and (.datatypes | length > 0)'
 
 run_odh mobility latest --station-type EChargingStation --data-type number-available --origin ALPERIA --active --fresh-within 24h --sort newest --request-limit 1000 --limit 5 >"$tmpdir/ev-availability.json"
@@ -92,20 +92,20 @@ assert_json_filter "diagnostics separates current parking from stale forecasts" 
 run_odh diagnostics tourism-events --limit 5 >"$tmpdir/tourism-event-diagnostics.json"
 assert_json_filter "diagnostics reports tourism event caveats" "$tmpdir/tourism-event-diagnostics.json" '.domain == "tourism-events" and (.verdict | type == "string") and (.events | type == "array") and (.warnings | type == "array")'
 
-run_odh a22 status --limit 5 >"$tmpdir/a22-status.json"
+run_odh a22 status --limit 5 --json >"$tmpdir/a22-status.json"
 assert_json_filter "a22 status separates events and forecast feeds" "$tmpdir/a22-status.json" '.events.count >= 0 and .forecast.count >= 0 and (.warnings | type == "array")'
 
-run_odh transit delay-stats --from auer --to brenner --time 14:05 --weekday saturday >"$tmpdir/delay-stats.json"
+run_odh transit delay-stats --from auer --to brenner --time 14:05 --weekday saturday --json >"$tmpdir/delay-stats.json"
 assert_json_filter "transit delay-stats reports historical archive limitation" "$tmpdir/delay-stats.json" '.supported == false and (.reason | test("historical|archive|GTFS-RT"))'
 
-run_odh transit stops search auer --limit 1 >"$tmpdir/transit-stops.json"
+run_odh transit stops search auer --limit 1 --json >"$tmpdir/transit-stops.json"
 transit_stop_id="$(jq -r '.stops[0].id // ""' "$tmpdir/transit-stops.json")"
 if [ -z "$transit_stop_id" ]; then
   echo "not ok - transit stop search returned no stop id" >&2
   sed -n '1,120p' "$tmpdir/transit-stops.json" >&2
   exit 1
 fi
-run_odh transit departures --stop-id "$transit_stop_id" --date 2026-05-16 --around 14:05 --window 5m --mode train --limit 5 >"$tmpdir/transit-departures-by-id.json"
+run_odh transit departures --stop-id "$transit_stop_id" --date 2026-05-16 --around 14:05 --window 5m --mode train --limit 5 --json >"$tmpdir/transit-departures-by-id.json"
 assert_json_filter "transit departures supports exact stop ids" "$tmpdir/transit-departures-by-id.json" '(.stop_match_mode == "stop-id" or .stop_match_mode == "parent-station") and (.stop_id | length > 0) and (.matched_stops | length >= 1) and (.departures | type == "array")'
 
 printf '\nAgent eval smoke checks passed. Use evals/agent/tasks.json for manual agent scoring.\n'

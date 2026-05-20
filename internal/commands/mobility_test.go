@@ -173,7 +173,7 @@ func TestRunnerWithMock(t *testing.T) {
 	runner.Client = runner.Client.WithTransport(transport)
 
 	var stdout, stderr strings.Builder
-	args := []string{"mobility", "datatypes", "--station-type", "Any"}
+	args := []string{"mobility", "datatypes", "--station-type", "Any", "--json"}
 	code := runner.Run(context.Background(), args, &stdout, &stderr)
 
 	if code != 0 {

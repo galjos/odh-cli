@@ -6,7 +6,7 @@ SPDX-License-Identifier: CC0-1.0
 
 # odh-cli
 
-`odh` is an unofficial JSON-first command-line interface for public Open Data Hub APIs.
+`odh` is an unofficial command-line interface for public Open Data Hub APIs, with compact human output for curated workflows and JSON output for scripts and agents.
 
 It is built for developers, scripts, demos, and AI agents that need stable command behavior instead of scraping web UI pages. It wraps known Open Data Hub API entrypoints, fetches OpenAPI specs, and provides small curated commands for common Tourism and Mobility API calls, including an opinionated traffic layer over Open Data Hub `PROVINCE_BZ` events.
 
@@ -61,7 +61,7 @@ The installer detects macOS/Linux and `amd64`/`arm64`, downloads the matching re
 Install a specific version or directory:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/galjos/odh-cli/main/scripts/install.sh | sh -s -- --version v0.1.9 --dir "$HOME/bin"
+curl -fsSL https://raw.githubusercontent.com/galjos/odh-cli/main/scripts/install.sh | sh -s -- --version v0.1.10 --dir "$HOME/bin"
 ```
 
 Build from source instead:
@@ -80,7 +80,7 @@ Build with release metadata:
 
 ```bash
 go build \
-  -ldflags "-X github.com/galjos/odh-cli/internal/version.Version=0.1.9 -X github.com/galjos/odh-cli/internal/version.Commit=$(git rev-parse --short HEAD) -X github.com/galjos/odh-cli/internal/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  -ldflags "-X github.com/galjos/odh-cli/internal/version.Version=0.1.10 -X github.com/galjos/odh-cli/internal/version.Commit=$(git rev-parse --short HEAD) -X github.com/galjos/odh-cli/internal/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   -o odh ./cmd/odh
 ```
 
@@ -136,6 +136,7 @@ Discover Tourism event taxonomy values:
 
 ```bash
 odh tourism types --dataset event --limit 10
+odh tourism types --dataset event --limit 10 --json
 ```
 
 Use the curated Mobility latest-measurements command:
@@ -149,7 +150,8 @@ odh mobility latest \
   --fresh-within 24h \
   --sort newest \
   --request-limit 1000 \
-  --limit 5
+  --limit 5 \
+  --format table
 ```
 
 Check whether a data area is currently reliable enough to answer from:
@@ -180,6 +182,7 @@ Search public-transport stops and check timetable data:
 odh transit stops search auer
 odh transit departures --stop "Ora, Stazione di Ora" --date 2026-05-16 --around 14:05
 odh transit trip --from auer --to brenner --date 2026-05-16 --time 14:05 --mode train
+odh transit trip --from auer --to brenner --date 2026-05-16 --time 14:05 --mode train --json
 odh transit departures --stop-id <stop_id-from-search> --date 2026-05-16 --around 14:05 --mode train
 odh transit trip --from-stop-id <origin-stop-id> --to-stop-id <destination-stop-id> --date 2026-05-16 --time 14:05 --mode train
 odh transit delay-stats --from auer --to brenner --time 14:05 --weekday saturday
@@ -213,6 +216,7 @@ odh mobility datatypes \
   --station-type TrafficSensor \
   --origin A22 \
   --limit 100
+odh mobility datatypes --station-type TrafficSensor --origin A22 --limit 100 --json
 ```
 
 Check the A22-specific diagnostic output:
@@ -225,9 +229,9 @@ odh a22 status --limit 10
 
 `odh` is designed to be script and agent friendly:
 
-- stdout is machine-readable output,
-- JSON is the default output for data commands,
-- `odh traffic` defaults to table output for human road-event summaries; pass `--json` for agent parsing,
+- stdout is command output,
+- JSON is available on data commands through `--json` or `--format json`,
+- curated answer/discovery commands such as `traffic`, `a22 status`, `transit`, `tourism types`, and `mobility types`/`datatypes` default to compact table output,
 - stderr is for diagnostics,
 - failures return nonzero exit codes,
 - commands are non-interactive,

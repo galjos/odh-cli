@@ -16,6 +16,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"text/tabwriter"
 	"time"
 
 	"github.com/galjos/odh-cli/internal/output"
@@ -125,11 +126,18 @@ func (r *Runner) newTransitCmd() *cobra.Command {
 	var searchLimit int
 	var searchCacheDir string
 	var searchRefresh bool
+	var searchFormat string
+	var searchJSON bool
 	searchCmd := &cobra.Command{
 		Use:   "search <query>",
 		Short: "Search GTFS stops by name",
 		Args:  cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			applyJSONShortcut(&searchFormat, searchJSON)
+			format, err := normalizeOutputFormat(searchFormat)
+			if err != nil {
+				return err
+			}
 			if searchLimit < 1 {
 				return fmt.Errorf("--limit must be greater than zero")
 			}
@@ -143,12 +151,13 @@ func (r *Runner) newTransitCmd() *cobra.Command {
 				return err
 			}
 			matches := searchGTFSStops(stops, query, searchLimit)
-			return output.WriteJSON(cmd.OutOrStdout(), map[string]any{
-				"dataset": searchDataset,
-				"query":   query,
-				"archive": archive,
-				"count":   len(matches),
-				"stops":   matches,
+			return writeTransitStopsSearchOutput(cmd.OutOrStdout(), transitStopsSearchOutput{
+				Dataset: searchDataset,
+				Query:   query,
+				Archive: archive,
+				Count:   len(matches),
+				Stops:   matches,
+				Format:  format,
 			})
 		},
 	}
@@ -156,6 +165,8 @@ func (r *Runner) newTransitCmd() *cobra.Command {
 	searchCmd.Flags().IntVar(&searchLimit, "limit", 20, "maximum stops to return")
 	searchCmd.Flags().StringVar(&searchCacheDir, "cache-dir", "", "directory for cached GTFS archives")
 	searchCmd.Flags().BoolVar(&searchRefresh, "refresh", false, "refresh cached GTFS archive")
+	searchCmd.Flags().StringVar(&searchFormat, "format", "table", "output format: json, table, or markdown")
+	searchCmd.Flags().BoolVar(&searchJSON, "json", false, "shortcut for --format json")
 	stopsCmd.AddCommand(searchCmd)
 
 	// departures
@@ -169,11 +180,18 @@ func (r *Runner) newTransitCmd() *cobra.Command {
 	var depLimit int
 	var depCacheDir string
 	var depRefresh bool
+	var depFormat string
+	var depJSON bool
 	departuresCmd := &cobra.Command{
 		Use:   "departures",
 		Short: "List departures from a stop",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			applyJSONShortcut(&depFormat, depJSON)
+			format, err := normalizeOutputFormat(depFormat)
+			if err != nil {
+				return err
+			}
 			selector := transitStopSelector{Query: depStopQuery, ID: depStopID}
 			if err := selector.validate("stop", "stop-id"); err != nil {
 				return err
@@ -198,20 +216,21 @@ func (r *Runner) newTransitCmd() *cobra.Command {
 				return err
 			}
 			warnings := appendTransitStopMatchWarning(nil, "stop", "stop-id", selector, result.StopMatchMode, len(result.Stops))
-			return output.WriteJSON(cmd.OutOrStdout(), map[string]any{
-				"dataset":         depDataset,
-				"stop_query":      depStopQuery,
-				"stop_id":         depStopID,
-				"stop_match_mode": result.StopMatchMode,
-				"date":            query.Date.Format("2006-01-02"),
-				"around":          query.AroundText,
-				"window":          query.Window.String(),
-				"mode":            normalizeTransitModeName(depMode),
-				"archive":         archive,
-				"matched_stops":   result.Stops,
-				"count":           len(result.Departures),
-				"departures":      result.Departures,
-				"warnings":        warnings,
+			return writeTransitDeparturesOutput(cmd.OutOrStdout(), transitDeparturesOutput{
+				Dataset:       depDataset,
+				StopQuery:     depStopQuery,
+				StopID:        depStopID,
+				StopMatchMode: result.StopMatchMode,
+				Date:          query.Date.Format("2006-01-02"),
+				Around:        query.AroundText,
+				Window:        query.Window.String(),
+				Mode:          normalizeTransitModeName(depMode),
+				Archive:       archive,
+				MatchedStops:  result.Stops,
+				Count:         len(result.Departures),
+				Departures:    result.Departures,
+				Warnings:      warnings,
+				Format:        format,
 			})
 		},
 	}
@@ -225,6 +244,8 @@ func (r *Runner) newTransitCmd() *cobra.Command {
 	departuresCmd.Flags().IntVar(&depLimit, "limit", 20, "maximum departures to return")
 	departuresCmd.Flags().StringVar(&depCacheDir, "cache-dir", "", "directory for cached GTFS archives")
 	departuresCmd.Flags().BoolVar(&depRefresh, "refresh", false, "refresh cached GTFS archive")
+	departuresCmd.Flags().StringVar(&depFormat, "format", "table", "output format: json, table, or markdown")
+	departuresCmd.Flags().BoolVar(&depJSON, "json", false, "shortcut for --format json")
 
 	// trip
 	var tripDataset string
@@ -239,11 +260,18 @@ func (r *Runner) newTransitCmd() *cobra.Command {
 	var tripLimit int
 	var tripCacheDir string
 	var tripRefresh bool
+	var tripFormat string
+	var tripJSON bool
 	tripCmd := &cobra.Command{
 		Use:   "trip",
 		Short: "Search direct trips between stops",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			applyJSONShortcut(&tripFormat, tripJSON)
+			format, err := normalizeOutputFormat(tripFormat)
+			if err != nil {
+				return err
+			}
 			fromSelector := transitStopSelector{Query: tripFromQuery, ID: tripFromStopID}
 			toSelector := transitStopSelector{Query: tripToQuery, ID: tripToStopID}
 			if err := fromSelector.validate("from", "from-stop-id"); err != nil {
@@ -281,24 +309,25 @@ func (r *Runner) newTransitCmd() *cobra.Command {
 			warnings = appendTransitStopMatchWarning(warnings, "from", "from-stop-id", fromSelector, result.FromMatchMode, len(result.FromStops))
 			warnings = appendTransitStopMatchWarning(warnings, "to", "to-stop-id", toSelector, result.ToMatchMode, len(result.ToStops))
 			warnings = append(warnings, "historical delay probability is not available from the live GTFS API without an archived GTFS-RT snapshot dataset")
-			return output.WriteJSON(cmd.OutOrStdout(), map[string]any{
-				"dataset":         tripDataset,
-				"from_query":      tripFromQuery,
-				"from_stop_id":    tripFromStopID,
-				"from_match_mode": result.FromMatchMode,
-				"to_query":        tripToQuery,
-				"to_stop_id":      tripToStopID,
-				"to_match_mode":   result.ToMatchMode,
-				"date":            query.Date.Format("2006-01-02"),
-				"time":            query.AroundText,
-				"window":          query.Window.String(),
-				"mode":            normalizeTransitModeName(tripMode),
-				"archive":         archive,
-				"from_stops":      result.FromStops,
-				"to_stops":        result.ToStops,
-				"count":           len(result.Matches),
-				"matches":         result.Matches,
-				"warnings":        warnings,
+			return writeTransitTripOutput(cmd.OutOrStdout(), transitTripOutput{
+				Dataset:       tripDataset,
+				FromQuery:     tripFromQuery,
+				FromStopID:    tripFromStopID,
+				FromMatchMode: result.FromMatchMode,
+				ToQuery:       tripToQuery,
+				ToStopID:      tripToStopID,
+				ToMatchMode:   result.ToMatchMode,
+				Date:          query.Date.Format("2006-01-02"),
+				Time:          query.AroundText,
+				Window:        query.Window.String(),
+				Mode:          normalizeTransitModeName(tripMode),
+				Archive:       archive,
+				FromStops:     result.FromStops,
+				ToStops:       result.ToStops,
+				Count:         len(result.Matches),
+				Matches:       result.Matches,
+				Warnings:      warnings,
+				Format:        format,
 			})
 		},
 	}
@@ -314,6 +343,8 @@ func (r *Runner) newTransitCmd() *cobra.Command {
 	tripCmd.Flags().IntVar(&tripLimit, "limit", 20, "maximum direct trip matches to return")
 	tripCmd.Flags().StringVar(&tripCacheDir, "cache-dir", "", "directory for cached GTFS archives")
 	tripCmd.Flags().BoolVar(&tripRefresh, "refresh", false, "refresh cached GTFS archive")
+	tripCmd.Flags().StringVar(&tripFormat, "format", "table", "output format: json, table, or markdown")
+	tripCmd.Flags().BoolVar(&tripJSON, "json", false, "shortcut for --format json")
 
 	// delay-stats
 	var dsFrom string
@@ -321,28 +352,36 @@ func (r *Runner) newTransitCmd() *cobra.Command {
 	var dsTime string
 	var dsWeekday string
 	var dsSince string
+	var dsFormat string
+	var dsJSON bool
 	delayStatsCmd := &cobra.Command{
 		Use:     "delay-stats",
 		Aliases: []string{"delay-probability"},
 		Short:   "Historical delay statistics",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return output.WriteJSON(cmd.OutOrStdout(), map[string]any{
-				"supported": false,
-				"reason":    "Open Data Hub GTFS exposes current static GTFS and live GTFS-RT feeds, but this CLI has no historical GTFS-RT archive to compute probabilities from.",
-				"requested": map[string]string{
+			applyJSONShortcut(&dsFormat, dsJSON)
+			format, err := normalizeOutputFormat(dsFormat)
+			if err != nil {
+				return err
+			}
+			return writeTransitDelayStatsOutput(cmd.OutOrStdout(), transitDelayStatsOutput{
+				Supported: false,
+				Reason:    "Open Data Hub GTFS exposes current static GTFS and live GTFS-RT feeds, but this CLI has no historical GTFS-RT archive to compute probabilities from.",
+				Requested: map[string]string{
 					"from":    strings.TrimSpace(dsFrom),
 					"to":      strings.TrimSpace(depTo),
 					"time":    strings.TrimSpace(dsTime),
 					"weekday": strings.TrimSpace(dsWeekday),
 					"since":   strings.TrimSpace(dsSince),
 				},
-				"available_now": []string{
+				AvailableNow: []string{
 					"odh gtfs realtime --dataset sta-time-tables --feed trip-updates",
 					"odh transit trip --from <stop> --to <stop> --date YYYY-MM-DD --time HH:MM",
 					"odh transit departures --stop <stop> --date YYYY-MM-DD --around HH:MM",
 				},
-				"next_step": "add an explicit archive collector for GTFS-RT trip-updates before reporting delay probability or usual delay minutes",
+				NextStep: "add an explicit archive collector for GTFS-RT trip-updates before reporting delay probability or usual delay minutes",
+				Format:   format,
 			})
 		},
 	}
@@ -351,6 +390,8 @@ func (r *Runner) newTransitCmd() *cobra.Command {
 	delayStatsCmd.Flags().StringVar(&dsTime, "time", "", "origin departure time HH:MM")
 	delayStatsCmd.Flags().StringVar(&dsWeekday, "weekday", "", "weekday filter, for example saturday")
 	delayStatsCmd.Flags().StringVar(&dsSince, "since", "", "archive range, for example 90d")
+	delayStatsCmd.Flags().StringVar(&dsFormat, "format", "table", "output format: json, table, or markdown")
+	delayStatsCmd.Flags().BoolVar(&dsJSON, "json", false, "shortcut for --format json")
 
 	cmd.AddCommand(stopsCmd)
 	cmd.AddCommand(departuresCmd)
@@ -406,6 +447,196 @@ type transitTripResult struct {
 	ToStops       []gtfsStop         `json:"to_stops"`
 	ToMatchMode   string             `json:"to_match_mode"`
 	Matches       []transitTripMatch `json:"matches"`
+}
+
+type transitStopsSearchOutput struct {
+	Dataset string          `json:"dataset"`
+	Query   string          `json:"query"`
+	Archive gtfsArchiveInfo `json:"archive"`
+	Count   int             `json:"count"`
+	Stops   []gtfsStop      `json:"stops"`
+	Format  string          `json:"-"`
+}
+
+type transitDeparturesOutput struct {
+	Dataset       string             `json:"dataset"`
+	StopQuery     string             `json:"stop_query,omitempty"`
+	StopID        string             `json:"stop_id,omitempty"`
+	StopMatchMode string             `json:"stop_match_mode"`
+	Date          string             `json:"date"`
+	Around        string             `json:"around"`
+	Window        string             `json:"window"`
+	Mode          string             `json:"mode"`
+	Archive       gtfsArchiveInfo    `json:"archive"`
+	MatchedStops  []gtfsStop         `json:"matched_stops"`
+	Count         int                `json:"count"`
+	Departures    []transitDeparture `json:"departures"`
+	Warnings      []string           `json:"warnings,omitempty"`
+	Format        string             `json:"-"`
+}
+
+type transitTripOutput struct {
+	Dataset       string             `json:"dataset"`
+	FromQuery     string             `json:"from_query,omitempty"`
+	FromStopID    string             `json:"from_stop_id,omitempty"`
+	FromMatchMode string             `json:"from_match_mode"`
+	ToQuery       string             `json:"to_query,omitempty"`
+	ToStopID      string             `json:"to_stop_id,omitempty"`
+	ToMatchMode   string             `json:"to_match_mode"`
+	Date          string             `json:"date"`
+	Time          string             `json:"time"`
+	Window        string             `json:"window"`
+	Mode          string             `json:"mode"`
+	Archive       gtfsArchiveInfo    `json:"archive"`
+	FromStops     []gtfsStop         `json:"from_stops"`
+	ToStops       []gtfsStop         `json:"to_stops"`
+	Count         int                `json:"count"`
+	Matches       []transitTripMatch `json:"matches"`
+	Warnings      []string           `json:"warnings,omitempty"`
+	Format        string             `json:"-"`
+}
+
+type transitDelayStatsOutput struct {
+	Supported    bool              `json:"supported"`
+	Reason       string            `json:"reason"`
+	Requested    map[string]string `json:"requested"`
+	AvailableNow []string          `json:"available_now"`
+	NextStep     string            `json:"next_step"`
+	Format       string            `json:"-"`
+}
+
+func writeTransitStopsSearchOutput(stdout io.Writer, result transitStopsSearchOutput) error {
+	switch result.Format {
+	case "", "json":
+		return output.WriteJSON(stdout, result)
+	case "table":
+		tw := tabwriter.NewWriter(stdout, 0, 0, 2, ' ', 0)
+		fmt.Fprintln(tw, "STOP_ID\tNAME\tPARENT_STATION\tLAT\tLON")
+		for _, stop := range result.Stops {
+			fmt.Fprintf(tw, "%s\t%s\t%s\t%.6f\t%.6f\n", stop.ID, stop.Name, stop.ParentStation, stop.Lat, stop.Lon)
+		}
+		return tw.Flush()
+	case "markdown":
+		fmt.Fprintln(stdout, "| stop_id | name | parent_station | lat | lon |")
+		fmt.Fprintln(stdout, "| --- | --- | --- | --- | --- |")
+		for _, stop := range result.Stops {
+			fmt.Fprintf(stdout, "| %s | %s | %s | %.6f | %.6f |\n",
+				escapeMarkdown(stop.ID),
+				escapeMarkdown(stop.Name),
+				escapeMarkdown(stop.ParentStation),
+				stop.Lat,
+				stop.Lon,
+			)
+		}
+		return nil
+	default:
+		return fmt.Errorf("unsupported format %q", result.Format)
+	}
+}
+
+func writeTransitDeparturesOutput(stdout io.Writer, result transitDeparturesOutput) error {
+	switch result.Format {
+	case "", "json":
+		return output.WriteJSON(stdout, result)
+	case "table":
+		tw := tabwriter.NewWriter(stdout, 0, 0, 2, ' ', 0)
+		fmt.Fprintln(tw, "TIME\tROUTE\tHEADSIGN\tSTOP\tSTOP_ID\tTRIP_ID")
+		for _, departure := range result.Departures {
+			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\n",
+				departure.DepartureTime,
+				firstNonEmpty(departure.RouteShortName, departure.RouteID),
+				departure.Headsign,
+				departure.StopName,
+				departure.StopID,
+				departure.TripID,
+			)
+		}
+		if err := tw.Flush(); err != nil {
+			return err
+		}
+		writePlainWarnings(stdout, result.Warnings)
+		return nil
+	case "markdown":
+		fmt.Fprintln(stdout, "| time | route | headsign | stop | stop_id | trip_id |")
+		fmt.Fprintln(stdout, "| --- | --- | --- | --- | --- | --- |")
+		for _, departure := range result.Departures {
+			fmt.Fprintf(stdout, "| %s | %s | %s | %s | %s | %s |\n",
+				escapeMarkdown(departure.DepartureTime),
+				escapeMarkdown(firstNonEmpty(departure.RouteShortName, departure.RouteID)),
+				escapeMarkdown(departure.Headsign),
+				escapeMarkdown(departure.StopName),
+				escapeMarkdown(departure.StopID),
+				escapeMarkdown(departure.TripID),
+			)
+		}
+		writeMarkdownWarnings(stdout, result.Warnings)
+		return nil
+	default:
+		return fmt.Errorf("unsupported format %q", result.Format)
+	}
+}
+
+func writeTransitTripOutput(stdout io.Writer, result transitTripOutput) error {
+	switch result.Format {
+	case "", "json":
+		return output.WriteJSON(stdout, result)
+	case "table":
+		tw := tabwriter.NewWriter(stdout, 0, 0, 2, ' ', 0)
+		fmt.Fprintln(tw, "ROUTE\tFROM\tDEPART\tTO\tARRIVE\tHEADSIGN\tTRIP_ID")
+		for _, match := range result.Matches {
+			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
+				firstNonEmpty(match.RouteShortName, match.RouteID),
+				match.From.StopName,
+				match.From.DepartureTime,
+				match.To.StopName,
+				match.To.ArrivalTime,
+				match.Headsign,
+				match.TripID,
+			)
+		}
+		if err := tw.Flush(); err != nil {
+			return err
+		}
+		writePlainWarnings(stdout, result.Warnings)
+		return nil
+	case "markdown":
+		fmt.Fprintln(stdout, "| route | from | depart | to | arrive | headsign | trip_id |")
+		fmt.Fprintln(stdout, "| --- | --- | --- | --- | --- | --- | --- |")
+		for _, match := range result.Matches {
+			fmt.Fprintf(stdout, "| %s | %s | %s | %s | %s | %s | %s |\n",
+				escapeMarkdown(firstNonEmpty(match.RouteShortName, match.RouteID)),
+				escapeMarkdown(match.From.StopName),
+				escapeMarkdown(match.From.DepartureTime),
+				escapeMarkdown(match.To.StopName),
+				escapeMarkdown(match.To.ArrivalTime),
+				escapeMarkdown(match.Headsign),
+				escapeMarkdown(match.TripID),
+			)
+		}
+		writeMarkdownWarnings(stdout, result.Warnings)
+		return nil
+	default:
+		return fmt.Errorf("unsupported format %q", result.Format)
+	}
+}
+
+func writeTransitDelayStatsOutput(stdout io.Writer, result transitDelayStatsOutput) error {
+	switch result.Format {
+	case "", "json":
+		return output.WriteJSON(stdout, result)
+	case "table":
+		fmt.Fprintf(stdout, "supported: %t\n", result.Supported)
+		fmt.Fprintf(stdout, "reason: %s\n", result.Reason)
+		fmt.Fprintf(stdout, "next_step: %s\n", result.NextStep)
+		return nil
+	case "markdown":
+		fmt.Fprintf(stdout, "- supported: `%t`\n", result.Supported)
+		fmt.Fprintf(stdout, "- reason: %s\n", escapeMarkdown(result.Reason))
+		fmt.Fprintf(stdout, "- next_step: %s\n", escapeMarkdown(result.NextStep))
+		return nil
+	default:
+		return fmt.Errorf("unsupported format %q", result.Format)
+	}
 }
 
 func (r *Runner) fetchGTFSArchive(ctx context.Context, dataset, cacheDir string, refresh bool) (gtfsArchiveInfo, error) {

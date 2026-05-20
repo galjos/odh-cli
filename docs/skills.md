@@ -16,7 +16,7 @@ The skill should stay focused on runtime behavior:
 
 - prefer `odh` commands over browser scraping,
 - run `odh doctor` before relying on upstream data,
-- parse stdout as JSON, with `--json` for traffic commands,
+- parse stdout as JSON only after adding `--json` or `--format json` to commands that default to compact table output,
 - treat stderr as diagnostics,
 - verify geographic claims from returned fields,
 - use `odh gtfs` and `odh transit` for public-transport timetable and live-feed questions,
@@ -29,7 +29,7 @@ The skill frontmatter also declares the `odh` runtime binary through `metadata.o
 ClawHub publishing uses the ClawHub CLI:
 
 ```bash
-clawhub skill publish skills/open-data-hub-cli --version 0.1.13 --clawscan-note "Uses network access only through the odh CLI to query public Open Data Hub endpoints. Declares odh as a required binary and provides an OpenClaw Go installer hint."
+clawhub skill publish skills/open-data-hub-cli --version 0.1.14 --clawscan-note "Uses network access only through the odh CLI to query public Open Data Hub endpoints. Declares odh as a required binary and provides an OpenClaw Go installer hint."
 ```
 
 Publishing to ClawHub makes the skill public under ClawHub's registry terms.
