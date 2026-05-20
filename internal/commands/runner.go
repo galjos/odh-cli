@@ -238,7 +238,7 @@ func (r *Runner) newCallCmd() *cobra.Command {
 			return r.fetchJSONCobra(cmd.Context(), requestURL, cmd.OutOrStdout())
 		},
 	}
-	cmd.Flags().StringSliceVar(&params, "param", nil, "additional query parameter as key=value; repeatable")
+	cmd.Flags().StringArrayVar(&params, "param", nil, "additional query parameter as key=value; repeatable; values may contain commas")
 	return cmd
 }
 

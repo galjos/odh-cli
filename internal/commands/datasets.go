@@ -239,7 +239,7 @@ func datasetCatalog() []datasetEntry {
 			Commands: []string{
 				"odh a22 status --limit 10",
 				"odh mobility origins --station-type TrafficSensor",
-				"odh mobility datatypes --station-type TrafficSensor --origin A22 --limit 100",
+				"odh mobility datatypes --station-type TrafficSensor --origin A22 --limit 1000",
 			},
 			Endpoints: []string{"/v2/flat,event/A22/latest", "/v2/flat/TrafficForecast/forecast/latest"},
 			Keywords:  []string{"traffic", "a22", "autobrennero", "forecast", "incident", "sensor"},

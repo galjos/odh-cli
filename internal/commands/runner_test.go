@@ -195,6 +195,29 @@ func TestRunCallUsesRegistryAndParams(t *testing.T) {
 	}
 }
 
+func TestRunCallPreservesCommaValuesInParams(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/ODHActivityPoi" {
+			t.Fatalf("unexpected path %q", r.URL.Path)
+		}
+		if got := r.URL.Query().Get("fields"); got != "Detail.en.Title,GpsInfo" {
+			t.Fatalf("unexpected fields %q from raw query %q", got, r.URL.RawQuery)
+		}
+		_, _ = w.Write([]byte(`{"Items":[{"Id":"one"}]}`))
+	}))
+	defer server.Close()
+
+	runner := newTestRunner(t, []apis.API{{Name: "tourism", BaseURL: server.URL, Public: true}})
+	var stdout, stderr bytes.Buffer
+	code := runner.Run(context.Background(), []string{"call", "tourism", "/v1/ODHActivityPoi", "--param", "fields=Detail.en.Title,GpsInfo", "--param", "pagesize=1"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("Run exit = %d, stderr = %s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), `"Items"`) {
+		t.Fatalf("unexpected stdout: %s", stdout.String())
+	}
+}
+
 func TestRunDoctorChecksNetworkTargets(t *testing.T) {
 	seen := map[string]bool{}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -349,6 +372,9 @@ func TestRunTransitStopsSearchUsesAuerAlias(t *testing.T) {
 	}
 	if !strings.Contains(stdout.String(), `"name": "Ora, Stazione di Ora"`) {
 		t.Fatalf("unexpected stdout: %s", stdout.String())
+	}
+	if !strings.Contains(stderr.String(), "loading GTFS archive") {
+		t.Fatalf("expected cold-cache GTFS progress on stderr, got %s", stderr.String())
 	}
 }
 
@@ -1025,6 +1051,31 @@ func TestRunMobilityDatatypesDefaultsToCompactTable(t *testing.T) {
 		!strings.Contains(stdout.String(), "Average Flow") ||
 		strings.Contains(stdout.String(), `"datatypes"`) {
 		t.Fatalf("expected compact table output, got: %s", stdout.String())
+	}
+}
+
+func TestRunMobilityDatatypesWarnsWhenSmallLimitMayHideValues(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v2/flat/ParkingStation/*" {
+			t.Fatalf("unexpected path %q", r.URL.Path)
+		}
+		if got := r.URL.Query().Get("limit"); got != "1" {
+			t.Fatalf("unexpected limit %q", got)
+		}
+		_, _ = w.Write([]byte(`{"data":[
+			{"scode":"park-1","sorigin":"Municipality Merano","tname":"free","tdescription":"Free parking spaces","tunit":"spaces"}
+		]}`))
+	}))
+	defer server.Close()
+
+	runner := newTestRunner(t, []apis.API{{Name: "mobility", BaseURL: server.URL, Public: true}})
+	var stdout, stderr bytes.Buffer
+	code := runner.Run(context.Background(), []string{"mobility", "datatypes", "--station-type", "ParkingStation", "--limit", "1", "--json"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("Run exit = %d, stderr = %s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "rerun with --limit 1000") {
+		t.Fatalf("expected limit warning, got: %s", stdout.String())
 	}
 }
 

@@ -68,7 +68,7 @@ func (r *Runner) newTourismCmd() *cobra.Command {
 	poiCmd.Flags().IntVar(&poiPage, "page", 1, "page number")
 	poiCmd.Flags().StringVar(&poiSeed, "seed", "", "stable randomization seed")
 	poiCmd.Flags().StringVar(&poiFields, "fields", "", "comma-separated fields")
-	poiCmd.Flags().StringSliceVar(&poiParams, "param", nil, "additional query parameter as key=value; repeatable")
+	poiCmd.Flags().StringArrayVar(&poiParams, "param", nil, "additional query parameter as key=value; repeatable; values may contain commas")
 
 	var typesDataset string
 	var typesLimit int
@@ -133,7 +133,7 @@ func (r *Runner) newTourismCmd() *cobra.Command {
 	typesCmd.Flags().IntVar(&typesLimit, "limit", 100, "number of type records to request")
 	typesCmd.Flags().IntVar(&typesPage, "page", 1, "page number")
 	typesCmd.Flags().StringVar(&typesSeed, "seed", "", "stable randomization seed")
-	typesCmd.Flags().StringSliceVar(&typesParams, "param", nil, "additional query parameter as key=value; repeatable")
+	typesCmd.Flags().StringArrayVar(&typesParams, "param", nil, "additional query parameter as key=value; repeatable; values may contain commas")
 	typesCmd.Flags().StringVar(&typesFormat, "format", "table", "output format: json, table, or markdown")
 	typesCmd.Flags().BoolVar(&typesJSON, "json", false, "shortcut for --format json")
 

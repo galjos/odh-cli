@@ -33,7 +33,7 @@ Run the command-affordance checks from the repository root:
 scripts/run-agent-evals.sh
 ```
 
-By default, this runs the local source tree with `go run ./cmd/odh --`. To test an installed binary:
+By default, this runs the local source tree with `go run ./cmd/odh`. For direct source-checkout commands, use `go run ./cmd/odh version`, not `go run ./cmd/odh -- version`. To test an installed binary:
 
 ```bash
 ODH_EVAL_BIN=odh scripts/run-agent-evals.sh

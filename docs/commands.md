@@ -36,7 +36,7 @@ Example output with `--network=false`:
 {
   "ok": true,
   "version": {
-    "version": "0.1.10-dev",
+    "version": "0.1.11-dev",
     "commit": "unknown",
     "date": "unknown",
     "goos": "darwin",
@@ -46,7 +46,7 @@ Example output with `--network=false`:
     {
       "name": "version",
       "ok": true,
-      "message": "0.1.10-dev"
+      "message": "0.1.11-dev"
     },
     {
       "name": "api_registry",
@@ -148,7 +148,7 @@ odh call tourism /v1/ODHActivityPoi \
 
 Flags:
 
-- `--param key=value` - query parameter. Repeatable.
+- `--param key=value` - query parameter. Repeatable; values may contain commas.
 
 The response must be JSON. Invalid JSON is treated as a command failure.
 
@@ -166,7 +166,7 @@ Flags:
 - `--page n` - maps to `pagenumber`; default `1`.
 - `--seed value` - stable randomization seed.
 - `--fields value` - comma-separated fields.
-- `--param key=value` - additional query parameter. Repeatable.
+- `--param key=value` - additional query parameter. Repeatable; values may contain commas.
 
 ## `odh tourism types`
 
@@ -195,7 +195,7 @@ Flags:
 - `--limit n` - maps to `pagesize`; default `100`.
 - `--page n` - maps to `pagenumber`; default `1`.
 - `--seed value` - stable randomization seed.
-- `--param key=value` - additional query parameter. Repeatable.
+- `--param key=value` - additional query parameter. Repeatable; values may contain commas.
 - `--format json|table|markdown` - output format; default `table`.
 - `--json` - shortcut for `--format json`.
 
@@ -246,7 +246,7 @@ Flags:
 - `--only-active` - request upstream `onlyactive=true`; default `true`.
 - `--limit n` - number of upstream events to inspect; default `20`.
 - `--page n` - page number; default `1`.
-- `--param key=value` - additional query parameter. Repeatable.
+- `--param key=value` - additional query parameter. Repeatable; values may contain commas.
 
 ## `odh mobility latest`
 
@@ -277,7 +277,7 @@ Flags:
 - `--fresh-within duration` - keep only rows whose `mvalidtime` is within this age, for example `24h` or `7d`.
 - `--sort upstream|newest|oldest|station` - local sort mode; default `upstream`.
 - `--where expr` - Open Data Hub where filter.
-- `--param key=value` - additional query parameter. Repeatable.
+- `--param key=value` - additional query parameter. Repeatable; values may contain commas.
 - `--format json|table|markdown` - output format; default `json`.
 - `--json` - shortcut for `--format json`.
 
@@ -318,7 +318,7 @@ Flags:
 - `--station-type value` - required.
 - `--representation value` - default `flat`.
 - `--limit n` - maximum station records to inspect; default `1000`.
-- `--param key=value` - additional query parameter. Repeatable.
+- `--param key=value` - additional query parameter. Repeatable; values may contain commas.
 
 The output wraps discovered origin names with station counts and a few station-code samples. Use an origin from this command with `odh mobility stations --origin ...`, `odh mobility datatypes --origin ...`, or origin-specific Mobility event commands when the upstream feed supports them.
 
@@ -342,7 +342,7 @@ Flags:
 - `--limit n` - maximum stations to request; default `20`.
 - `--offset n` - pagination offset; default `0`.
 - `--where expr` - Open Data Hub where filter.
-- `--param key=value` - additional query parameter. Repeatable.
+- `--param key=value` - additional query parameter. Repeatable; values may contain commas.
 
 The output wraps matching records with `station_type`, `origin`, `record_count`, `count`, and `stations`.
 
@@ -356,7 +356,7 @@ Summarizes available data types for a Mobility station type.
 odh mobility datatypes \
   --station-type TrafficSensor \
   --origin A22 \
-  --limit 100
+  --limit 1000
 ```
 
 Flags:
@@ -365,11 +365,12 @@ Flags:
 - `--origin value` - optional `sorigin` filter, for example `A22`.
 - `--representation value` - default `flat`.
 - `--limit n` - maximum station/data-type records to inspect; default `1000`.
-- `--param key=value` - additional query parameter. Repeatable.
+- `--param key=value` - additional query parameter. Repeatable; values may contain commas.
 - `--format json|table|markdown` - output format; default `table`.
 - `--json` - shortcut for `--format json`.
 
 The output groups records by data type name and includes station counts, units, descriptions, and origins.
+Use `--limit 1000` when an answer depends on datatype completeness. Smaller limits are useful for quick inspection; if the inspected record limit may hide values, the CLI emits a warning.
 
 This discovery response can be served from the local 24-hour metadata cache.
 
@@ -387,7 +388,7 @@ Flags:
 - `--latest` - request latest events; default `true`.
 - `--representation value` - default `flat`.
 - `--limit n` - maximum events to request; default `20`.
-- `--param key=value` - additional query parameter. Repeatable.
+- `--param key=value` - additional query parameter. Repeatable; values may contain commas.
 
 ## `odh gtfs datasets`
 

@@ -13,7 +13,7 @@ metadata:
             {
               "id": "go",
               "kind": "go",
-              "module": "github.com/galjos/odh-cli/cmd/odh@v0.1.10",
+              "module": "github.com/galjos/odh-cli/cmd/odh@v0.1.11",
               "bins": ["odh"],
               "label": "Install odh CLI (go)",
             },
@@ -39,10 +39,10 @@ odh version
 odh doctor --timeout 10s
 ```
 
-The traffic discovery, GTFS, transit, and filtered mobility-latest commands require `odh` `v0.1.10` or newer. If `odh version` reports an older release, install the current release into a directory that is already on PATH:
+The traffic discovery, GTFS, transit, filtered mobility-latest, comma-safe `--param`, and GTFS progress diagnostics require `odh` `v0.1.11` or newer. If `odh version` reports an older release, install the current release into a directory that is already on PATH:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/galjos/odh-cli/main/scripts/install.sh | sh -s -- --version v0.1.10 --dir "$HOME/bin"
+curl -fsSL https://raw.githubusercontent.com/galjos/odh-cli/main/scripts/install.sh | sh -s -- --version v0.1.11 --dir "$HOME/bin"
 ```
 
 If `odh` is not installed in a normal shell, install the latest release:
@@ -85,8 +85,11 @@ Use `odh call` for known endpoints rather than scraping a UI:
 odh call tourism /v1/ODHActivityPoi \
   --param pagenumber=1 \
   --param pagesize=1 \
-  --param seed=42
+  --param seed=42 \
+  --param fields=Detail.en.Title,GpsInfo
 ```
+
+`--param` is repeatable and preserves comma-separated API values, so Tourism field lists can be passed as one flag.
 
 For geographic claims, inspect returned fields. Useful examples:
 
@@ -136,9 +139,11 @@ Mobility type and data-type discovery:
 odh mobility types --kind event
 odh mobility origins --station-type TrafficSensor
 odh mobility stations --station-type ParkingStation --limit 5
-odh mobility datatypes --station-type TrafficSensor --origin A22 --limit 100
-odh mobility datatypes --station-type TrafficSensor --origin A22 --limit 100 --json
+odh mobility datatypes --station-type TrafficSensor --origin A22 --limit 1000
+odh mobility datatypes --station-type TrafficSensor --origin A22 --limit 1000 --json
 ```
+
+Use `--limit 1000` for datatype discovery when completeness matters. Smaller limits are fine for inspection, but warnings about inspected record limits mean an agent should rerun with a higher limit.
 
 Public transport GTFS and STA timetable data:
 
@@ -154,7 +159,7 @@ odh transit trip --from-stop-id <origin-stop-id> --to-stop-id <destination-stop-
 odh transit delay-stats --from auer --to brenner --time 14:05 --weekday saturday
 ```
 
-Use these commands when the user asks about trains, buses, public-transport stops, STA timetables, GTFS, GTFS-RT, live trip updates, or whether delay probability can be computed. The first transit command may download a large static GTFS archive and cache it for 24 hours; retry once if the upstream download is interrupted. Transit commands default to compact table output; add `--json` when you need stop-match arrays, archive metadata, or match-mode fields. If the output warns that a stop query matched many stops, run `odh transit stops search <query> --limit 5` and rerun with `--stop-id`, `--from-stop-id`, or `--to-stop-id`. Parent station IDs are valid and expand to their child platform stops. This is the preferred agent pattern for ambiguous station names like Merano and Bolzano. `odh transit trip` only finds direct static GTFS trip matches; it does not do transfer routing. `odh transit delay-stats` currently returns `supported: false` because delay probability requires historical GTFS-RT snapshots, not just the current live feed. Do not infer historical delay probability from one realtime response.
+Use these commands when the user asks about trains, buses, public-transport stops, STA timetables, GTFS, GTFS-RT, live trip updates, or whether delay probability can be computed. The first transit command may download a large static GTFS archive and cache it for 24 hours; the CLI writes a progress diagnostic to stderr while a cold archive is loading, and agents should retry once if the upstream download is interrupted. Transit commands default to compact table output; add `--json` when you need stop-match arrays, archive metadata, or match-mode fields. If the output warns that a stop query matched many stops, run `odh transit stops search <query> --limit 5` and rerun with `--stop-id`, `--from-stop-id`, or `--to-stop-id`. Parent station IDs are valid and expand to their child platform stops. This is the preferred agent pattern for ambiguous station names like Merano and Bolzano. `odh transit trip` only finds direct static GTFS trip matches; it does not do transfer routing. `odh transit delay-stats` currently returns `supported: false` because delay probability requires historical GTFS-RT snapshots, not just the current live feed. Do not infer historical delay probability from one realtime response.
 
 South Tyrol traffic events, roadworks, closures, and road events:
 
@@ -193,7 +198,15 @@ odh a22 status --limit 10
 - Use `odh diagnostics` for EV availability, parking forecasts, and Tourism event caveats before making factual current-data claims.
 - Do not infer live A22 traffic from `TrafficForecast` rows alone.
 - Prefer `odh a22 status` for A22 because it reports current-event availability and warns when forecast rows are not current incident data. Use its default table for direct answers, or `--json --raw` when raw upstream rows are required.
-- Use `--where` and `--param key=value` instead of manually constructing query strings when a curated command supports them.
+- Use `--where` and repeatable `--param key=value` instead of manually constructing query strings when a curated command supports them. `--param` values may contain commas.
+
+## Answer Patterns
+
+- Historical train delays: report that `odh transit delay-stats` is unsupported without archived GTFS-RT history; do not estimate probability or usual delay minutes from one live feed snapshot.
+- Stale traffic rows: mention stale or hidden open-ended rows only as caveated context, not as confirmed current closures; compare with the official traffic service when the user needs a complete live bulletin.
+- Parking forecasts: if diagnostics return `current_only`, report fresh current occupancy and do not present stale forecast rows as live predictions.
+- A22 status: if `odh a22 status` reports no current event rows, say so directly and keep forecast rows separate from current incidents.
+- Tourism events: if diagnostics show date-inconsistent rows or missing GPS, avoid precise "near me today" claims unless returned dates and coordinates support them.
 
 ## Agent Evals
 

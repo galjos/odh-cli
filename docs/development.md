@@ -73,11 +73,11 @@ The generic HTTP cache is only for low-risk discovery surfaces such as OpenAPI s
 
 ## Build Metadata
 
-Development builds default to `0.1.10-dev` with best-effort VCS metadata. Release builds can stamp metadata through Go linker flags:
+Development builds default to `0.1.11-dev` with best-effort VCS metadata. Release builds can stamp metadata through Go linker flags:
 
 ```bash
 go build \
-  -ldflags "-X github.com/galjos/odh-cli/internal/version.Version=0.1.10 -X github.com/galjos/odh-cli/internal/version.Commit=$(git rev-parse --short HEAD) -X github.com/galjos/odh-cli/internal/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  -ldflags "-X github.com/galjos/odh-cli/internal/version.Version=0.1.11 -X github.com/galjos/odh-cli/internal/version.Commit=$(git rev-parse --short HEAD) -X github.com/galjos/odh-cli/internal/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   -o odh ./cmd/odh
 ```
 

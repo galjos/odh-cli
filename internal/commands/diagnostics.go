@@ -227,7 +227,7 @@ func (r *Runner) newDiagnosticsCmd() *cobra.Command {
 	tourCmd.Flags().BoolVar(&tourOnlyActive, "only-active", true, "request upstream onlyactive=true")
 	tourCmd.Flags().IntVar(&tourLimit, "limit", 20, "number of upstream events to inspect")
 	tourCmd.Flags().IntVar(&tourPage, "page", 1, "page number")
-	tourCmd.Flags().StringSliceVar(&tourParams, "param", nil, "additional query parameter as key=value; repeatable")
+	tourCmd.Flags().StringArrayVar(&tourParams, "param", nil, "additional query parameter as key=value; repeatable; values may contain commas")
 
 	cmd.AddCommand(evCmd)
 	cmd.AddCommand(parkCmd)

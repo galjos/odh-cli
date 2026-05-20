@@ -61,7 +61,7 @@ The installer detects macOS/Linux and `amd64`/`arm64`, downloads the matching re
 Install a specific version or directory:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/galjos/odh-cli/main/scripts/install.sh | sh -s -- --version v0.1.10 --dir "$HOME/bin"
+curl -fsSL https://raw.githubusercontent.com/galjos/odh-cli/main/scripts/install.sh | sh -s -- --version v0.1.11 --dir "$HOME/bin"
 ```
 
 Build from source instead:
@@ -74,13 +74,16 @@ Run directly during development:
 
 ```bash
 go run ./cmd/odh --help
+go run ./cmd/odh version
 ```
+
+When running from a source checkout, pass the `odh` subcommand directly after `./cmd/odh`; do not insert an extra `--` before the subcommand.
 
 Build with release metadata:
 
 ```bash
 go build \
-  -ldflags "-X github.com/galjos/odh-cli/internal/version.Version=0.1.10 -X github.com/galjos/odh-cli/internal/version.Commit=$(git rev-parse --short HEAD) -X github.com/galjos/odh-cli/internal/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  -ldflags "-X github.com/galjos/odh-cli/internal/version.Version=0.1.11 -X github.com/galjos/odh-cli/internal/version.Commit=$(git rev-parse --short HEAD) -X github.com/galjos/odh-cli/internal/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   -o odh ./cmd/odh
 ```
 
@@ -125,6 +128,8 @@ odh call tourism /v1/ODHActivityPoi \
   --param seed=42 \
   --param fields=Detail.en.Title,GpsInfo
 ```
+
+`--param` is repeatable and preserves comma-separated API values such as Tourism `fields`.
 
 Use the curated Tourism POI command:
 
@@ -215,8 +220,8 @@ odh mobility origins --station-type TrafficSensor
 odh mobility datatypes \
   --station-type TrafficSensor \
   --origin A22 \
-  --limit 100
-odh mobility datatypes --station-type TrafficSensor --origin A22 --limit 100 --json
+  --limit 1000
+odh mobility datatypes --station-type TrafficSensor --origin A22 --limit 1000 --json
 ```
 
 Check the A22-specific diagnostic output:

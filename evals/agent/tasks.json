@@ -52,7 +52,7 @@
       "expected_command_path": [
         "odh datasets search a22",
         "odh mobility origins --station-type TrafficSensor",
-        "odh mobility datatypes --station-type TrafficSensor --origin A22 --limit 100 --json",
+        "odh mobility datatypes --station-type TrafficSensor --origin A22 --limit 1000 --json",
         "odh a22 status --limit 10",
         "odh a22 status --limit 10 --json --raw"
       ],
@@ -120,7 +120,7 @@
         "odh mobility types --kind station",
         "odh mobility origins --station-type ParkingStation",
         "odh mobility stations --station-type ParkingStation --limit 5",
-        "odh mobility datatypes --station-type ParkingStation --limit 100"
+        "odh mobility datatypes --station-type ParkingStation --limit 1000"
       ],
       "pass_criteria": [
         "Starts with dataset or station-type discovery.",

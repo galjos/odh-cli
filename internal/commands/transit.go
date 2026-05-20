@@ -142,7 +142,7 @@ func (r *Runner) newTransitCmd() *cobra.Command {
 				return fmt.Errorf("--limit must be greater than zero")
 			}
 			query := strings.Join(args, " ")
-			archive, err := r.fetchGTFSArchive(cmd.Context(), searchDataset, searchCacheDir, searchRefresh)
+			archive, err := r.fetchGTFSArchive(cmd.Context(), searchDataset, searchCacheDir, searchRefresh, cmd.ErrOrStderr())
 			if err != nil {
 				return err
 			}
@@ -207,7 +207,7 @@ func (r *Runner) newTransitCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			archive, err := r.fetchGTFSArchive(cmd.Context(), depDataset, depCacheDir, depRefresh)
+			archive, err := r.fetchGTFSArchive(cmd.Context(), depDataset, depCacheDir, depRefresh, cmd.ErrOrStderr())
 			if err != nil {
 				return err
 			}
@@ -294,7 +294,7 @@ func (r *Runner) newTransitCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			archive, err := r.fetchGTFSArchive(cmd.Context(), tripDataset, tripCacheDir, tripRefresh)
+			archive, err := r.fetchGTFSArchive(cmd.Context(), tripDataset, tripCacheDir, tripRefresh, cmd.ErrOrStderr())
 			if err != nil {
 				return err
 			}
@@ -639,10 +639,13 @@ func writeTransitDelayStatsOutput(stdout io.Writer, result transitDelayStatsOutp
 	}
 }
 
-func (r *Runner) fetchGTFSArchive(ctx context.Context, dataset, cacheDir string, refresh bool) (gtfsArchiveInfo, error) {
+func (r *Runner) fetchGTFSArchive(ctx context.Context, dataset, cacheDir string, refresh bool, progress io.Writer) (gtfsArchiveInfo, error) {
 	dataset = strings.TrimSpace(dataset)
 	if dataset == "" {
 		dataset = defaultGTFSDataset
+	}
+	if progress == nil {
+		progress = io.Discard
 	}
 	api, _ := r.Registry.Find("gtfs")
 	path := fmt.Sprintf("/v1/dataset/%s/raw", url.PathEscape(dataset))
@@ -663,6 +666,7 @@ func (r *Runner) fetchGTFSArchive(ctx context.Context, dataset, cacheDir string,
 	if !refresh && cacheFresh(cachePath, defaultGTFSCacheTTL) {
 		return gtfsArchiveInfo{Dataset: dataset, Endpoint: endpoint, Path: cachePath, Cached: true}, nil
 	}
+	fmt.Fprintf(progress, "loading GTFS archive %q from Open Data Hub; this may take up to %s on a cold cache\n", dataset, gtfsDownloadTimeout)
 	resp, err := r.Client.WithTimeout(gtfsDownloadTimeout).GetWithLimit(ctx, endpoint, maxGTFSArchiveBytes)
 	if err != nil {
 		return gtfsArchiveInfo{}, err

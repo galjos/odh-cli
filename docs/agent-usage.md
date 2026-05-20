@@ -39,8 +39,8 @@ odh tourism poi --limit 1 --seed 42 --fields Detail.en.Title,GpsInfo
 odh mobility types --kind event
 odh mobility origins --station-type TrafficSensor
 odh mobility stations --station-type ParkingStation --limit 5
-odh mobility datatypes --station-type TrafficSensor --origin A22 --limit 100
-odh mobility datatypes --station-type TrafficSensor --origin A22 --limit 100 --json
+odh mobility datatypes --station-type TrafficSensor --origin A22 --limit 1000
+odh mobility datatypes --station-type TrafficSensor --origin A22 --limit 1000 --json
 odh mobility events --origin A22 --latest --limit 20
 odh gtfs datasets
 odh gtfs realtime --dataset sta-time-tables --feed trip-updates --limit 5
@@ -77,8 +77,11 @@ When an endpoint is known from OpenAPI docs, use `odh call` instead of scraping 
 odh call tourism /v1/ODHActivityPoi \
   --param pagenumber=1 \
   --param pagesize=1 \
-  --param seed=42
+  --param seed=42 \
+  --param fields=Detail.en.Title,GpsInfo
 ```
+
+`--param` is repeatable and preserves comma-separated API values, so Tourism `fields=a,b,c` can be passed as one flag.
 
 When the endpoint is not known yet, start with catalog and type discovery:
 
@@ -103,6 +106,8 @@ odh mobility latest --station-type EChargingStation --data-type number-available
 ```
 
 The filtered `mobility latest` JSON output wraps measurements with `raw_count`, `count`, and `warnings`; the table/markdown output shows station, value, valid time, origin, and warnings. Report warnings when filters hide stale or inactive rows, and increase `--request-limit` when a question needs broader coverage than the inspected upstream rows. If a common datatype guess is wrong, for example `ParkingStation/number-free`, the CLI may print a hint such as using `free`.
+
+For datatype discovery, prefer `--limit 1000` when an answer depends on completeness. Smaller limits are acceptable for quick inspection, but the CLI warns when the inspected record limit may have hidden datatype values.
 
 ## Data Quality Diagnostics
 
@@ -138,7 +143,7 @@ odh transit departures --stop-id <stop_id-from-search> --date 2026-05-16 --aroun
 odh transit trip --from-stop-id <origin-stop-id> --to-stop-id <destination-stop-id> --date 2026-05-16 --time 13:00 --mode train
 ```
 
-The transit layer reads the static STA GTFS archive and caches it locally for 24 hours. A cold cache download can be large, so transit commands allow a longer archive-download timeout than normal API calls. Stop search supports common German/Italian aliases such as `auer` / `ora`, `brenner` / `brennero`, and `bozen` / `bolzano`.
+The transit layer reads the static STA GTFS archive and caches it locally for 24 hours. A cold cache download can be large, so transit commands allow a longer archive-download timeout than normal API calls and write a progress diagnostic to stderr while the archive is loading. Stop search supports common German/Italian aliases such as `auer` / `ora`, `brenner` / `brennero`, and `bozen` / `bolzano`.
 
 Transit commands default to compact table output. Add `--json` when you need `matched_stops`, `from_stops`, `to_stops`, `archive`, or exact match-mode fields as structured data.
 
@@ -183,6 +188,16 @@ If a user needs an exact public traffic bulletin, compare the Open Data Hub resu
 Agents should not infer live A22 traffic solely from `TrafficForecast` rows. Prefer `odh a22 status` when checking A22 because it reports current-event availability and warns when forecast timestamps indicate non-current data. It defaults to a compact table; add `--json --raw` when raw upstream rows are needed.
 
 If the user asks for current traffic conditions, report the timestamp and feed type used. If Open Data Hub has no current A22 event rows, say that directly instead of converting forecast rows into live incidents.
+
+## Answer Patterns
+
+Use these patterns when the CLI reports known data limitations:
+
+- Historical train delays: "I can find the static timetable/direct trip, but `odh transit delay-stats` reports that historical delay probability is unsupported because no archived GTFS-RT history is available. I should not estimate usual delay minutes from one live feed snapshot."
+- Stale traffic rows: "Open Data Hub returned only stale or hidden open-ended traffic rows for this query. I can mention them as caveated context, but not as confirmed current closures. For an official live bulletin, compare with the traffic service and state that separate source."
+- Parking forecasts: "Current parking occupancy is fresh, but the forecast diagnostic is `current_only`, so I can report current free spaces and should not present stale 60-minute forecasts as live predictions."
+- A22 status: "Open Data Hub returned no current A22 event rows. Forecast rows are forecast data, not current incidents, so I should not infer congestion or closures from them alone."
+- Tourism events: "The Tourism event diagnostic is unavailable or caveated because `onlyactive=true` returned date-inconsistent rows or records without GPS. I should avoid precise 'near me today' claims unless returned dates and coordinates support them."
 
 ## Why No MCP Yet
 

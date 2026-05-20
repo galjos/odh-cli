@@ -122,7 +122,7 @@ func (r *Runner) newMobilityCmd() *cobra.Command {
 	originsCmd.Flags().StringVar(&originsStationType, "station-type", "", "station type, for example TrafficSensor")
 	originsCmd.Flags().StringVar(&originsRepresentation, "representation", "flat", "API representation")
 	originsCmd.Flags().IntVar(&originsLimit, "limit", 1000, "maximum station records to inspect")
-	originsCmd.Flags().StringSliceVar(&originsParams, "param", nil, "additional query parameter as key=value; repeatable")
+	originsCmd.Flags().StringArrayVar(&originsParams, "param", nil, "additional query parameter as key=value; repeatable; values may contain commas")
 
 	// stations
 	var stationsStationType string
@@ -187,7 +187,7 @@ func (r *Runner) newMobilityCmd() *cobra.Command {
 	stationsCmd.Flags().IntVar(&stationsLimit, "limit", 20, "maximum stations to request")
 	stationsCmd.Flags().IntVar(&stationsOffset, "offset", 0, "pagination offset")
 	stationsCmd.Flags().StringVar(&stationsWhere, "where", "", "Open Data Hub where filter")
-	stationsCmd.Flags().StringSliceVar(&stationsParams, "param", nil, "additional query parameter as key=value; repeatable")
+	stationsCmd.Flags().StringArrayVar(&stationsParams, "param", nil, "additional query parameter as key=value; repeatable; values may contain commas")
 
 	// datatypes
 	var datatypesStationType string
@@ -241,7 +241,7 @@ func (r *Runner) newMobilityCmd() *cobra.Command {
 				RecordCount: len(records),
 				Count:       len(summary),
 				Datatypes:   summary,
-				Warnings:    mobilityDatatypeDiscoveryWarnings(datatypesStationType, summary),
+				Warnings:    mobilityDatatypeDiscoveryWarnings(datatypesStationType, summary, datatypesLimit, len(records)),
 				Format:      format,
 			})
 		},
@@ -250,7 +250,7 @@ func (r *Runner) newMobilityCmd() *cobra.Command {
 	datatypesCmd.Flags().StringVar(&datatypesRepresentation, "representation", "flat", "API representation")
 	datatypesCmd.Flags().StringVar(&datatypesOrigin, "origin", "", "optional sorigin filter, for example A22")
 	datatypesCmd.Flags().IntVar(&datatypesLimit, "limit", 1000, "maximum station/datatype records to inspect")
-	datatypesCmd.Flags().StringSliceVar(&datatypesParams, "param", nil, "additional query parameter as key=value; repeatable")
+	datatypesCmd.Flags().StringArrayVar(&datatypesParams, "param", nil, "additional query parameter as key=value; repeatable; values may contain commas")
 	datatypesCmd.Flags().StringVar(&datatypesFormat, "format", "table", "output format: json, table, or markdown")
 	datatypesCmd.Flags().BoolVar(&datatypesJSON, "json", false, "shortcut for --format json")
 
@@ -307,7 +307,7 @@ func (r *Runner) newMobilityCmd() *cobra.Command {
 	eventsCmd.Flags().BoolVar(&eventsLatest, "latest", true, "request latest events")
 	eventsCmd.Flags().StringVar(&eventsRepresentation, "representation", "flat", "API representation")
 	eventsCmd.Flags().IntVar(&eventsLimit, "limit", 20, "maximum events to request")
-	eventsCmd.Flags().StringSliceVar(&eventsParams, "param", nil, "additional query parameter as key=value; repeatable")
+	eventsCmd.Flags().StringArrayVar(&eventsParams, "param", nil, "additional query parameter as key=value; repeatable; values may contain commas")
 
 	// latest
 	var latestStationType string
@@ -427,7 +427,7 @@ func (r *Runner) newMobilityCmd() *cobra.Command {
 	latestCmd.Flags().StringVar(&latestFreshWithin, "fresh-within", "", "keep only rows with mvalidtime within this age, for example 24h or 7d")
 	latestCmd.Flags().StringVar(&latestSortMode, "sort", "upstream", "local sort: upstream, newest, oldest, or station")
 	latestCmd.Flags().StringVar(&latestWhere, "where", "", "Open Data Hub where filter")
-	latestCmd.Flags().StringSliceVar(&latestParams, "param", nil, "additional query parameter as key=value; repeatable")
+	latestCmd.Flags().StringArrayVar(&latestParams, "param", nil, "additional query parameter as key=value; repeatable; values may contain commas")
 	latestCmd.Flags().StringVar(&latestFormat, "format", "json", "output format: json, table, or markdown")
 	latestCmd.Flags().BoolVar(&latestJSON, "json", false, "shortcut for --format json")
 
@@ -782,11 +782,15 @@ func writeMobilityLatestOutput(stdout io.Writer, result mobilityLatestResult, fo
 	}
 }
 
-func mobilityDatatypeDiscoveryWarnings(stationType string, summaries []datatypeSummary) []string {
-	if len(summaries) > 0 {
-		return nil
+func mobilityDatatypeDiscoveryWarnings(stationType string, summaries []datatypeSummary, limit, recordCount int) []string {
+	warnings := []string{}
+	if len(summaries) == 0 {
+		warnings = append(warnings, fmt.Sprintf("no datatype rows matched; inspect raw station records with odh mobility stations --station-type %s --limit 5 --json", strings.TrimSpace(stationType)))
 	}
-	return []string{fmt.Sprintf("no datatype rows matched; inspect raw station records with odh mobility stations --station-type %s --limit 5 --json", strings.TrimSpace(stationType))}
+	if limit > 0 && limit < 1000 && recordCount >= limit {
+		warnings = append(warnings, fmt.Sprintf("inspected %d records because --limit=%d; rerun with --limit 1000 when datatype completeness matters", recordCount, limit))
+	}
+	return warnings
 }
 
 func mobilityLatestDatatypeHints(stationType, dataType string) []string {
