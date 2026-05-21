@@ -108,4 +108,7 @@ fi
 run_odh transit departures --stop-id "$transit_stop_id" --date 2026-05-16 --around 14:05 --window 5m --mode train --limit 5 --json >"$tmpdir/transit-departures-by-id.json"
 assert_json_filter "transit departures supports exact stop ids" "$tmpdir/transit-departures-by-id.json" '(.stop_match_mode == "stop-id" or .stop_match_mode == "parent-station") and (.stop_id | length > 0) and (.matched_stops | length >= 1) and (.departures | type == "array")'
 
+run_odh transit journey --from auer --to brenner --date 2026-05-16 --time 14:05 --max-transfers 2 --limit 3 --json >"$tmpdir/transit-journey.json"
+assert_json_filter "transit journey returns exact-station transfer-planning schema" "$tmpdir/transit-journey.json" '.count >= 1 and (.journeys | type == "array") and (.journeys[0].legs | type == "array") and all(.journeys[].legs[-1].to.stop_name; contains("Brennero")) and (.warnings[]? | contains("static GTFS timetable"))'
+
 printf '\nAgent eval smoke checks passed. Use evals/agent/tasks.json for manual agent scoring.\n'

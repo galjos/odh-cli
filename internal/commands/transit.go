@@ -6,10 +6,12 @@ package commands
 
 import (
 	"archive/zip"
+	"container/heap"
 	"context"
 	"encoding/csv"
 	"fmt"
 	"io"
+	"math"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -87,6 +89,26 @@ type transitTripMatch struct {
 	From           transitStopOnTrip `json:"from"`
 	To             transitStopOnTrip `json:"to"`
 	TransferCount  int               `json:"transfer_count"`
+}
+
+type transitJourneyLeg struct {
+	TripID         string            `json:"trip_id"`
+	RouteID        string            `json:"route_id"`
+	RouteShortName string            `json:"route_short_name,omitempty"`
+	RouteLongName  string            `json:"route_long_name,omitempty"`
+	RouteType      string            `json:"route_type,omitempty"`
+	Headsign       string            `json:"headsign,omitempty"`
+	DirectionID    string            `json:"direction_id,omitempty"`
+	From           transitStopOnTrip `json:"from"`
+	To             transitStopOnTrip `json:"to"`
+}
+
+type transitJourney struct {
+	DepartureTime string              `json:"departure_time"`
+	ArrivalTime   string              `json:"arrival_time"`
+	Duration      string              `json:"duration"`
+	TransferCount int                 `json:"transfer_count"`
+	Legs          []transitJourneyLeg `json:"legs"`
 }
 
 type transitStopOnTrip struct {
@@ -346,6 +368,128 @@ func (r *Runner) newTransitCmd() *cobra.Command {
 	tripCmd.Flags().StringVar(&tripFormat, "format", "table", "output format: json, table, or markdown")
 	tripCmd.Flags().BoolVar(&tripJSON, "json", false, "shortcut for --format json")
 
+	// journey
+	var journeyDataset string
+	var journeyFromQuery string
+	var journeyFromStopID string
+	var journeyToQuery string
+	var journeyToStopID string
+	var journeyDate string
+	var journeyTime string
+	var journeyMode string
+	var journeyMaxTransfers int
+	var journeyMinTransfer string
+	var journeyMaxDuration string
+	var journeyLimit int
+	var journeyCacheDir string
+	var journeyRefresh bool
+	var journeyFormat string
+	var journeyJSON bool
+	journeyCmd := &cobra.Command{
+		Use:   "journey",
+		Short: "Plan static GTFS journeys with transfers",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			applyJSONShortcut(&journeyFormat, journeyJSON)
+			format, err := normalizeOutputFormat(journeyFormat)
+			if err != nil {
+				return err
+			}
+			fromSelector := transitStopSelector{Query: journeyFromQuery, ID: journeyFromStopID}
+			toSelector := transitStopSelector{Query: journeyToQuery, ID: journeyToStopID}
+			if err := fromSelector.validate("from", "from-stop-id"); err != nil {
+				return err
+			}
+			if err := toSelector.validate("to", "to-stop-id"); err != nil {
+				return err
+			}
+			if strings.TrimSpace(journeyTime) == "" {
+				return fmt.Errorf("--time is required")
+			}
+			if journeyMaxTransfers < 0 {
+				return fmt.Errorf("--max-transfers must not be negative")
+			}
+			if journeyLimit < 1 {
+				return fmt.Errorf("--limit must be greater than zero")
+			}
+			minTransfer, err := time.ParseDuration(strings.TrimSpace(journeyMinTransfer))
+			if err != nil {
+				return fmt.Errorf("invalid --min-transfer %q", journeyMinTransfer)
+			}
+			if minTransfer < 0 {
+				return fmt.Errorf("--min-transfer must not be negative")
+			}
+			maxDuration, err := time.ParseDuration(strings.TrimSpace(journeyMaxDuration))
+			if err != nil {
+				return fmt.Errorf("invalid --max-duration %q", journeyMaxDuration)
+			}
+			if maxDuration <= 0 {
+				return fmt.Errorf("--max-duration must be greater than zero")
+			}
+			query, err := parseTransitTimeQuery(journeyDate, journeyTime, "0s")
+			if err != nil {
+				return err
+			}
+			routeTypes, err := transitModeRouteTypes(journeyMode)
+			if err != nil {
+				return err
+			}
+			archive, err := r.fetchGTFSArchive(cmd.Context(), journeyDataset, journeyCacheDir, journeyRefresh, cmd.ErrOrStderr())
+			if err != nil {
+				return err
+			}
+			result, err := findTransitJourneys(archive.Path, fromSelector, toSelector, query, routeTypes, journeyMaxTransfers, minTransfer, maxDuration, journeyLimit)
+			if err != nil {
+				return err
+			}
+			warnings := make([]string, 0)
+			if len(result.Journeys) == 0 {
+				warnings = append(warnings, fmt.Sprintf("no static GTFS journey matched within %s and %d transfers", maxDuration, journeyMaxTransfers))
+			}
+			warnings = appendTransitStopMatchWarning(warnings, "from", "from-stop-id", fromSelector, result.FromMatchMode, len(result.FromStops))
+			warnings = appendTransitStopMatchWarning(warnings, "to", "to-stop-id", toSelector, result.ToMatchMode, len(result.ToStops))
+			warnings = append(warnings, "journey planning uses static GTFS timetable data only; live delays and missed-transfer risk are not included")
+			return writeTransitJourneyOutput(cmd.OutOrStdout(), transitJourneyOutput{
+				Dataset:       journeyDataset,
+				FromQuery:     journeyFromQuery,
+				FromStopID:    journeyFromStopID,
+				FromMatchMode: result.FromMatchMode,
+				ToQuery:       journeyToQuery,
+				ToStopID:      journeyToStopID,
+				ToMatchMode:   result.ToMatchMode,
+				Date:          query.Date.Format("2006-01-02"),
+				Time:          query.AroundText,
+				Mode:          normalizeTransitModeName(journeyMode),
+				MaxTransfers:  journeyMaxTransfers,
+				MinTransfer:   minTransfer.String(),
+				MaxDuration:   maxDuration.String(),
+				Archive:       archive,
+				FromStops:     result.FromStops,
+				ToStops:       result.ToStops,
+				Count:         len(result.Journeys),
+				Journeys:      result.Journeys,
+				Warnings:      warnings,
+				Format:        format,
+			})
+		},
+	}
+	journeyCmd.Flags().StringVar(&journeyDataset, "dataset", defaultGTFSDataset, "GTFS dataset id")
+	journeyCmd.Flags().StringVar(&journeyFromQuery, "from", "", "origin stop query")
+	journeyCmd.Flags().StringVar(&journeyFromStopID, "from-stop-id", "", "exact origin GTFS stop_id or parent_station")
+	journeyCmd.Flags().StringVar(&journeyToQuery, "to", "", "destination stop query")
+	journeyCmd.Flags().StringVar(&journeyToStopID, "to-stop-id", "", "exact destination GTFS stop_id or parent_station")
+	journeyCmd.Flags().StringVar(&journeyDate, "date", time.Now().Format("2006-01-02"), "service date YYYY-MM-DD")
+	journeyCmd.Flags().StringVar(&journeyTime, "time", "", "earliest origin departure time HH:MM")
+	journeyCmd.Flags().StringVar(&journeyMode, "mode", "all", "mode filter: all, train, bus, or cable-car")
+	journeyCmd.Flags().IntVar(&journeyMaxTransfers, "max-transfers", 3, "maximum transfers")
+	journeyCmd.Flags().StringVar(&journeyMinTransfer, "min-transfer", "3m", "minimum transfer time, for example 3m")
+	journeyCmd.Flags().StringVar(&journeyMaxDuration, "max-duration", "6h", "maximum journey duration to search")
+	journeyCmd.Flags().IntVar(&journeyLimit, "limit", 3, "maximum journeys to return")
+	journeyCmd.Flags().StringVar(&journeyCacheDir, "cache-dir", "", "directory for cached GTFS archives")
+	journeyCmd.Flags().BoolVar(&journeyRefresh, "refresh", false, "refresh cached GTFS archive")
+	journeyCmd.Flags().StringVar(&journeyFormat, "format", "table", "output format: json, table, or markdown")
+	journeyCmd.Flags().BoolVar(&journeyJSON, "json", false, "shortcut for --format json")
+
 	// delay-stats
 	var dsFrom string
 	var depTo string
@@ -396,6 +540,7 @@ func (r *Runner) newTransitCmd() *cobra.Command {
 	cmd.AddCommand(stopsCmd)
 	cmd.AddCommand(departuresCmd)
 	cmd.AddCommand(tripCmd)
+	cmd.AddCommand(journeyCmd)
 	cmd.AddCommand(delayStatsCmd)
 	return cmd
 }
@@ -449,6 +594,14 @@ type transitTripResult struct {
 	Matches       []transitTripMatch `json:"matches"`
 }
 
+type transitJourneyResult struct {
+	FromStops     []gtfsStop       `json:"from_stops"`
+	FromMatchMode string           `json:"from_match_mode"`
+	ToStops       []gtfsStop       `json:"to_stops"`
+	ToMatchMode   string           `json:"to_match_mode"`
+	Journeys      []transitJourney `json:"journeys"`
+}
+
 type transitStopsSearchOutput struct {
 	Dataset string          `json:"dataset"`
 	Query   string          `json:"query"`
@@ -494,6 +647,29 @@ type transitTripOutput struct {
 	Matches       []transitTripMatch `json:"matches"`
 	Warnings      []string           `json:"warnings,omitempty"`
 	Format        string             `json:"-"`
+}
+
+type transitJourneyOutput struct {
+	Dataset       string           `json:"dataset"`
+	FromQuery     string           `json:"from_query,omitempty"`
+	FromStopID    string           `json:"from_stop_id,omitempty"`
+	FromMatchMode string           `json:"from_match_mode"`
+	ToQuery       string           `json:"to_query,omitempty"`
+	ToStopID      string           `json:"to_stop_id,omitempty"`
+	ToMatchMode   string           `json:"to_match_mode"`
+	Date          string           `json:"date"`
+	Time          string           `json:"time"`
+	Mode          string           `json:"mode"`
+	MaxTransfers  int              `json:"max_transfers"`
+	MinTransfer   string           `json:"min_transfer"`
+	MaxDuration   string           `json:"max_duration"`
+	Archive       gtfsArchiveInfo  `json:"archive"`
+	FromStops     []gtfsStop       `json:"from_stops"`
+	ToStops       []gtfsStop       `json:"to_stops"`
+	Count         int              `json:"count"`
+	Journeys      []transitJourney `json:"journeys"`
+	Warnings      []string         `json:"warnings,omitempty"`
+	Format        string           `json:"-"`
 }
 
 type transitDelayStatsOutput struct {
@@ -611,6 +787,70 @@ func writeTransitTripOutput(stdout io.Writer, result transitTripOutput) error {
 				escapeMarkdown(match.To.ArrivalTime),
 				escapeMarkdown(match.Headsign),
 				escapeMarkdown(match.TripID),
+			)
+		}
+		writeMarkdownWarnings(stdout, result.Warnings)
+		return nil
+	default:
+		return fmt.Errorf("unsupported format %q", result.Format)
+	}
+}
+
+func writeTransitJourneyOutput(stdout io.Writer, result transitJourneyOutput) error {
+	switch result.Format {
+	case "", "json":
+		return output.WriteJSON(stdout, result)
+	case "table":
+		tw := tabwriter.NewWriter(stdout, 0, 0, 2, ' ', 0)
+		fmt.Fprintln(tw, "JOURNEY\tLEG\tROUTE\tFROM\tDEPART\tTO\tARRIVE\tHEADSIGN")
+		for journeyIndex, journey := range result.Journeys {
+			for legIndex, leg := range journey.Legs {
+				fmt.Fprintf(tw, "%d\t%d\t%s\t%s\t%s\t%s\t%s\t%s\n",
+					journeyIndex+1,
+					legIndex+1,
+					firstNonEmpty(leg.RouteShortName, leg.RouteID),
+					leg.From.StopName,
+					leg.From.DepartureTime,
+					leg.To.StopName,
+					leg.To.ArrivalTime,
+					leg.Headsign,
+				)
+			}
+			fmt.Fprintf(tw, "%d\tsummary\t-\t-\t%s\t-\t%s\t%s, %d transfer(s)\n",
+				journeyIndex+1,
+				journey.DepartureTime,
+				journey.ArrivalTime,
+				journey.Duration,
+				journey.TransferCount,
+			)
+		}
+		if err := tw.Flush(); err != nil {
+			return err
+		}
+		writePlainWarnings(stdout, result.Warnings)
+		return nil
+	case "markdown":
+		fmt.Fprintln(stdout, "| journey | leg | route | from | depart | to | arrive | headsign |")
+		fmt.Fprintln(stdout, "| --- | --- | --- | --- | --- | --- | --- | --- |")
+		for journeyIndex, journey := range result.Journeys {
+			for legIndex, leg := range journey.Legs {
+				fmt.Fprintf(stdout, "| %d | %d | %s | %s | %s | %s | %s | %s |\n",
+					journeyIndex+1,
+					legIndex+1,
+					escapeMarkdown(firstNonEmpty(leg.RouteShortName, leg.RouteID)),
+					escapeMarkdown(leg.From.StopName),
+					escapeMarkdown(leg.From.DepartureTime),
+					escapeMarkdown(leg.To.StopName),
+					escapeMarkdown(leg.To.ArrivalTime),
+					escapeMarkdown(leg.Headsign),
+				)
+			}
+			fmt.Fprintf(stdout, "| %d | summary | - | - | %s | - | %s | %s, %d transfer(s) |\n",
+				journeyIndex+1,
+				escapeMarkdown(journey.DepartureTime),
+				escapeMarkdown(journey.ArrivalTime),
+				escapeMarkdown(journey.Duration),
+				journey.TransferCount,
 			)
 		}
 		writeMarkdownWarnings(stdout, result.Warnings)
@@ -872,10 +1112,133 @@ func findTransitTripMatches(zipPath string, fromSelector, toSelector transitStop
 	return transitTripResult{FromStops: fromStops, FromMatchMode: fromMode, ToStops: toStops, ToMatchMode: toMode, Matches: matches}, nil
 }
 
+func findTransitJourneys(zipPath string, fromSelector, toSelector transitStopSelector, query transitTimeQuery, routeTypes map[string]struct{}, maxTransfers int, minTransfer, maxDuration time.Duration, limit int) (transitJourneyResult, error) {
+	reader, closeFn, err := openGTFSZip(zipPath)
+	if err != nil {
+		return transitJourneyResult{}, err
+	}
+	defer closeFn()
+	stops, stopByID, err := loadGTFSStops(reader)
+	if err != nil {
+		return transitJourneyResult{}, err
+	}
+	fromStops, fromMode, err := selectGTFSStops(stops, fromSelector, 50)
+	if err != nil {
+		return transitJourneyResult{}, err
+	}
+	toStops, toMode, err := selectGTFSStops(stops, toSelector, 50)
+	if err != nil {
+		return transitJourneyResult{}, err
+	}
+	activeServices, err := loadActiveGTFSServiceIDs(reader, query.Date)
+	if err != nil {
+		return transitJourneyResult{}, err
+	}
+	routes, err := loadGTFSRoutes(reader)
+	if err != nil {
+		return transitJourneyResult{}, err
+	}
+	trips, err := loadGTFSActiveTrips(reader, activeServices, routes, routeTypes)
+	if err != nil {
+		return transitJourneyResult{}, err
+	}
+	stopTimes, err := readCSVRows(reader, "stop_times.txt")
+	if err != nil {
+		return transitJourneyResult{}, err
+	}
+
+	tripTimes, departuresByStop := buildJourneyTimetable(stopTimes, trips)
+	transferIndex := newStopTransferIndex(stops, 300)
+	originIDs := expandedJourneyStopIDs(fromStops, transferIndex)
+	destinationIDs := expandedJourneyStopIDs(toStops, transferIndex)
+	maxLegs := maxTransfers + 1
+	minTransferSeconds := int(minTransfer.Seconds())
+	searchEnd := query.Around + int(maxDuration.Seconds())
+
+	best := map[journeyStateKey]int{}
+	queue := &journeyPriorityQueue{}
+	heap.Init(queue)
+	for stopID := range originIDs {
+		state := &journeySearchState{StopID: stopID, ArrivalSec: query.Around, LegsUsed: 0}
+		best[journeyStateKey{StopID: stopID, LegsUsed: 0}] = query.Around
+		heap.Push(queue, state)
+	}
+
+	journeys := make([]transitJourney, 0, limit)
+	signatures := map[string]struct{}{}
+	for queue.Len() > 0 && len(journeys) < limit {
+		state := heap.Pop(queue).(*journeySearchState)
+		if got, ok := best[journeyStateKey{StopID: state.StopID, LegsUsed: state.LegsUsed}]; !ok || got != state.ArrivalSec {
+			continue
+		}
+		if _, ok := destinationIDs[state.StopID]; ok && state.LegsUsed > 0 {
+			journey := buildTransitJourney(state)
+			signature := transitJourneySignature(journey)
+			if _, exists := signatures[signature]; !exists {
+				signatures[signature] = struct{}{}
+				journeys = append(journeys, journey)
+			}
+			continue
+		}
+		if state.LegsUsed >= maxLegs || state.ArrivalSec > searchEnd {
+			continue
+		}
+		earliestDeparture := state.ArrivalSec
+		if state.LegsUsed > 0 {
+			earliestDeparture += minTransferSeconds
+		}
+		for _, boardStopID := range transferIndex.transferStopIDs(state.StopID) {
+			departures := departuresByStop[boardStopID]
+			start := sort.Search(len(departures), func(index int) bool {
+				return departures[index].DepartureSec >= earliestDeparture
+			})
+			for _, departure := range departures[start:] {
+				if departure.DepartureSec > searchEnd {
+					break
+				}
+				times := tripTimes[departure.TripID]
+				trip := trips[departure.TripID]
+				route := routes[trip.RouteID]
+				for _, toTime := range times[departure.Index+1:] {
+					if toTime.ArrivalSec < departure.DepartureSec || toTime.ArrivalSec > searchEnd {
+						continue
+					}
+					nextLegs := state.LegsUsed + 1
+					key := journeyStateKey{StopID: toTime.StopID, LegsUsed: nextLegs}
+					if previous, ok := best[key]; ok && previous <= toTime.ArrivalSec {
+						continue
+					}
+					fromTime := times[departure.Index]
+					leg := makeTransitJourneyLeg(trip, route, fromTime, toTime, stopByID)
+					next := &journeySearchState{
+						StopID:     toTime.StopID,
+						ArrivalSec: toTime.ArrivalSec,
+						LegsUsed:   nextLegs,
+						Previous:   state,
+						Leg:        &leg,
+					}
+					best[key] = toTime.ArrivalSec
+					heap.Push(queue, next)
+				}
+			}
+		}
+	}
+
+	return transitJourneyResult{
+		FromStops:     fromStops,
+		FromMatchMode: fromMode,
+		ToStops:       toStops,
+		ToMatchMode:   toMode,
+		Journeys:      journeys,
+	}, nil
+}
+
 func selectGTFSStops(stops []gtfsStop, selector transitStopSelector, queryLimit int) ([]gtfsStop, string, error) {
 	id := strings.TrimSpace(selector.ID)
 	if id == "" {
-		return searchGTFSStops(stops, selector.Query, queryLimit), "query", nil
+		matches := searchGTFSStops(stops, selector.Query, queryLimit)
+		terms := transitQueryAlternatives(selector.Query)
+		return refineGTFSStopSelectorMatches(stops, matches, terms, queryLimit), "query", nil
 	}
 	parentMatches := make([]gtfsStop, 0)
 	var exactMatch *gtfsStop
@@ -901,6 +1264,55 @@ func selectGTFSStops(stops []gtfsStop, selector transitStopSelector, queryLimit 
 		return []gtfsStop{*exactMatch}, "stop-id", nil
 	}
 	return nil, "stop-id", fmt.Errorf("GTFS stop id %q was not found", id)
+}
+
+func refineGTFSStopSelectorMatches(stops, matches []gtfsStop, terms [][]string, limit int) []gtfsStop {
+	if len(matches) == 0 || len(terms) == 0 {
+		return matches
+	}
+	bestScore := stopSearchScore(matches[0], terms)
+	if bestScore > 0 {
+		return matches
+	}
+	childrenByParent := map[string][]gtfsStop{}
+	for _, stop := range stops {
+		if strings.TrimSpace(stop.ParentStation) != "" {
+			childrenByParent[stop.ParentStation] = append(childrenByParent[stop.ParentStation], stop)
+		}
+	}
+	refined := make([]gtfsStop, 0, len(matches))
+	seen := map[string]struct{}{}
+	add := func(stop gtfsStop) {
+		if _, ok := seen[stop.ID]; ok {
+			return
+		}
+		seen[stop.ID] = struct{}{}
+		refined = append(refined, stop)
+	}
+	for _, stop := range matches {
+		if stopSearchScore(stop, terms) != bestScore {
+			continue
+		}
+		add(stop)
+		for _, child := range childrenByParent[stop.ID] {
+			add(child)
+		}
+	}
+	sort.Slice(refined, func(i, j int) bool {
+		leftScore := stopSearchScore(refined[i], terms)
+		rightScore := stopSearchScore(refined[j], terms)
+		if leftScore != rightScore {
+			return leftScore < rightScore
+		}
+		if refined[i].Name != refined[j].Name {
+			return refined[i].Name < refined[j].Name
+		}
+		return refined[i].ID < refined[j].ID
+	})
+	if limit > 0 && len(refined) > limit {
+		refined = refined[:limit]
+	}
+	return refined
 }
 
 func openGTFSZip(path string) (*zip.Reader, func(), error) {
@@ -1105,7 +1517,15 @@ func searchGTFSStops(stops []gtfsStop, query string, limit int) []gtfsStop {
 		}
 	}
 	sort.Slice(matches, func(i, j int) bool {
-		return stopSearchScore(matches[i], terms) < stopSearchScore(matches[j], terms)
+		leftScore := stopSearchScore(matches[i], terms)
+		rightScore := stopSearchScore(matches[j], terms)
+		if leftScore != rightScore {
+			return leftScore < rightScore
+		}
+		if matches[i].Name != matches[j].Name {
+			return matches[i].Name < matches[j].Name
+		}
+		return matches[i].ID < matches[j].ID
 	})
 	if limit > 0 && len(matches) > limit {
 		matches = matches[:limit]
@@ -1228,6 +1648,300 @@ func makeTransitTripMatch(trip gtfsTrip, route gtfsRoute, fromTime, toTime gtfsS
 			StopSequence:  toTime.StopSequence,
 		},
 	}
+}
+
+type journeyTripStop struct {
+	gtfsStopTime
+	ArrivalSec   int
+	DepartureSec int
+}
+
+type journeyDeparture struct {
+	TripID       string
+	Index        int
+	DepartureSec int
+}
+
+type journeyStateKey struct {
+	StopID   string
+	LegsUsed int
+}
+
+type journeySearchState struct {
+	StopID     string
+	ArrivalSec int
+	LegsUsed   int
+	Previous   *journeySearchState
+	Leg        *transitJourneyLeg
+	index      int
+}
+
+type journeyPriorityQueue []*journeySearchState
+
+func (q journeyPriorityQueue) Len() int {
+	return len(q)
+}
+
+func (q journeyPriorityQueue) Less(i, j int) bool {
+	if q[i].ArrivalSec != q[j].ArrivalSec {
+		return q[i].ArrivalSec < q[j].ArrivalSec
+	}
+	return q[i].LegsUsed < q[j].LegsUsed
+}
+
+func (q journeyPriorityQueue) Swap(i, j int) {
+	q[i], q[j] = q[j], q[i]
+	q[i].index = i
+	q[j].index = j
+}
+
+func (q *journeyPriorityQueue) Push(value any) {
+	item := value.(*journeySearchState)
+	item.index = len(*q)
+	*q = append(*q, item)
+}
+
+func (q *journeyPriorityQueue) Pop() any {
+	old := *q
+	item := old[len(old)-1]
+	old[len(old)-1] = nil
+	*q = old[:len(old)-1]
+	return item
+}
+
+func buildJourneyTimetable(rows []map[string]string, trips map[string]gtfsTrip) (map[string][]journeyTripStop, map[string][]journeyDeparture) {
+	tripTimes := map[string][]journeyTripStop{}
+	for _, row := range rows {
+		tripID := row["trip_id"]
+		if _, ok := trips[tripID]; !ok {
+			continue
+		}
+		arrivalSec, _, err := parseGTFSTimeOfDay(row["arrival_time"])
+		if err != nil {
+			continue
+		}
+		departureText := row["departure_time"]
+		if strings.TrimSpace(departureText) == "" {
+			departureText = row["arrival_time"]
+		}
+		departureSec, _, err := parseGTFSTimeOfDay(departureText)
+		if err != nil {
+			continue
+		}
+		tripTimes[tripID] = append(tripTimes[tripID], journeyTripStop{
+			gtfsStopTime: gtfsStopTime{
+				TripID:        tripID,
+				ArrivalTime:   row["arrival_time"],
+				DepartureTime: departureText,
+				StopID:        row["stop_id"],
+				StopSequence:  parseInt(row["stop_sequence"]),
+			},
+			ArrivalSec:   arrivalSec,
+			DepartureSec: departureSec,
+		})
+	}
+	departuresByStop := map[string][]journeyDeparture{}
+	for tripID, times := range tripTimes {
+		sort.Slice(times, func(i, j int) bool {
+			return times[i].StopSequence < times[j].StopSequence
+		})
+		tripTimes[tripID] = times
+		for index, stopTime := range times {
+			if index >= len(times)-1 {
+				continue
+			}
+			departuresByStop[stopTime.StopID] = append(departuresByStop[stopTime.StopID], journeyDeparture{
+				TripID:       tripID,
+				Index:        index,
+				DepartureSec: stopTime.DepartureSec,
+			})
+		}
+	}
+	for stopID := range departuresByStop {
+		sort.Slice(departuresByStop[stopID], func(i, j int) bool {
+			return departuresByStop[stopID][i].DepartureSec < departuresByStop[stopID][j].DepartureSec
+		})
+	}
+	return tripTimes, departuresByStop
+}
+
+func makeTransitJourneyLeg(trip gtfsTrip, route gtfsRoute, fromTime, toTime journeyTripStop, stops map[string]gtfsStop) transitJourneyLeg {
+	return transitJourneyLeg{
+		TripID:         trip.ID,
+		RouteID:        route.ID,
+		RouteShortName: route.ShortName,
+		RouteLongName:  route.LongName,
+		RouteType:      route.Type,
+		Headsign:       trip.Headsign,
+		DirectionID:    trip.DirectionID,
+		From: transitStopOnTrip{
+			StopID:        fromTime.StopID,
+			StopName:      stops[fromTime.StopID].Name,
+			ArrivalTime:   fromTime.ArrivalTime,
+			DepartureTime: fromTime.DepartureTime,
+			StopSequence:  fromTime.StopSequence,
+		},
+		To: transitStopOnTrip{
+			StopID:        toTime.StopID,
+			StopName:      stops[toTime.StopID].Name,
+			ArrivalTime:   toTime.ArrivalTime,
+			DepartureTime: toTime.DepartureTime,
+			StopSequence:  toTime.StopSequence,
+		},
+	}
+}
+
+func buildTransitJourney(state *journeySearchState) transitJourney {
+	legs := make([]transitJourneyLeg, 0, state.LegsUsed)
+	for cursor := state; cursor != nil && cursor.Leg != nil; cursor = cursor.Previous {
+		legs = append(legs, *cursor.Leg)
+	}
+	for i, j := 0, len(legs)-1; i < j; i, j = i+1, j-1 {
+		legs[i], legs[j] = legs[j], legs[i]
+	}
+	journey := transitJourney{Legs: legs}
+	if len(legs) == 0 {
+		return journey
+	}
+	journey.DepartureTime = legs[0].From.DepartureTime
+	journey.ArrivalTime = legs[len(legs)-1].To.ArrivalTime
+	journey.TransferCount = max(0, len(legs)-1)
+	departureSec, _, depErr := parseGTFSTimeOfDay(journey.DepartureTime)
+	arrivalSec, _, arrErr := parseGTFSTimeOfDay(journey.ArrivalTime)
+	if depErr == nil && arrErr == nil && arrivalSec >= departureSec {
+		journey.Duration = compactDuration(time.Duration(arrivalSec-departureSec) * time.Second)
+	}
+	return journey
+}
+
+func transitJourneySignature(journey transitJourney) string {
+	parts := make([]string, 0, len(journey.Legs))
+	for _, leg := range journey.Legs {
+		parts = append(parts, strings.Join([]string{
+			leg.TripID,
+			leg.From.StopID,
+			leg.From.DepartureTime,
+			leg.To.StopID,
+			leg.To.ArrivalTime,
+		}, "|"))
+	}
+	return strings.Join(parts, "->")
+}
+
+func compactDuration(value time.Duration) string {
+	value = value.Round(time.Second)
+	if value%time.Hour == 0 {
+		return fmt.Sprintf("%dh", int(value/time.Hour))
+	}
+	if value >= time.Hour && value%time.Minute == 0 {
+		hours := int(value / time.Hour)
+		minutes := int((value % time.Hour) / time.Minute)
+		return fmt.Sprintf("%dh%dm", hours, minutes)
+	}
+	if value%time.Minute == 0 {
+		return fmt.Sprintf("%dm", int(value/time.Minute))
+	}
+	return value.String()
+}
+
+type stopTransferIndex struct {
+	stops          map[string]gtfsStop
+	parentChildren map[string][]string
+	grid           map[transferGridKey][]gtfsStop
+	cellSize       float64
+	radiusMeters   float64
+}
+
+type transferGridKey struct {
+	Lat int
+	Lon int
+}
+
+func newStopTransferIndex(stops []gtfsStop, radiusMeters float64) stopTransferIndex {
+	index := stopTransferIndex{
+		stops:          map[string]gtfsStop{},
+		parentChildren: map[string][]string{},
+		grid:           map[transferGridKey][]gtfsStop{},
+		cellSize:       radiusMeters / 111000,
+		radiusMeters:   radiusMeters,
+	}
+	if index.cellSize <= 0 {
+		index.cellSize = 0.003
+	}
+	for _, stop := range stops {
+		index.stops[stop.ID] = stop
+		if strings.TrimSpace(stop.ParentStation) != "" {
+			index.parentChildren[stop.ParentStation] = append(index.parentChildren[stop.ParentStation], stop.ID)
+		}
+		if stop.Lat != 0 || stop.Lon != 0 {
+			key := index.gridKey(stop.Lat, stop.Lon)
+			index.grid[key] = append(index.grid[key], stop)
+		}
+	}
+	return index
+}
+
+func (i stopTransferIndex) transferStopIDs(stopID string) []string {
+	stop, ok := i.stops[stopID]
+	if !ok {
+		return []string{stopID}
+	}
+	seen := map[string]struct{}{stopID: {}}
+	result := []string{stopID}
+	add := func(id string) {
+		if _, ok := seen[id]; ok {
+			return
+		}
+		seen[id] = struct{}{}
+		result = append(result, id)
+	}
+	if strings.TrimSpace(stop.ParentStation) != "" {
+		for _, childID := range i.parentChildren[stop.ParentStation] {
+			add(childID)
+		}
+	}
+	for _, childID := range i.parentChildren[stop.ID] {
+		add(childID)
+	}
+	if stop.Lat != 0 || stop.Lon != 0 {
+		center := i.gridKey(stop.Lat, stop.Lon)
+		for latOffset := -2; latOffset <= 2; latOffset++ {
+			for lonOffset := -2; lonOffset <= 2; lonOffset++ {
+				for _, candidate := range i.grid[transferGridKey{Lat: center.Lat + latOffset, Lon: center.Lon + lonOffset}] {
+					if haversineMeters(stop.Lat, stop.Lon, candidate.Lat, candidate.Lon) <= i.radiusMeters {
+						add(candidate.ID)
+					}
+				}
+			}
+		}
+	}
+	sort.Strings(result)
+	return result
+}
+
+func (i stopTransferIndex) gridKey(lat, lon float64) transferGridKey {
+	return transferGridKey{Lat: int(math.Floor(lat / i.cellSize)), Lon: int(math.Floor(lon / i.cellSize))}
+}
+
+func expandedJourneyStopIDs(stops []gtfsStop, transferIndex stopTransferIndex) map[string]struct{} {
+	result := map[string]struct{}{}
+	for _, stop := range stops {
+		for _, stopID := range transferIndex.transferStopIDs(stop.ID) {
+			result[stopID] = struct{}{}
+		}
+	}
+	return result
+}
+
+func haversineMeters(lat1, lon1, lat2, lon2 float64) float64 {
+	const earthRadiusMeters = 6371000.0
+	toRadians := func(value float64) float64 { return value * math.Pi / 180 }
+	dLat := toRadians(lat2 - lat1)
+	dLon := toRadians(lon2 - lon1)
+	lat1Rad := toRadians(lat1)
+	lat2Rad := toRadians(lat2)
+	a := math.Sin(dLat/2)*math.Sin(dLat/2) + math.Cos(lat1Rad)*math.Cos(lat2Rad)*math.Sin(dLon/2)*math.Sin(dLon/2)
+	return 2 * earthRadiusMeters * math.Asin(math.Sqrt(a))
 }
 
 func sortTransitDepartures(departures []transitDeparture) {

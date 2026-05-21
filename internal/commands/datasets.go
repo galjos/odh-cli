@@ -200,6 +200,7 @@ func datasetCatalog() []datasetEntry {
 				"odh transit stops search auer",
 				"odh transit departures --stop \"Ora, Stazione di Ora\" --date 2026-05-16 --around 14:05",
 				"odh transit trip --from auer --to brenner --date 2026-05-16 --time 14:05 --mode train",
+				"odh transit journey --from auer --to brenner --date 2026-05-16 --time 14:05 --max-transfers 2",
 			},
 			Endpoints: []string{"/v1/dataset", "/v1/dataset/{datasetId}/raw", "/v1/realtime/{datasetId}/{feedType}"},
 			Keywords:  []string{"gtfs", "gtfs-rt", "transit", "public transport", "train", "trains", "bus", "delay", "delays", "trip updates", "sta", "timetable", "schedule", "connection"},

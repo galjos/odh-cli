@@ -42,7 +42,7 @@ Mobility / Time Series API:
 
 Standards APIs:
 
-- `gtfs` has curated wrappers for dataset listing, GTFS-RT realtime feeds, stop search, static departures, and direct static timetable matches.
+- `gtfs` has curated wrappers for dataset listing, GTFS-RT realtime feeds, stop search, static departures, direct static timetable matches, and static transfer journeys.
 - `gbfs`, `transmodel`, and `alpinebits` are registered so agents can discover their base URLs consistently.
 - v0.1 does not yet provide curated wrappers for `gbfs`, `transmodel`, or `alpinebits`.
 - `odh transit delay-stats` intentionally reports unsupported because the live GTFS API does not provide a historical GTFS-RT archive for probability calculations.
@@ -57,7 +57,8 @@ The Mobility commands include a narrow A22 diagnostic path:
 - `odh gtfs realtime --dataset sta-time-tables --feed trip-updates --limit 5` inspects current GTFS-RT trip updates.
 - `odh transit stops search auer` searches static STA timetable stops with common German/Italian place aliases.
 - `odh transit departures --stop "Ora, Stazione di Ora" --date YYYY-MM-DD --around HH:MM` inspects static GTFS departures near a time.
-- `odh transit trip --from auer --to brenner --date YYYY-MM-DD --time HH:MM --mode train` looks for direct static GTFS trip matches; it does not perform transfer routing.
+- `odh transit trip --from auer --to brenner --date YYYY-MM-DD --time HH:MM --mode train` looks for direct static GTFS trip matches.
+- `odh transit journey --from auer --to brenner --date YYYY-MM-DD --time HH:MM --max-transfers 2` plans static GTFS transfer itineraries.
 - `odh mobility events --origin A22 --latest` checks current A22 events.
 - `odh mobility origins --station-type TrafficSensor` lists `sorigin` values before choosing one for sensor or datatype commands.
 - `odh mobility stations --station-type TrafficSensor --origin A22` lists A22 traffic-sensor station records.

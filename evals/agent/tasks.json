@@ -109,7 +109,29 @@
       "common_failures": [
         "Runs broad --from merano --to bolzano and ignores ambiguity warnings.",
         "Chooses a bus bay because the station name matched many stops.",
-        "Claims full transfer routing when the CLI only supports direct matches."
+        "Uses broad name matching when the user asked to avoid similarly named stops."
+      ]
+    },
+    {
+      "id": "transit-static-journey-with-transfers",
+      "prompt": "Plan a public transport route from Merano Maia Bassa to Fontanefredde, Bivio Trodena around 16:40 using only public transport.",
+      "expected_command_path": [
+        "odh transit stops search \"Merano Maia Bassa\" --limit 10",
+        "odh transit stops search \"Fontanefredde Bivio Trodena\" --limit 10",
+        "odh transit journey --from-stop-id <origin-stop-id-or-parent> --to-stop-id <destination-stop-id> --date <date> --time 16:40 --max-transfers 3",
+        "odh transit journey --from-stop-id <origin-stop-id-or-parent> --to-stop-id <destination-stop-id> --date <date> --time 16:40 --max-transfers 3 --json"
+      ],
+      "pass_criteria": [
+        "Uses transit journey rather than manually stitching only direct trip commands.",
+        "Uses stop search and stop IDs or parent station IDs for ambiguous stop names.",
+        "Reports the returned legs, transfers, departure time, and arrival time.",
+        "States that the itinerary is based on static GTFS timetable data, not live delay-aware routing."
+      ],
+      "common_failures": [
+        "Stops after transit trip reports no direct match.",
+        "Manually invents a transfer chain without using the journey command.",
+        "Presents static GTFS as live delay-aware routing.",
+        "Mixes nearby bus bays or platforms without checking stop IDs."
       ]
     },
     {

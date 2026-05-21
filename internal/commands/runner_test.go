@@ -627,6 +627,159 @@ func TestRunTransitTripSupportsParentStationIDs(t *testing.T) {
 	}
 }
 
+func TestRunTransitJourneyFindsTransferItinerary(t *testing.T) {
+	gtfsZip := buildTestGTFSZip(t)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/dataset/sta-time-tables/raw" {
+			t.Fatalf("unexpected path %q", r.URL.Path)
+		}
+		_, _ = w.Write(gtfsZip)
+	}))
+	defer server.Close()
+
+	runner := newTestRunner(t, []apis.API{{Name: "gtfs", BaseURL: server.URL, Public: true}})
+	var stdout, stderr bytes.Buffer
+	code := runner.Run(context.Background(), []string{
+		"transit", "journey",
+		"--from", "auer",
+		"--to", "truden",
+		"--date", "2026-05-16",
+		"--time", "14:00",
+		"--max-transfers", "2",
+		"--min-transfer", "3m",
+		"--max-duration", "2h",
+		"--cache-dir", t.TempDir(),
+		"--json",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("Run exit = %d, stderr = %s", code, stderr.String())
+	}
+	var decoded struct {
+		Count    int `json:"count"`
+		Journeys []struct {
+			ArrivalTime   string `json:"arrival_time"`
+			TransferCount int    `json:"transfer_count"`
+			Legs          []struct {
+				RouteShortName string `json:"route_short_name"`
+				From           struct {
+					StopName      string `json:"stop_name"`
+					DepartureTime string `json:"departure_time"`
+				} `json:"from"`
+				To struct {
+					StopName    string `json:"stop_name"`
+					ArrivalTime string `json:"arrival_time"`
+				} `json:"to"`
+			} `json:"legs"`
+		} `json:"journeys"`
+		Warnings []string `json:"warnings"`
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &decoded); err != nil {
+		t.Fatalf("invalid JSON: %v\n%s", err, stdout.String())
+	}
+	if decoded.Count != 1 || len(decoded.Journeys) != 1 {
+		t.Fatalf("expected one journey, got: %s", stdout.String())
+	}
+	journey := decoded.Journeys[0]
+	if journey.TransferCount != 1 || journey.ArrivalTime != "15:10:00" || len(journey.Legs) != 2 {
+		t.Fatalf("unexpected journey summary: %#v", journey)
+	}
+	if journey.Legs[0].RouteShortName != "REG" || journey.Legs[0].From.StopName != "Ora, Stazione di Ora" || journey.Legs[0].To.StopName != "Bolzano" {
+		t.Fatalf("unexpected first leg: %#v", journey.Legs[0])
+	}
+	if journey.Legs[1].RouteShortName != "120" || journey.Legs[1].From.StopName != "Bolzano" || journey.Legs[1].To.StopName != "Truden" {
+		t.Fatalf("unexpected second leg: %#v", journey.Legs[1])
+	}
+	if !containsWarning(decoded.Warnings, "static GTFS timetable") {
+		t.Fatalf("missing static GTFS warning: %#v", decoded.Warnings)
+	}
+}
+
+func TestRunTransitJourneyPrefersExactDestinationOverStreetName(t *testing.T) {
+	gtfsZip := buildTestGTFSZip(t)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/dataset/sta-time-tables/raw" {
+			t.Fatalf("unexpected path %q", r.URL.Path)
+		}
+		_, _ = w.Write(gtfsZip)
+	}))
+	defer server.Close()
+
+	runner := newTestRunner(t, []apis.API{{Name: "gtfs", BaseURL: server.URL, Public: true}})
+	var stdout, stderr bytes.Buffer
+	code := runner.Run(context.Background(), []string{
+		"transit", "journey",
+		"--from", "auer",
+		"--to", "brenner",
+		"--date", "2026-05-16",
+		"--time", "14:00",
+		"--max-transfers", "0",
+		"--max-duration", "2h",
+		"--cache-dir", t.TempDir(),
+		"--json",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("Run exit = %d, stderr = %s", code, stderr.String())
+	}
+	var decoded struct {
+		Count    int `json:"count"`
+		Journeys []struct {
+			Legs []struct {
+				To struct {
+					StopName string `json:"stop_name"`
+				} `json:"to"`
+			} `json:"legs"`
+		} `json:"journeys"`
+		ToStops []gtfsStop `json:"to_stops"`
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &decoded); err != nil {
+		t.Fatalf("invalid JSON: %v\n%s", err, stdout.String())
+	}
+	if decoded.Count != 1 || len(decoded.Journeys) != 1 || len(decoded.Journeys[0].Legs) != 1 {
+		t.Fatalf("expected one direct journey, got: %s", stdout.String())
+	}
+	if got := decoded.Journeys[0].Legs[0].To.StopName; got != "Brennero" {
+		t.Fatalf("expected exact Brennero destination, got %q in %s", got, stdout.String())
+	}
+	for _, stop := range decoded.ToStops {
+		if stop.Name == "Bolzano, Via Brennero" {
+			t.Fatalf("street-name match leaked into exact destination selector: %s", stdout.String())
+		}
+	}
+}
+
+func TestRunTransitJourneyDefaultsToCompactTable(t *testing.T) {
+	gtfsZip := buildTestGTFSZip(t)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/dataset/sta-time-tables/raw" {
+			t.Fatalf("unexpected path %q", r.URL.Path)
+		}
+		_, _ = w.Write(gtfsZip)
+	}))
+	defer server.Close()
+
+	runner := newTestRunner(t, []apis.API{{Name: "gtfs", BaseURL: server.URL, Public: true}})
+	var stdout, stderr bytes.Buffer
+	code := runner.Run(context.Background(), []string{
+		"transit", "journey",
+		"--from", "auer",
+		"--to", "truden",
+		"--date", "2026-05-16",
+		"--time", "14:00",
+		"--max-transfers", "2",
+		"--max-duration", "2h",
+		"--cache-dir", t.TempDir(),
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("Run exit = %d, stderr = %s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "JOURNEY") ||
+		!strings.Contains(stdout.String(), "summary") ||
+		!strings.Contains(stdout.String(), "Truden") ||
+		strings.Contains(stdout.String(), `"journeys"`) {
+		t.Fatalf("expected compact journey table, got: %s", stdout.String())
+	}
+}
+
 func TestRunTransitDelayStatsReportsUnsupported(t *testing.T) {
 	runner := newTestRunner(t, nil)
 	var stdout, stderr bytes.Buffer
@@ -1801,6 +1954,8 @@ func buildTestGTFSZip(t *testing.T) []byte {
 			"brenner-parent,\"Brennero\",47.00268073,11.50557389,,1,",
 			"brenner,\"Brennero\",47.00268073,11.50557389,,,brenner-parent",
 			"bozen,\"Bolzano\",46.498,11.354,,,",
+			"bolzano-via-brennero,\"Bolzano, Via Brennero\",46.501,11.354,,,",
+			"truden,\"Truden\",46.322,11.349,,,",
 			"",
 		}, "\n"),
 		"routes.txt": strings.Join([]string{
@@ -1812,7 +1967,10 @@ func buildTestGTFSZip(t *testing.T) []byte {
 		"trips.txt": strings.Join([]string{
 			"route_id,service_id,trip_id,trip_headsign,direction_id",
 			"route-reg,weekday-sat,trip-reg-1,Brennero,1",
+			"route-reg,weekday-sat,trip-reg-2,Bolzano,1",
 			"route-bus,weekday-sat,trip-bus-1,Ora,0",
+			"route-bus,weekday-sat,trip-bus-2,Truden,0",
+			"route-bus,weekday-sat,trip-bus-3,Via Brennero,0",
 			"",
 		}, "\n"),
 		"calendar.txt": strings.Join([]string{
@@ -1825,7 +1983,13 @@ func buildTestGTFSZip(t *testing.T) []byte {
 			"trip_id,arrival_time,departure_time,stop_id,stop_sequence",
 			"trip-reg-1,14:04:00,14:05:00,ora-station,1",
 			"trip-reg-1,15:39:00,15:40:00,brenner,2",
+			"trip-reg-2,14:04:00,14:05:00,ora-station,1",
+			"trip-reg-2,14:25:00,14:26:00,bozen,2",
 			"trip-bus-1,14:05:00,14:05:00,ora-station,1",
+			"trip-bus-2,14:35:00,14:35:00,bozen,1",
+			"trip-bus-2,15:10:00,15:10:00,truden,2",
+			"trip-bus-3,14:06:00,14:06:00,ora-station,1",
+			"trip-bus-3,14:40:00,14:40:00,bolzano-via-brennero,2",
 			"",
 		}, "\n"),
 	}

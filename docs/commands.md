@@ -36,7 +36,7 @@ Example output with `--network=false`:
 {
   "ok": true,
   "version": {
-    "version": "0.1.11-dev",
+    "version": "0.1.12-dev",
     "commit": "unknown",
     "date": "unknown",
     "goos": "darwin",
@@ -46,7 +46,7 @@ Example output with `--network=false`:
     {
       "name": "version",
       "ok": true,
-      "message": "0.1.11-dev"
+      "message": "0.1.12-dev"
     },
     {
       "name": "api_registry",
@@ -498,7 +498,37 @@ Flags:
 - `--format json|table|markdown` - output format; default `table`.
 - `--json` - shortcut for `--format json`.
 
-This command does not perform transfer routing. If no direct trip matches, the output includes a warning. JSON output includes `from_match_mode`, `to_match_mode`, `from_stops`, and `to_stops`; use stop-id or parent-station mode for agent workflows where names like Merano or Bolzano return many matches.
+This command only finds direct static GTFS trip matches. Use `odh transit journey` when transfer planning is needed. If no direct trip matches, the output includes a warning. JSON output includes `from_match_mode`, `to_match_mode`, `from_stops`, and `to_stops`; use stop-id or parent-station mode for agent workflows where names like Merano or Bolzano return many matches.
+
+## `odh transit journey`
+
+Plans static GTFS journeys with transfers.
+
+```bash
+odh transit journey --from auer --to brenner --date 2026-05-16 --time 14:05 --max-transfers 2
+odh transit journey --from-stop-id Parentit:22021:301 --to-stop-id it:22021:730:0:1150 --date 2026-05-21 --time 16:40 --max-transfers 3
+```
+
+Flags:
+
+- `--dataset value` - GTFS dataset id; default `sta-time-tables`.
+- `--from value` - origin stop query; required unless `--from-stop-id` is used.
+- `--from-stop-id value` - exact origin GTFS `stop_id` or `parent_station` from `odh transit stops search`.
+- `--to value` - destination stop query; required unless `--to-stop-id` is used.
+- `--to-stop-id value` - exact destination GTFS `stop_id` or `parent_station` from `odh transit stops search`.
+- `--date YYYY-MM-DD` - service date; default today.
+- `--time HH:MM` - earliest origin departure time; required.
+- `--mode all|train|bus|cable-car` - route-type filter; default `all`.
+- `--max-transfers n` - maximum transfers; default `3`.
+- `--min-transfer duration` - minimum transfer time; default `3m`.
+- `--max-duration duration` - maximum journey duration to search; default `6h`.
+- `--limit n` - maximum journeys to return; default `3`.
+- `--cache-dir dir` - directory for cached GTFS archives.
+- `--refresh` - force a new archive download.
+- `--format json|table|markdown` - output format; default `table`.
+- `--json` - shortcut for `--format json`.
+
+The command uses static GTFS only. It can transfer between platforms in the same parent station or a nearby stop cluster, which covers common train-to-bus station transfers. It does not account for live delays, cancellations, walking from arbitrary coordinates, or missed-transfer risk. JSON output includes matched origin/destination stops, transfer settings, and the leg list for each journey.
 
 ## `odh transit delay-stats`
 
