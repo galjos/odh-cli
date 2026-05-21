@@ -6,20 +6,20 @@ SPDX-License-Identifier: CC0-1.0
 
 # Release
 
-Releases are built from Git tags named `v*`, for example `v0.1.12`.
+Releases are built from Git tags named `v*`, for example `v0.1.13`.
 
 ## Local Archive Build
 
 Build a stamped archive for the current platform:
 
 ```bash
-VERSION=v0.1.12 scripts/build-release.sh
+VERSION=v0.1.13 scripts/build-release.sh
 ```
 
 Cross-compile by setting `GOOS` and `GOARCH`:
 
 ```bash
-VERSION=v0.1.12 GOOS=linux GOARCH=amd64 scripts/build-release.sh
+VERSION=v0.1.13 GOOS=linux GOARCH=amd64 scripts/build-release.sh
 ```
 
 Artifacts are written to `dist/` as archives plus SHA-256 checksum files.
@@ -29,8 +29,8 @@ Artifacts are written to `dist/` as archives plus SHA-256 checksum files.
 Push a version tag:
 
 ```bash
-git tag v0.1.12
-git push origin v0.1.12
+git tag v0.1.13
+git push origin v0.1.13
 ```
 
 The release workflow builds Linux and macOS binaries for `amd64` and `arm64`, stamps `odh version`, uploads archives, and creates the GitHub Release.

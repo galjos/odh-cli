@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -691,6 +692,173 @@ func TestRunTransitJourneyFindsTransferItinerary(t *testing.T) {
 	}
 	if !containsWarning(decoded.Warnings, "static GTFS timetable") {
 		t.Fatalf("missing static GTFS warning: %#v", decoded.Warnings)
+	}
+}
+
+func TestRunTransitJourneyAnnotatesRealtime(t *testing.T) {
+	gtfsZip := buildTestGTFSZip(t)
+	timestamp := time.Now().Unix()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/dataset/sta-time-tables/raw":
+			_, _ = w.Write(gtfsZip)
+		case "/v1/realtime/sta-time-tables/trip-updates":
+			fmt.Fprintf(w, `{
+				"header":{"timestamp":%d},
+				"entity":[
+					{"id":"rt-reg","trip_update":{"trip":{"trip_id":"trip-reg-2","route_id":"route-reg"},"stop_time_update":[{"stop_id":"bozen","stop_sequence":2,"arrival":{"delay":300},"departure":{"delay":300}}]}},
+					{"id":"rt-bus","trip_update":{"trip":{"trip_id":"trip-bus-2","route_id":"route-bus"},"stop_time_update":[{"stop_id":"bozen","stop_sequence":1,"departure":{"delay":120}},{"stop_id":"truden","stop_sequence":2,"arrival":{"delay":120}}]}}
+				]
+			}`, timestamp)
+		case "/v1/realtime/sta-time-tables/service-alerts":
+			fmt.Fprintf(w, `{
+				"header":{"timestamp":%d},
+				"entity":[
+					{"id":"alert-bus","alert":{"cause":"CONSTRUCTION","effect":"SIGNIFICANT_DELAYS","informed_entity":[{"route_id":"route-bus"}],"header_text":{"translation":[{"language":"en","text":"Road works near Truden"}]}}}
+				]
+			}`, timestamp)
+		default:
+			t.Fatalf("unexpected path %q", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	runner := newTestRunner(t, []apis.API{{Name: "gtfs", BaseURL: server.URL, Public: true}})
+	var stdout, stderr bytes.Buffer
+	code := runner.Run(context.Background(), []string{
+		"transit", "journey",
+		"--from", "auer",
+		"--to", "truden",
+		"--date", "2026-05-16",
+		"--time", "14:00",
+		"--max-transfers", "2",
+		"--min-transfer", "3m",
+		"--max-duration", "2h",
+		"--with-realtime",
+		"--cache-dir", t.TempDir(),
+		"--json",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("Run exit = %d, stderr = %s", code, stderr.String())
+	}
+	var decoded struct {
+		WithRealtime bool `json:"with_realtime"`
+		Realtime     struct {
+			TripUpdateEntityCount   int   `json:"trip_update_entity_count"`
+			ServiceAlertEntityCount int   `json:"service_alert_entity_count"`
+			MatchedTripUpdateCount  int   `json:"matched_trip_update_count"`
+			MatchedAlertCount       int   `json:"matched_alert_count"`
+			FeedTimestampUnix       int64 `json:"feed_timestamp_unix"`
+		} `json:"realtime"`
+		Journeys []struct {
+			RealtimeTransfers []struct {
+				Status                 string `json:"status"`
+				ScheduledBufferSeconds int    `json:"scheduled_buffer_seconds"`
+				AdjustedBufferSeconds  *int   `json:"adjusted_buffer_seconds"`
+			} `json:"realtime_transfers"`
+			Legs []struct {
+				Realtime struct {
+					Status                string `json:"status"`
+					DelaySeconds          *int   `json:"delay_seconds"`
+					AdjustedDepartureTime string `json:"adjusted_departure_time"`
+					AdjustedArrivalTime   string `json:"adjusted_arrival_time"`
+					Alerts                []struct {
+						ID     string `json:"id"`
+						Header string `json:"header"`
+					} `json:"alerts"`
+				} `json:"realtime"`
+			} `json:"legs"`
+		} `json:"journeys"`
+		Warnings []string `json:"warnings"`
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &decoded); err != nil {
+		t.Fatalf("invalid JSON: %v\n%s", err, stdout.String())
+	}
+	if !decoded.WithRealtime || decoded.Realtime.TripUpdateEntityCount != 2 || decoded.Realtime.ServiceAlertEntityCount != 1 ||
+		decoded.Realtime.MatchedTripUpdateCount != 2 || decoded.Realtime.MatchedAlertCount != 1 || decoded.Realtime.FeedTimestampUnix != timestamp {
+		t.Fatalf("unexpected realtime summary: %#v\n%s", decoded.Realtime, stdout.String())
+	}
+	if len(decoded.Journeys) != 1 || len(decoded.Journeys[0].Legs) != 2 {
+		t.Fatalf("expected two-leg journey, got: %s", stdout.String())
+	}
+	firstLegRT := decoded.Journeys[0].Legs[0].Realtime
+	if firstLegRT.Status != "updated" || firstLegRT.DelaySeconds == nil || *firstLegRT.DelaySeconds != 300 ||
+		firstLegRT.AdjustedArrivalTime != "14:30:00" {
+		t.Fatalf("unexpected first leg realtime: %#v", firstLegRT)
+	}
+	secondLegRT := decoded.Journeys[0].Legs[1].Realtime
+	if secondLegRT.Status != "updated" || secondLegRT.DelaySeconds == nil || *secondLegRT.DelaySeconds != 120 ||
+		secondLegRT.AdjustedDepartureTime != "14:37:00" || len(secondLegRT.Alerts) != 1 || secondLegRT.Alerts[0].ID != "alert-bus" {
+		t.Fatalf("unexpected second leg realtime: %#v", secondLegRT)
+	}
+	if got := decoded.Journeys[0].RealtimeTransfers[0]; got.Status != "ok" || got.ScheduledBufferSeconds != 600 ||
+		got.AdjustedBufferSeconds == nil || *got.AdjustedBufferSeconds != 420 {
+		t.Fatalf("unexpected transfer realtime: %#v", got)
+	}
+	if !containsWarning(decoded.Warnings, "GTFS-RT annotations") {
+		t.Fatalf("missing GTFS-RT caveat warning: %#v", decoded.Warnings)
+	}
+}
+
+func TestRunTransitJourneyWarnsWhenRealtimeDoesNotMatch(t *testing.T) {
+	gtfsZip := buildTestGTFSZip(t)
+	timestamp := time.Now().Unix()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/dataset/sta-time-tables/raw":
+			_, _ = w.Write(gtfsZip)
+		case "/v1/realtime/sta-time-tables/trip-updates":
+			fmt.Fprintf(w, `{"header":{"timestamp":%d},"entity":[{"id":"other","trip_update":{"trip":{"trip_id":"not-the-returned-trip"},"stop_time_update":[{"arrival":{"delay":60}}]}}]}`, timestamp)
+		case "/v1/realtime/sta-time-tables/service-alerts":
+			fmt.Fprintf(w, `{"header":{"timestamp":%d},"entity":[]}`, timestamp)
+		default:
+			t.Fatalf("unexpected path %q", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	runner := newTestRunner(t, []apis.API{{Name: "gtfs", BaseURL: server.URL, Public: true}})
+	var stdout, stderr bytes.Buffer
+	code := runner.Run(context.Background(), []string{
+		"transit", "journey",
+		"--from", "auer",
+		"--to", "truden",
+		"--date", "2026-05-16",
+		"--time", "14:00",
+		"--max-transfers", "2",
+		"--max-duration", "2h",
+		"--with-realtime",
+		"--cache-dir", t.TempDir(),
+		"--json",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("Run exit = %d, stderr = %s", code, stderr.String())
+	}
+	var decoded struct {
+		Realtime struct {
+			TripUpdateEntityCount  int `json:"trip_update_entity_count"`
+			MatchedTripUpdateCount int `json:"matched_trip_update_count"`
+		} `json:"realtime"`
+		Journeys []struct {
+			Legs []struct {
+				Realtime struct {
+					Status string `json:"status"`
+				} `json:"realtime"`
+			} `json:"legs"`
+		} `json:"journeys"`
+		Warnings []string `json:"warnings"`
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &decoded); err != nil {
+		t.Fatalf("invalid JSON: %v\n%s", err, stdout.String())
+	}
+	if decoded.Realtime.TripUpdateEntityCount != 1 || decoded.Realtime.MatchedTripUpdateCount != 0 {
+		t.Fatalf("unexpected realtime counts: %#v", decoded.Realtime)
+	}
+	if decoded.Journeys[0].Legs[0].Realtime.Status != "no-update" {
+		t.Fatalf("expected no-update leg status, got: %s", stdout.String())
+	}
+	if !containsWarning(decoded.Warnings, "none matched the returned journey trip IDs") {
+		t.Fatalf("missing unmatched realtime warning: %#v", decoded.Warnings)
 	}
 }
 

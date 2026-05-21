@@ -59,6 +59,7 @@ The Mobility commands include a narrow A22 diagnostic path:
 - `odh transit departures --stop "Ora, Stazione di Ora" --date YYYY-MM-DD --around HH:MM` inspects static GTFS departures near a time.
 - `odh transit trip --from auer --to brenner --date YYYY-MM-DD --time HH:MM --mode train` looks for direct static GTFS trip matches.
 - `odh transit journey --from auer --to brenner --date YYYY-MM-DD --time HH:MM --max-transfers 2` plans static GTFS transfer itineraries.
+- `odh transit journey --from auer --to brenner --date YYYY-MM-DD --time HH:MM --max-transfers 2 --with-realtime --json` annotates returned static journeys with matching current GTFS-RT delays, alerts, and transfer risk.
 - `odh mobility events --origin A22 --latest` checks current A22 events.
 - `odh mobility origins --station-type TrafficSensor` lists `sorigin` values before choosing one for sensor or datatype commands.
 - `odh mobility stations --station-type TrafficSensor --origin A22` lists A22 traffic-sensor station records.

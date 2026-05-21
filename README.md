@@ -61,7 +61,7 @@ The installer detects macOS/Linux and `amd64`/`arm64`, downloads the matching re
 Install a specific version or directory:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/galjos/odh-cli/main/scripts/install.sh | sh -s -- --version v0.1.12 --dir "$HOME/bin"
+curl -fsSL https://raw.githubusercontent.com/galjos/odh-cli/main/scripts/install.sh | sh -s -- --version v0.1.13 --dir "$HOME/bin"
 ```
 
 Build from source instead:
@@ -83,7 +83,7 @@ Build with release metadata:
 
 ```bash
 go build \
-  -ldflags "-X github.com/galjos/odh-cli/internal/version.Version=0.1.12 -X github.com/galjos/odh-cli/internal/version.Commit=$(git rev-parse --short HEAD) -X github.com/galjos/odh-cli/internal/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  -ldflags "-X github.com/galjos/odh-cli/internal/version.Version=0.1.13 -X github.com/galjos/odh-cli/internal/version.Commit=$(git rev-parse --short HEAD) -X github.com/galjos/odh-cli/internal/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   -o odh ./cmd/odh
 ```
 
@@ -191,10 +191,11 @@ odh transit trip --from auer --to brenner --date 2026-05-16 --time 14:05 --mode 
 odh transit departures --stop-id <stop_id-from-search> --date 2026-05-16 --around 14:05 --mode train
 odh transit trip --from-stop-id <origin-stop-id> --to-stop-id <destination-stop-id> --date 2026-05-16 --time 14:05 --mode train
 odh transit journey --from-stop-id <origin-stop-id> --to-stop-id <destination-stop-id> --date 2026-05-16 --time 14:05 --max-transfers 3
+odh transit journey --from-stop-id <origin-stop-id> --to-stop-id <destination-stop-id> --date 2026-05-16 --time 14:05 --max-transfers 3 --with-realtime --json
 odh transit delay-stats --from auer --to brenner --time 14:05 --weekday saturday
 ```
 
-`odh transit journey` plans static GTFS transfer itineraries. `odh transit delay-stats` is intentionally explicit: it reports that historical delay probability is unsupported until a GTFS-RT archive collector exists. It does not guess probabilities from the live feed.
+`odh transit journey` plans static GTFS transfer itineraries. Add `--with-realtime` to annotate the returned static journeys with matching current GTFS-RT trip delays, service alerts, adjusted leg times, and transfer-risk hints. It still does not reroute live. `odh transit delay-stats` is intentionally explicit: it reports that historical delay probability is unsupported until a GTFS-RT archive collector exists. It does not guess probabilities from the live feed.
 
 Use `odh transit stops search` first and switch to stop IDs when a place name matches many platforms or bus bays. Parent station IDs are valid and expand to their child platform stops.
 

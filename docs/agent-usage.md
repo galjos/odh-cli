@@ -143,6 +143,7 @@ odh transit stops search merano --limit 10
 odh transit departures --stop-id <stop_id-from-search> --date 2026-05-16 --around 13:00 --mode train
 odh transit trip --from-stop-id <origin-stop-id> --to-stop-id <destination-stop-id> --date 2026-05-16 --time 13:00 --mode train
 odh transit journey --from-stop-id <origin-stop-id> --to-stop-id <destination-stop-id> --date 2026-05-16 --time 13:00 --max-transfers 3
+odh transit journey --from-stop-id <origin-stop-id> --to-stop-id <destination-stop-id> --date 2026-05-16 --time 13:00 --max-transfers 3 --with-realtime --json
 ```
 
 The transit layer reads the static STA GTFS archive and caches it locally for 24 hours. A cold cache download can be large, so transit commands allow a longer archive-download timeout than normal API calls and write a progress diagnostic to stderr while the archive is loading. Stop search supports common German/Italian aliases such as `auer` / `ora`, `brenner` / `brennero`, and `bozen` / `bolzano`.
@@ -151,7 +152,7 @@ Transit commands default to compact table output. Add `--json` when you need `ma
 
 If `transit departures`, `transit trip`, or `transit journey` returns a warning that a stop query matched many stops, narrow the stop wording with `odh transit stops search <query> --limit 5` and rerun with the returned `stop_id`: `--stop-id` for departures, or `--from-stop-id` / `--to-stop-id` for trip and journey matching. Parent station IDs are valid and expand to their child platform stops. This is the preferred agent pattern for ambiguous station names such as Merano or Bolzano.
 
-Use `odh transit journey` for multi-leg public-transport questions such as "how do I get home by bus and train?" It performs static GTFS transfer planning with `--max-transfers`, `--min-transfer`, and `--max-duration`, and it can transfer between platforms in the same parent station or nearby stop cluster. It is still not a live journey planner: it does not account for realtime delays, cancellations, or missed-transfer risk. Use `odh transit trip` when the user specifically needs direct trip evidence for one vehicle.
+Use `odh transit journey` for multi-leg public-transport questions such as "how do I get home by bus and train?" It performs static GTFS transfer planning with `--max-transfers`, `--min-transfer`, and `--max-duration`, and it can transfer between platforms in the same parent station or nearby stop cluster. For current same-day questions, add `--with-realtime --json`; this annotates returned static journey legs with matching current GTFS-RT trip delays, service alerts, adjusted times, and transfer-risk hints. It is still not a full live journey planner: missing realtime entities do not prove a trip is on time, and the CLI does not reroute around delays or cancellations. Use `odh transit trip` when the user specifically needs direct trip evidence for one vehicle.
 
 For historical delay probability or "usual delay minutes", use:
 

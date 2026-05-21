@@ -119,18 +119,19 @@
         "odh transit stops search \"Merano Maia Bassa\" --limit 10",
         "odh transit stops search \"Fontanefredde Bivio Trodena\" --limit 10",
         "odh transit journey --from-stop-id <origin-stop-id-or-parent> --to-stop-id <destination-stop-id> --date <date> --time 16:40 --max-transfers 3",
-        "odh transit journey --from-stop-id <origin-stop-id-or-parent> --to-stop-id <destination-stop-id> --date <date> --time 16:40 --max-transfers 3 --json"
+        "odh transit journey --from-stop-id <origin-stop-id-or-parent> --to-stop-id <destination-stop-id> --date <date> --time 16:40 --max-transfers 3 --with-realtime --json"
       ],
       "pass_criteria": [
         "Uses transit journey rather than manually stitching only direct trip commands.",
         "Uses stop search and stop IDs or parent station IDs for ambiguous stop names.",
         "Reports the returned legs, transfers, departure time, and arrival time.",
-        "States that the itinerary is based on static GTFS timetable data, not live delay-aware routing."
+        "Uses --with-realtime for current same-day questions when live delay or transfer-risk context matters.",
+        "States that routing is based on static GTFS and realtime is only an annotation, not live rerouting."
       ],
       "common_failures": [
         "Stops after transit trip reports no direct match.",
         "Manually invents a transfer chain without using the journey command.",
-        "Presents static GTFS as live delay-aware routing.",
+        "Presents GTFS-RT annotations as full live delay-aware routing.",
         "Mixes nearby bus bays or platforms without checking stop IDs."
       ]
     },

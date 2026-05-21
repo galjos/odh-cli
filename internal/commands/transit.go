@@ -92,23 +92,25 @@ type transitTripMatch struct {
 }
 
 type transitJourneyLeg struct {
-	TripID         string            `json:"trip_id"`
-	RouteID        string            `json:"route_id"`
-	RouteShortName string            `json:"route_short_name,omitempty"`
-	RouteLongName  string            `json:"route_long_name,omitempty"`
-	RouteType      string            `json:"route_type,omitempty"`
-	Headsign       string            `json:"headsign,omitempty"`
-	DirectionID    string            `json:"direction_id,omitempty"`
-	From           transitStopOnTrip `json:"from"`
-	To             transitStopOnTrip `json:"to"`
+	TripID         string              `json:"trip_id"`
+	RouteID        string              `json:"route_id"`
+	RouteShortName string              `json:"route_short_name,omitempty"`
+	RouteLongName  string              `json:"route_long_name,omitempty"`
+	RouteType      string              `json:"route_type,omitempty"`
+	Headsign       string              `json:"headsign,omitempty"`
+	DirectionID    string              `json:"direction_id,omitempty"`
+	From           transitStopOnTrip   `json:"from"`
+	To             transitStopOnTrip   `json:"to"`
+	Realtime       *transitLegRealtime `json:"realtime,omitempty"`
 }
 
 type transitJourney struct {
-	DepartureTime string              `json:"departure_time"`
-	ArrivalTime   string              `json:"arrival_time"`
-	Duration      string              `json:"duration"`
-	TransferCount int                 `json:"transfer_count"`
-	Legs          []transitJourneyLeg `json:"legs"`
+	DepartureTime     string                    `json:"departure_time"`
+	ArrivalTime       string                    `json:"arrival_time"`
+	Duration          string                    `json:"duration"`
+	TransferCount     int                       `json:"transfer_count"`
+	Legs              []transitJourneyLeg       `json:"legs"`
+	RealtimeTransfers []transitTransferRealtime `json:"realtime_transfers,omitempty"`
 }
 
 type transitStopOnTrip struct {
@@ -383,6 +385,7 @@ func (r *Runner) newTransitCmd() *cobra.Command {
 	var journeyLimit int
 	var journeyCacheDir string
 	var journeyRefresh bool
+	var journeyWithRealtime bool
 	var journeyFormat string
 	var journeyJSON bool
 	journeyCmd := &cobra.Command{
@@ -448,7 +451,15 @@ func (r *Runner) newTransitCmd() *cobra.Command {
 			}
 			warnings = appendTransitStopMatchWarning(warnings, "from", "from-stop-id", fromSelector, result.FromMatchMode, len(result.FromStops))
 			warnings = appendTransitStopMatchWarning(warnings, "to", "to-stop-id", toSelector, result.ToMatchMode, len(result.ToStops))
-			warnings = append(warnings, "journey planning uses static GTFS timetable data only; live delays and missed-transfer risk are not included")
+			var realtime *transitRealtimeFeedInfo
+			if journeyWithRealtime {
+				realtime, warnings = r.annotateTransitJourneysRealtime(cmd.Context(), journeyDataset, query.Date, result.Journeys, minTransfer, warnings)
+			}
+			if journeyWithRealtime {
+				warnings = append(warnings, "journey planning uses static GTFS routing with GTFS-RT annotations; missing realtime entities do not prove trips are on time")
+			} else {
+				warnings = append(warnings, "journey planning uses static GTFS timetable data only; add --with-realtime to annotate matching trips with current GTFS-RT delays and alerts")
+			}
 			return writeTransitJourneyOutput(cmd.OutOrStdout(), transitJourneyOutput{
 				Dataset:       journeyDataset,
 				FromQuery:     journeyFromQuery,
@@ -468,6 +479,8 @@ func (r *Runner) newTransitCmd() *cobra.Command {
 				ToStops:       result.ToStops,
 				Count:         len(result.Journeys),
 				Journeys:      result.Journeys,
+				WithRealtime:  journeyWithRealtime,
+				Realtime:      realtime,
 				Warnings:      warnings,
 				Format:        format,
 			})
@@ -487,6 +500,7 @@ func (r *Runner) newTransitCmd() *cobra.Command {
 	journeyCmd.Flags().IntVar(&journeyLimit, "limit", 3, "maximum journeys to return")
 	journeyCmd.Flags().StringVar(&journeyCacheDir, "cache-dir", "", "directory for cached GTFS archives")
 	journeyCmd.Flags().BoolVar(&journeyRefresh, "refresh", false, "refresh cached GTFS archive")
+	journeyCmd.Flags().BoolVar(&journeyWithRealtime, "with-realtime", false, "annotate static journeys with current GTFS-RT trip updates, alerts, and transfer risk")
 	journeyCmd.Flags().StringVar(&journeyFormat, "format", "table", "output format: json, table, or markdown")
 	journeyCmd.Flags().BoolVar(&journeyJSON, "json", false, "shortcut for --format json")
 
@@ -650,26 +664,28 @@ type transitTripOutput struct {
 }
 
 type transitJourneyOutput struct {
-	Dataset       string           `json:"dataset"`
-	FromQuery     string           `json:"from_query,omitempty"`
-	FromStopID    string           `json:"from_stop_id,omitempty"`
-	FromMatchMode string           `json:"from_match_mode"`
-	ToQuery       string           `json:"to_query,omitempty"`
-	ToStopID      string           `json:"to_stop_id,omitempty"`
-	ToMatchMode   string           `json:"to_match_mode"`
-	Date          string           `json:"date"`
-	Time          string           `json:"time"`
-	Mode          string           `json:"mode"`
-	MaxTransfers  int              `json:"max_transfers"`
-	MinTransfer   string           `json:"min_transfer"`
-	MaxDuration   string           `json:"max_duration"`
-	Archive       gtfsArchiveInfo  `json:"archive"`
-	FromStops     []gtfsStop       `json:"from_stops"`
-	ToStops       []gtfsStop       `json:"to_stops"`
-	Count         int              `json:"count"`
-	Journeys      []transitJourney `json:"journeys"`
-	Warnings      []string         `json:"warnings,omitempty"`
-	Format        string           `json:"-"`
+	Dataset       string                   `json:"dataset"`
+	FromQuery     string                   `json:"from_query,omitempty"`
+	FromStopID    string                   `json:"from_stop_id,omitempty"`
+	FromMatchMode string                   `json:"from_match_mode"`
+	ToQuery       string                   `json:"to_query,omitempty"`
+	ToStopID      string                   `json:"to_stop_id,omitempty"`
+	ToMatchMode   string                   `json:"to_match_mode"`
+	Date          string                   `json:"date"`
+	Time          string                   `json:"time"`
+	Mode          string                   `json:"mode"`
+	MaxTransfers  int                      `json:"max_transfers"`
+	MinTransfer   string                   `json:"min_transfer"`
+	MaxDuration   string                   `json:"max_duration"`
+	Archive       gtfsArchiveInfo          `json:"archive"`
+	FromStops     []gtfsStop               `json:"from_stops"`
+	ToStops       []gtfsStop               `json:"to_stops"`
+	Count         int                      `json:"count"`
+	Journeys      []transitJourney         `json:"journeys"`
+	WithRealtime  bool                     `json:"with_realtime"`
+	Realtime      *transitRealtimeFeedInfo `json:"realtime,omitempty"`
+	Warnings      []string                 `json:"warnings,omitempty"`
+	Format        string                   `json:"-"`
 }
 
 type transitDelayStatsOutput struct {
@@ -802,27 +818,57 @@ func writeTransitJourneyOutput(stdout io.Writer, result transitJourneyOutput) er
 		return output.WriteJSON(stdout, result)
 	case "table":
 		tw := tabwriter.NewWriter(stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(tw, "JOURNEY\tLEG\tROUTE\tFROM\tDEPART\tTO\tARRIVE\tHEADSIGN")
+		if result.WithRealtime {
+			fmt.Fprintln(tw, "JOURNEY\tLEG\tROUTE\tFROM\tDEPART\tTO\tARRIVE\tRT\tDELAY\tHEADSIGN")
+		} else {
+			fmt.Fprintln(tw, "JOURNEY\tLEG\tROUTE\tFROM\tDEPART\tTO\tARRIVE\tHEADSIGN")
+		}
 		for journeyIndex, journey := range result.Journeys {
 			for legIndex, leg := range journey.Legs {
-				fmt.Fprintf(tw, "%d\t%d\t%s\t%s\t%s\t%s\t%s\t%s\n",
+				if result.WithRealtime {
+					fmt.Fprintf(tw, "%d\t%d\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
+						journeyIndex+1,
+						legIndex+1,
+						firstNonEmpty(leg.RouteShortName, leg.RouteID),
+						leg.From.StopName,
+						firstNonEmpty(realtimeAdjustedDeparture(leg), leg.From.DepartureTime),
+						leg.To.StopName,
+						firstNonEmpty(realtimeAdjustedArrival(leg), leg.To.ArrivalTime),
+						realtimeLegStatus(leg),
+						realtimeDelayText(leg),
+						leg.Headsign,
+					)
+				} else {
+					fmt.Fprintf(tw, "%d\t%d\t%s\t%s\t%s\t%s\t%s\t%s\n",
+						journeyIndex+1,
+						legIndex+1,
+						firstNonEmpty(leg.RouteShortName, leg.RouteID),
+						leg.From.StopName,
+						leg.From.DepartureTime,
+						leg.To.StopName,
+						leg.To.ArrivalTime,
+						leg.Headsign,
+					)
+				}
+			}
+			if result.WithRealtime {
+				fmt.Fprintf(tw, "%d\tsummary\t-\t-\t%s\t-\t%s\t%s\t-\t%s, %d transfer(s)\n",
 					journeyIndex+1,
-					legIndex+1,
-					firstNonEmpty(leg.RouteShortName, leg.RouteID),
-					leg.From.StopName,
-					leg.From.DepartureTime,
-					leg.To.StopName,
-					leg.To.ArrivalTime,
-					leg.Headsign,
+					journey.DepartureTime,
+					journey.ArrivalTime,
+					realtimeTransferSummary(journey.RealtimeTransfers),
+					journey.Duration,
+					journey.TransferCount,
+				)
+			} else {
+				fmt.Fprintf(tw, "%d\tsummary\t-\t-\t%s\t-\t%s\t%s, %d transfer(s)\n",
+					journeyIndex+1,
+					journey.DepartureTime,
+					journey.ArrivalTime,
+					journey.Duration,
+					journey.TransferCount,
 				)
 			}
-			fmt.Fprintf(tw, "%d\tsummary\t-\t-\t%s\t-\t%s\t%s, %d transfer(s)\n",
-				journeyIndex+1,
-				journey.DepartureTime,
-				journey.ArrivalTime,
-				journey.Duration,
-				journey.TransferCount,
-			)
 		}
 		if err := tw.Flush(); err != nil {
 			return err
@@ -830,28 +876,59 @@ func writeTransitJourneyOutput(stdout io.Writer, result transitJourneyOutput) er
 		writePlainWarnings(stdout, result.Warnings)
 		return nil
 	case "markdown":
-		fmt.Fprintln(stdout, "| journey | leg | route | from | depart | to | arrive | headsign |")
-		fmt.Fprintln(stdout, "| --- | --- | --- | --- | --- | --- | --- | --- |")
+		if result.WithRealtime {
+			fmt.Fprintln(stdout, "| journey | leg | route | from | depart | to | arrive | rt | delay | headsign |")
+			fmt.Fprintln(stdout, "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |")
+		} else {
+			fmt.Fprintln(stdout, "| journey | leg | route | from | depart | to | arrive | headsign |")
+			fmt.Fprintln(stdout, "| --- | --- | --- | --- | --- | --- | --- | --- |")
+		}
 		for journeyIndex, journey := range result.Journeys {
 			for legIndex, leg := range journey.Legs {
-				fmt.Fprintf(stdout, "| %d | %d | %s | %s | %s | %s | %s | %s |\n",
+				if result.WithRealtime {
+					fmt.Fprintf(stdout, "| %d | %d | %s | %s | %s | %s | %s | %s | %s | %s |\n",
+						journeyIndex+1,
+						legIndex+1,
+						escapeMarkdown(firstNonEmpty(leg.RouteShortName, leg.RouteID)),
+						escapeMarkdown(leg.From.StopName),
+						escapeMarkdown(firstNonEmpty(realtimeAdjustedDeparture(leg), leg.From.DepartureTime)),
+						escapeMarkdown(leg.To.StopName),
+						escapeMarkdown(firstNonEmpty(realtimeAdjustedArrival(leg), leg.To.ArrivalTime)),
+						escapeMarkdown(realtimeLegStatus(leg)),
+						escapeMarkdown(realtimeDelayText(leg)),
+						escapeMarkdown(leg.Headsign),
+					)
+				} else {
+					fmt.Fprintf(stdout, "| %d | %d | %s | %s | %s | %s | %s | %s |\n",
+						journeyIndex+1,
+						legIndex+1,
+						escapeMarkdown(firstNonEmpty(leg.RouteShortName, leg.RouteID)),
+						escapeMarkdown(leg.From.StopName),
+						escapeMarkdown(leg.From.DepartureTime),
+						escapeMarkdown(leg.To.StopName),
+						escapeMarkdown(leg.To.ArrivalTime),
+						escapeMarkdown(leg.Headsign),
+					)
+				}
+			}
+			if result.WithRealtime {
+				fmt.Fprintf(stdout, "| %d | summary | - | - | %s | - | %s | %s | - | %s, %d transfer(s) |\n",
 					journeyIndex+1,
-					legIndex+1,
-					escapeMarkdown(firstNonEmpty(leg.RouteShortName, leg.RouteID)),
-					escapeMarkdown(leg.From.StopName),
-					escapeMarkdown(leg.From.DepartureTime),
-					escapeMarkdown(leg.To.StopName),
-					escapeMarkdown(leg.To.ArrivalTime),
-					escapeMarkdown(leg.Headsign),
+					escapeMarkdown(journey.DepartureTime),
+					escapeMarkdown(journey.ArrivalTime),
+					escapeMarkdown(realtimeTransferSummary(journey.RealtimeTransfers)),
+					escapeMarkdown(journey.Duration),
+					journey.TransferCount,
+				)
+			} else {
+				fmt.Fprintf(stdout, "| %d | summary | - | - | %s | - | %s | %s, %d transfer(s) |\n",
+					journeyIndex+1,
+					escapeMarkdown(journey.DepartureTime),
+					escapeMarkdown(journey.ArrivalTime),
+					escapeMarkdown(journey.Duration),
+					journey.TransferCount,
 				)
 			}
-			fmt.Fprintf(stdout, "| %d | summary | - | - | %s | - | %s | %s, %d transfer(s) |\n",
-				journeyIndex+1,
-				escapeMarkdown(journey.DepartureTime),
-				escapeMarkdown(journey.ArrivalTime),
-				escapeMarkdown(journey.Duration),
-				journey.TransferCount,
-			)
 		}
 		writeMarkdownWarnings(stdout, result.Warnings)
 		return nil

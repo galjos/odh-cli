@@ -111,4 +111,7 @@ assert_json_filter "transit departures supports exact stop ids" "$tmpdir/transit
 run_odh transit journey --from auer --to brenner --date 2026-05-16 --time 14:05 --max-transfers 2 --limit 3 --json >"$tmpdir/transit-journey.json"
 assert_json_filter "transit journey returns exact-station transfer-planning schema" "$tmpdir/transit-journey.json" '.count >= 1 and (.journeys | type == "array") and (.journeys[0].legs | type == "array") and all(.journeys[].legs[-1].to.stop_name; contains("Brennero")) and (.warnings[]? | contains("static GTFS timetable"))'
 
+run_odh transit journey --from auer --to brenner --date 2026-05-16 --time 14:05 --max-transfers 2 --limit 3 --with-realtime --json >"$tmpdir/transit-journey-realtime.json"
+assert_json_filter "transit journey exposes GTFS-RT annotation schema" "$tmpdir/transit-journey-realtime.json" '.with_realtime == true and (.realtime.trip_update_entity_count | type == "number") and (.journeys[0].legs[0].realtime.status | type == "string") and (.warnings[]? | contains("GTFS-RT annotations"))'
+
 printf '\nAgent eval smoke checks passed. Use evals/agent/tasks.json for manual agent scoring.\n'

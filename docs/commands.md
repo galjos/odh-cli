@@ -36,7 +36,7 @@ Example output with `--network=false`:
 {
   "ok": true,
   "version": {
-    "version": "0.1.12-dev",
+    "version": "0.1.13-dev",
     "commit": "unknown",
     "date": "unknown",
     "goos": "darwin",
@@ -46,7 +46,7 @@ Example output with `--network=false`:
     {
       "name": "version",
       "ok": true,
-      "message": "0.1.12-dev"
+      "message": "0.1.13-dev"
     },
     {
       "name": "api_registry",
@@ -507,6 +507,7 @@ Plans static GTFS journeys with transfers.
 ```bash
 odh transit journey --from auer --to brenner --date 2026-05-16 --time 14:05 --max-transfers 2
 odh transit journey --from-stop-id Parentit:22021:301 --to-stop-id it:22021:730:0:1150 --date 2026-05-21 --time 16:40 --max-transfers 3
+odh transit journey --from-stop-id Parentit:22021:301 --to-stop-id it:22021:730:0:1150 --date 2026-05-21 --time 16:40 --max-transfers 3 --with-realtime --json
 ```
 
 Flags:
@@ -525,10 +526,11 @@ Flags:
 - `--limit n` - maximum journeys to return; default `3`.
 - `--cache-dir dir` - directory for cached GTFS archives.
 - `--refresh` - force a new archive download.
+- `--with-realtime` - annotate returned static journeys with current GTFS-RT trip updates, service alerts, adjusted times, and transfer-risk hints.
 - `--format json|table|markdown` - output format; default `table`.
 - `--json` - shortcut for `--format json`.
 
-The command uses static GTFS only. It can transfer between platforms in the same parent station or a nearby stop cluster, which covers common train-to-bus station transfers. It does not account for live delays, cancellations, walking from arbitrary coordinates, or missed-transfer risk. JSON output includes matched origin/destination stops, transfer settings, and the leg list for each journey.
+The command routes using static GTFS. It can transfer between platforms in the same parent station or a nearby stop cluster, which covers common train-to-bus station transfers. With `--with-realtime`, the CLI fetches current GTFS-RT trip-updates and service-alerts for the same dataset and annotates only matching returned legs. JSON output includes `with_realtime`, a `realtime` feed summary, per-leg `realtime` status/delay/alert fields, and `realtime_transfers` for adjacent legs. Missing realtime matches are reported as warnings and must not be interpreted as proof that service is on time. The command does not do live rerouting, arbitrary-coordinate walking, or historical delay probability.
 
 ## `odh transit delay-stats`
 
