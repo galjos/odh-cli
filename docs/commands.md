@@ -36,7 +36,7 @@ Example output with `--network=false`:
 {
   "ok": true,
   "version": {
-    "version": "0.1.13-dev",
+    "version": "0.2.0-dev",
     "commit": "unknown",
     "date": "unknown",
     "goos": "darwin",
@@ -46,7 +46,7 @@ Example output with `--network=false`:
     {
       "name": "version",
       "ok": true,
-      "message": "0.1.13-dev"
+      "message": "0.2.0-dev"
     },
     {
       "name": "api_registry",

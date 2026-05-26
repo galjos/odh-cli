@@ -24,7 +24,7 @@ See [docs/data-scope.md](docs/data-scope.md) for the official-source summary use
 
 ## Status
 
-This is an early v0.1 project. It intentionally focuses on a small working core:
+This is a v0.2 project with a small, working, agent-friendly core:
 
 - list known Open Data Hub APIs,
 - report machine-readable build/version metadata,
@@ -42,11 +42,14 @@ This is an early v0.1 project. It intentionally focuses on a small working core:
 - query latest Mobility time-series measurements, with optional local origin, active-station, freshness, and sorting filters for agent-friendly availability checks,
 - run data-quality diagnostics for EV charging availability, parking forecasts, and Tourism event caveats,
 - list GTFS datasets and inspect GTFS-RT trip updates, vehicle positions, and service alerts,
-- search STA timetable stops and inspect static GTFS departures and direct trip matches,
+- search STA timetable stops, inspect static GTFS departures and direct trip matches, and plan static transfer journeys,
+- annotate static transit journeys with matching current GTFS-RT trip updates and service alerts,
 - summarize South Tyrol roadworks, closures, events, and traffic notices from Open Data Hub `PROVINCE_BZ` with zone discovery, date filtering, text search, deduplication, and stale-record warnings,
 - inspect A22 Mobility event and forecast feeds with explicit warnings when the data does not look like current traffic incidents.
 
-It does not yet include MCP, generated clients, Homebrew packaging, Docker images, a full upstream metadata catalog, or authenticated write flows.
+It does not yet include MCP, generated clients, Homebrew packaging, Docker images, a full upstream metadata catalog, authenticated write flows, full live public-transport rerouting, historical GTFS-RT delay archives, or historical A22 incident reconstruction.
+
+See [CHANGELOG.md](CHANGELOG.md) for release notes.
 
 ## Install
 
@@ -61,7 +64,7 @@ The installer detects macOS/Linux and `amd64`/`arm64`, downloads the matching re
 Install a specific version or directory:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/galjos/odh-cli/main/scripts/install.sh | sh -s -- --version v0.1.13 --dir "$HOME/bin"
+curl -fsSL https://raw.githubusercontent.com/galjos/odh-cli/main/scripts/install.sh | sh -s -- --version v0.2.0 --dir "$HOME/bin"
 ```
 
 Build from source instead:
@@ -83,7 +86,7 @@ Build with release metadata:
 
 ```bash
 go build \
-  -ldflags "-X github.com/galjos/odh-cli/internal/version.Version=0.1.13 -X github.com/galjos/odh-cli/internal/version.Commit=$(git rev-parse --short HEAD) -X github.com/galjos/odh-cli/internal/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  -ldflags "-X github.com/galjos/odh-cli/internal/version.Version=0.2.0 -X github.com/galjos/odh-cli/internal/version.Commit=$(git rev-parse --short HEAD) -X github.com/galjos/odh-cli/internal/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   -o odh ./cmd/odh
 ```
 

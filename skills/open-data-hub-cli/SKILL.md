@@ -13,7 +13,7 @@ metadata:
             {
               "id": "go",
               "kind": "go",
-              "module": "github.com/galjos/odh-cli/cmd/odh@v0.1.13",
+              "module": "github.com/galjos/odh-cli/cmd/odh@v0.2.0",
               "bins": ["odh"],
               "label": "Install odh CLI (go)",
             },
@@ -33,10 +33,10 @@ odh version
 odh doctor --timeout 10s
 ```
 
-Need `odh v0.1.13+` for traffic helpers, GTFS/transit, filtered latest measurements, comma-safe `--param`, and `transit journey --with-realtime`.
+Need `odh v0.2.0+` for traffic helpers, GTFS/transit, filtered latest measurements, comma-safe `--param`, and `transit journey --with-realtime`.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/galjos/odh-cli/main/scripts/install.sh | sh -s -- --version v0.1.13 --dir "$HOME/bin"
+curl -fsSL https://raw.githubusercontent.com/galjos/odh-cli/main/scripts/install.sh | sh -s -- --version v0.2.0 --dir "$HOME/bin"
 ```
 
 If running from the source repo, use `./odh`.

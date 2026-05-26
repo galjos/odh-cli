@@ -28,7 +28,7 @@ The installer:
 Install a specific release:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/galjos/odh-cli/main/scripts/install.sh | sh -s -- --version v0.1.13
+curl -fsSL https://raw.githubusercontent.com/galjos/odh-cli/main/scripts/install.sh | sh -s -- --version v0.2.0
 ```
 
 Install into a different directory:
@@ -41,7 +41,7 @@ For audited installs, download the script first and read it before running:
 
 ```bash
 curl -fsSLo install-odh.sh https://raw.githubusercontent.com/galjos/odh-cli/main/scripts/install.sh
-sh install-odh.sh --version v0.1.13 --dir "$HOME/bin"
+sh install-odh.sh --version v0.2.0 --dir "$HOME/bin"
 ```
 
 ## Environment
@@ -53,7 +53,7 @@ sh install-odh.sh --version v0.1.13 --dir "$HOME/bin"
 Example:
 
 ```bash
-ODH_VERSION=v0.1.13 ODH_INSTALL_DIR="$HOME/bin" sh scripts/install.sh
+ODH_VERSION=v0.2.0 ODH_INSTALL_DIR="$HOME/bin" sh scripts/install.sh
 ```
 
 ## Verify
@@ -68,7 +68,7 @@ odh doctor --timeout 10s
 Agents or developer machines with Go installed can also use:
 
 ```bash
-go install github.com/galjos/odh-cli/cmd/odh@v0.1.13
+go install github.com/galjos/odh-cli/cmd/odh@v0.2.0
 ```
 
 This is the installer path declared in the OpenClaw skill metadata.

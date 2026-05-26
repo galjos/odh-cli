@@ -13,7 +13,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -376,6 +379,70 @@ func TestRunTransitStopsSearchUsesAuerAlias(t *testing.T) {
 	}
 	if !strings.Contains(stderr.String(), "loading GTFS archive") {
 		t.Fatalf("expected cold-cache GTFS progress on stderr, got %s", stderr.String())
+	}
+}
+
+func TestRunTransitStopsSearchFallsBackToStaleGTFSCacheOnRefreshTimeout(t *testing.T) {
+	gtfsZip := buildTestGTFSZip(t)
+	cacheDir := t.TempDir()
+	cachePath := filepath.Join(cacheDir, "sta-time-tables.zip")
+	if err := os.WriteFile(cachePath, gtfsZip, 0o644); err != nil {
+		t.Fatalf("write stale cache: %v", err)
+	}
+	staleTime := time.Now().Add(-2 * defaultGTFSCacheTTL)
+	if err := os.Chtimes(cachePath, staleTime, staleTime); err != nil {
+		t.Fatalf("mark stale cache: %v", err)
+	}
+
+	originalTimeout := gtfsDownloadTimeout
+	gtfsDownloadTimeout = 25 * time.Millisecond
+	t.Cleanup(func() { gtfsDownloadTimeout = originalTimeout })
+
+	var requestCount atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount.Add(1)
+		<-r.Context().Done()
+	}))
+	defer server.Close()
+
+	runner := newTestRunner(t, []apis.API{{Name: "gtfs", BaseURL: server.URL, Public: true}})
+	var stdout, stderr bytes.Buffer
+	code := runner.Run(context.Background(), []string{"transit", "stops", "search", "auer", "--cache-dir", cacheDir, "--json"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("Run exit = %d, stderr = %s", code, stderr.String())
+	}
+	if got := requestCount.Load(); got != 1 {
+		t.Fatalf("expected one GTFS archive download attempt, got %d", got)
+	}
+
+	var decoded transitStopsSearchOutput
+	if err := json.Unmarshal(stdout.Bytes(), &decoded); err != nil {
+		t.Fatalf("invalid JSON: %v\n%s", err, stdout.String())
+	}
+	if !decoded.Archive.Cached || !decoded.Archive.Stale {
+		t.Fatalf("expected stale cached archive metadata, got %#v", decoded.Archive)
+	}
+	if !strings.Contains(decoded.Archive.Warning, "stale cached GTFS archive") {
+		t.Fatalf("expected archive warning, got %#v", decoded.Archive)
+	}
+	if !strings.Contains(stderr.String(), "warning: using stale cached GTFS archive") {
+		t.Fatalf("expected stale-cache warning on stderr, got %s", stderr.String())
+	}
+	if decoded.Count == 0 || !strings.Contains(stdout.String(), `"name": "Ora, Stazione di Ora"`) {
+		t.Fatalf("expected stops from stale cache, got %#v", decoded.Stops)
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	code = runner.Run(context.Background(), []string{"transit", "stops", "search", "auer", "--cache-dir", cacheDir, "--json"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("second Run exit = %d, stderr = %s", code, stderr.String())
+	}
+	if got := requestCount.Load(); got != 1 {
+		t.Fatalf("expected recent refresh failure marker to suppress another download attempt, got %d attempts", got)
+	}
+	if !strings.Contains(stderr.String(), "refresh failed recently") {
+		t.Fatalf("expected recent refresh failure warning on stderr, got %s", stderr.String())
 	}
 }
 

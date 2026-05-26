@@ -9,6 +9,7 @@ import (
 	"container/heap"
 	"context"
 	"encoding/csv"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -26,11 +27,13 @@ import (
 )
 
 const (
-	defaultTransitWindow = 15 * time.Minute
-	defaultGTFSCacheTTL  = 24 * time.Hour
-	gtfsDownloadTimeout  = 2 * time.Minute
-	maxGTFSArchiveBytes  = 200 * 1024 * 1024
+	defaultTransitWindow  = 15 * time.Minute
+	defaultGTFSCacheTTL   = 24 * time.Hour
+	gtfsRefreshRetryDelay = 15 * time.Minute
+	maxGTFSArchiveBytes   = 200 * 1024 * 1024
 )
+
+var gtfsDownloadTimeout = 2 * time.Minute
 
 type gtfsStop struct {
 	ID            string  `json:"id"`
@@ -126,6 +129,8 @@ type gtfsArchiveInfo struct {
 	Endpoint string `json:"endpoint"`
 	Path     string `json:"path,omitempty"`
 	Cached   bool   `json:"cached"`
+	Stale    bool   `json:"stale,omitempty"`
+	Warning  string `json:"warning,omitempty"`
 }
 
 type transitStopSelector struct {
@@ -983,18 +988,48 @@ func (r *Runner) fetchGTFSArchive(ctx context.Context, dataset, cacheDir string,
 	if !refresh && cacheFresh(cachePath, defaultGTFSCacheTTL) {
 		return gtfsArchiveInfo{Dataset: dataset, Endpoint: endpoint, Path: cachePath, Cached: true}, nil
 	}
+	failurePath := cachePath + ".refresh-failed"
+	if !refresh && cacheUsable(cachePath) && cacheFresh(failurePath, gtfsRefreshRetryDelay) {
+		warning := fmt.Sprintf("using stale cached GTFS archive because refresh failed recently; retry with --refresh or after %s", gtfsRefreshRetryDelay)
+		fmt.Fprintf(progress, "warning: %s\n", warning)
+		return staleGTFSArchiveInfo(dataset, endpoint, cachePath, warning), nil
+	}
 	fmt.Fprintf(progress, "loading GTFS archive %q from Open Data Hub; this may take up to %s on a cold cache\n", dataset, gtfsDownloadTimeout)
-	resp, err := r.Client.WithTimeout(gtfsDownloadTimeout).GetWithLimit(ctx, endpoint, maxGTFSArchiveBytes)
+	downloadCtx, cancel := context.WithTimeout(ctx, gtfsDownloadTimeout)
+	defer cancel()
+	resp, err := r.Client.
+		WithTimeout(gtfsDownloadTimeout+5*time.Second).
+		WithRetryPolicy(0, 0).
+		GetWithLimit(downloadCtx, endpoint, maxGTFSArchiveBytes)
+	if err != nil {
+		if ctx.Err() != nil {
+			return gtfsArchiveInfo{}, ctx.Err()
+		}
+		if !refresh && cacheUsable(cachePath) {
+			warning := fmt.Sprintf("using stale cached GTFS archive because refresh failed: %s", summarizeGTFSDownloadError(err))
+			fmt.Fprintf(progress, "warning: %s\n", warning)
+			_ = os.WriteFile(failurePath, []byte(warning+"\n"), 0o644)
+			return staleGTFSArchiveInfo(dataset, endpoint, cachePath, warning), nil
+		}
+		return gtfsArchiveInfo{}, fmt.Errorf("download GTFS archive %q failed: %w", dataset, err)
+	}
+	tempFile, err := os.CreateTemp(cacheDir, sanitizeCacheName(dataset)+"-*.zip.tmp")
 	if err != nil {
 		return gtfsArchiveInfo{}, err
 	}
-	tempPath := cachePath + ".tmp"
-	if err := os.WriteFile(tempPath, resp.Body, 0o644); err != nil {
+	tempPath := tempFile.Name()
+	defer func() { _ = os.Remove(tempPath) }()
+	if _, err := tempFile.Write(resp.Body); err != nil {
+		_ = tempFile.Close()
+		return gtfsArchiveInfo{}, err
+	}
+	if err := tempFile.Close(); err != nil {
 		return gtfsArchiveInfo{}, err
 	}
 	if err := os.Rename(tempPath, cachePath); err != nil {
 		return gtfsArchiveInfo{}, err
 	}
+	_ = os.Remove(failurePath)
 	return gtfsArchiveInfo{Dataset: dataset, Endpoint: endpoint, Path: cachePath, Cached: false}, nil
 }
 
@@ -1030,11 +1065,48 @@ func sanitizeCacheName(value string) string {
 }
 
 func cacheFresh(path string, ttl time.Duration) bool {
+	if !cacheUsable(path) {
+		return false
+	}
 	info, err := os.Stat(path)
-	if err != nil || info.IsDir() || info.Size() == 0 {
+	if err != nil {
 		return false
 	}
 	return time.Since(info.ModTime()) <= ttl
+}
+
+func cacheUsable(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && !info.IsDir() && info.Size() > 0
+}
+
+func staleGTFSArchiveInfo(dataset, endpoint, cachePath, warning string) gtfsArchiveInfo {
+	return gtfsArchiveInfo{
+		Dataset:  dataset,
+		Endpoint: endpoint,
+		Path:     cachePath,
+		Cached:   true,
+		Stale:    true,
+		Warning:  warning,
+	}
+}
+
+func summarizeGTFSDownloadError(err error) string {
+	switch {
+	case errors.Is(err, context.DeadlineExceeded):
+		return fmt.Sprintf("timed out after %s", gtfsDownloadTimeout)
+	case errors.Is(err, context.Canceled):
+		return "request was canceled"
+	default:
+		message := strings.TrimSpace(err.Error())
+		if message == "" {
+			return "unknown error"
+		}
+		if len(message) > 160 {
+			message = message[:160] + "..."
+		}
+		return message
+	}
 }
 
 func readGTFSStops(zipPath string) ([]gtfsStop, error) {
