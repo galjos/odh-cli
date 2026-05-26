@@ -8,6 +8,30 @@ SPDX-License-Identifier: CC0-1.0
 
 The released package name is `odh-cli` / `open-data-hub-cli`, while the installed binary is `odh`.
 
+## Homebrew
+
+Install with Homebrew:
+
+```bash
+brew install galjos/odh/odh
+```
+
+Or tap first:
+
+```bash
+brew tap galjos/odh
+brew install odh
+```
+
+Verify:
+
+```bash
+odh version
+odh doctor --network=false
+```
+
+The tap repository is <https://github.com/galjos/homebrew-odh>.
+
 ## Release Installer
 
 Install the latest GitHub release:
@@ -73,21 +97,13 @@ go install github.com/galjos/odh-cli/cmd/odh@v0.2.0
 
 This is the installer path declared in the OpenClaw skill metadata.
 
-## Homebrew Formula Draft
+## Homebrew Tap Maintenance
 
-The repository includes [../Formula/odh.rb](../Formula/odh.rb) as a draft for a
-future Homebrew tap:
-
-```bash
-brew style Formula/odh.rb
-```
-
-It is not yet an official tap. Keep the script installer and Go installer as
-the supported installation paths until a tap repository exists. Once published
-in a tap, audit and test the tapped formula by name:
+The Homebrew formula lives in <https://github.com/galjos/homebrew-odh>. For a
+new release, update the tap formula and verify it by name:
 
 ```bash
-brew audit --strict --online galjos/<tap>/odh
-brew install --build-from-source --skip-link galjos/<tap>/odh
-brew test galjos/<tap>/odh
+brew audit --strict --online galjos/odh/odh
+brew install --build-from-source --skip-link galjos/odh/odh
+brew test galjos/odh/odh
 ```

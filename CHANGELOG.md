@@ -10,7 +10,7 @@ All notable changes to `odh-cli` are documented here.
 
 ## Unreleased
 
-- Added a maintained roadmap and Homebrew formula draft for future tap publishing.
+- Added a maintained roadmap and documented the public Homebrew tap.
 - Updated stale v0.1 documentation references to the v0.2 project direction.
 - Added agent eval tasks for realistic Merano-to-Kaltenbrunn transit routing and past-local A22 incident caveats.
 - Updated the default HTTP `User-Agent` to `odh-cli/0.2`.

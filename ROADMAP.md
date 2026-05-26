@@ -13,8 +13,8 @@ discovery, diagnostics, docs, and evals over broad natural-language shortcuts.
 
 - Keep the agent eval set close to real OpenClaw/Mira questions and add a task
   whenever an agent repeatedly struggles with the same command path.
-- Publish package-manager installation, starting with a Homebrew tap based on
-  the formula draft in `Formula/odh.rb`.
+- Keep package-manager installation current through the
+  [`galjos/homebrew-odh`](https://github.com/galjos/homebrew-odh) tap.
 - Improve metadata discovery for datasets, station types, origins, datatypes,
   traffic zones, and documented caveats without duplicating the upstream APIs.
 - Keep the OpenClaw/ClawHub skill aligned with the latest released CLI and
@@ -22,7 +22,7 @@ discovery, diagnostics, docs, and evals over broad natural-language shortcuts.
 
 ## Tracking Issues
 
-- [#1](https://github.com/galjos/odh-cli/issues/1) Publish Homebrew tap for `odh`.
+- [#1](https://github.com/galjos/odh-cli/issues/1) Publish Homebrew tap for `odh` - done.
 - [#2](https://github.com/galjos/odh-cli/issues/2) Run and expand real-agent evals after v0.2.
 - [#3](https://github.com/galjos/odh-cli/issues/3) Improve dataset and source metadata discovery.
 - [#4](https://github.com/galjos/odh-cli/issues/4) Evaluate MCP server mode after CLI stabilizes.

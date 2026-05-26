@@ -95,6 +95,6 @@ v0.2 intentionally keeps the command surface narrow. It includes a small audited
 Use [../ROADMAP.md](../ROADMAP.md) for the maintained project roadmap. The next useful milestones are:
 
 - agent evals based on repeated real OpenClaw/Mira failures,
-- package-manager distribution, starting with a Homebrew tap,
+- keep the Homebrew tap current for new releases,
 - richer dataset metadata once a suitable public upstream catalog endpoint is selected,
 - MCP server mode only after the CLI surface stays stable.
