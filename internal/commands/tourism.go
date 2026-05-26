@@ -121,11 +121,13 @@ func (r *Runner) newTourismCmd() *cobra.Command {
 			}
 			items := extractItemsList(value)
 			return writeTourismTypesOutput(cmd.OutOrStdout(), tourismTypesOutput{
-				Dataset:  normalizedDataset,
-				Endpoint: requestURL,
-				Count:    len(items),
-				Items:    items,
-				Format:   format,
+				Source:       "Open Data Hub Tourism API",
+				SourceDetail: "Tourism taxonomy/type endpoint",
+				Dataset:      normalizedDataset,
+				Endpoint:     requestURL,
+				Count:        len(items),
+				Items:        items,
+				Format:       format,
 			})
 		},
 	}
@@ -164,11 +166,13 @@ func tourismTypesEndpoint(dataset string) (string, string, error) {
 }
 
 type tourismTypesOutput struct {
-	Dataset  string `json:"dataset"`
-	Endpoint string `json:"endpoint"`
-	Count    int    `json:"count"`
-	Items    []any  `json:"items"`
-	Format   string `json:"-"`
+	Source       string `json:"source"`
+	SourceDetail string `json:"source_detail"`
+	Dataset      string `json:"dataset"`
+	Endpoint     string `json:"endpoint"`
+	Count        int    `json:"count"`
+	Items        []any  `json:"items"`
+	Format       string `json:"-"`
 }
 
 type tourismTypeRow struct {

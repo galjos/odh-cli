@@ -1,0 +1,42 @@
+{
+  "source": "odh",
+  "source_detail": "Open Data Hub Mobility API PROVINCE_BZ traffic events",
+  "endpoint": "https://example.test/v2/flat,event/PROVINCE_BZ/2026-05-16/2026-05-16?limit=1000",
+  "from": "2026-05-16",
+  "to": "2026-05-16",
+  "zone_id": "6",
+  "type": "all",
+  "search": "road closed badia",
+  "raw_count": 1,
+  "count": 1,
+  "events": [
+    {
+      "id": "badia-closure",
+      "series_id": "series-badia",
+      "message_id": "message-badia",
+      "source": "odh",
+      "type": "closure",
+      "subtype": "SPERRE",
+      "severity": "Sperre",
+      "zone_id": "6",
+      "zone": "Pustertal",
+      "zone_it": "Val Pusteria",
+      "road": "LS/SP 244",
+      "road_name": "Gadertal",
+      "place": "Badia",
+      "place_it": "Badia",
+      "start": "2026-05-16 08:00:00.000+0200",
+      "end": "2026-05-16 18:00:00.000+0200",
+      "transaction_time": "2999-05-16 07:45:00.000+0200",
+      "coordinates": [
+        11.903,
+        46.61
+      ],
+      "active": true,
+      "stale": false
+    }
+  ],
+  "warnings": [
+    "source is Open Data Hub PROVINCE_BZ; compare with the official traffic service before presenting this as a complete live road bulletin"
+  ]
+}

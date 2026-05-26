@@ -1,0 +1,19 @@
+{
+  "source": "Open Data Hub Tourism API",
+  "source_detail": "Tourism taxonomy/type endpoint",
+  "dataset": "event",
+  "endpoint": "https://example.test/v1/EventShortTypes?pagenumber=1&pagesize=1",
+  "count": 1,
+  "items": [
+    {
+      "Id": "type-1",
+      "Key": "music",
+      "Type": "event",
+      "TypeDesc": {
+        "de": "Musik",
+        "en": "Music",
+        "it": "Musica"
+      }
+    }
+  ]
+}

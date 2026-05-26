@@ -1,0 +1,31 @@
+{
+  "source": "Open Data Hub Mobility API",
+  "source_detail": "A22 event feed and TrafficForecast latest feed",
+  "events": {
+    "endpoint": "https://example.test/v2/flat,event/A22/latest?limit=1",
+    "count": 0
+  },
+  "forecast": {
+    "endpoint": "https://example.test/v2/flat/TrafficForecast/forecast/latest?limit=1",
+    "count": 1,
+    "summary": [
+      {
+        "name": "Bolzano Nord",
+        "value": "regular",
+        "valid_time": "2999-01-01 00:00:00.000+0000"
+      }
+    ],
+    "items": [
+      {
+        "mvalidtime": "2999-01-01 00:00:00.000+0000",
+        "mvalue": "regular",
+        "scode": "forecast-1",
+        "sname": "Bolzano Nord"
+      }
+    ]
+  },
+  "warnings": [
+    "Open Data Hub returned no current A22 events.",
+    "A22 forecast contains future valid_time values; treat it as forecast data, not current incident data."
+  ]
+}

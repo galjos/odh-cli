@@ -20,6 +20,7 @@ Each command returns JSON with:
 
 - `domain` - the checked data area.
 - `source` - the upstream Open Data Hub API used.
+- `source_detail` - the narrower endpoint or data-family checked.
 - `verdict` - `usable`, `usable_with_caveats`, `usable_with_forecast`, `current_only`, or `unavailable`.
 - `warnings` - caveats that must be surfaced when answering.
 

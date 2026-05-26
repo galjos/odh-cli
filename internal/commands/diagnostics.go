@@ -63,6 +63,8 @@ func (r *Runner) newDiagnosticsCmd() *cobra.Command {
 			return output.WriteJSON(cmd.OutOrStdout(), map[string]any{
 				"domain":              "ev-charging",
 				"source":              "Open Data Hub Mobility API",
+				"source_detail":       "EChargingStation number-available latest measurements",
+				"endpoint":            result.Endpoint,
 				"verdict":             verdict,
 				"station_type":        result.StationType,
 				"data_type":           result.DataType,
@@ -140,6 +142,7 @@ func (r *Runner) newDiagnosticsCmd() *cobra.Command {
 			return output.WriteJSON(cmd.OutOrStdout(), map[string]any{
 				"domain":           "parking-forecasts",
 				"source":           "Open Data Hub Mobility API",
+				"source_detail":    "ParkingStation current free spaces and parking forecast measurements",
 				"verdict":          verdict,
 				"origin":           strings.TrimSpace(parkOrigin),
 				"fresh_within":     strings.TrimSpace(parkFreshWithin),
@@ -210,16 +213,17 @@ func (r *Runner) newDiagnosticsCmd() *cobra.Command {
 				verdict = "unavailable"
 			}
 			return output.WriteJSON(cmd.OutOrStdout(), map[string]any{
-				"domain":       "tourism-events",
-				"source":       "Open Data Hub Tourism API",
-				"verdict":      verdict,
-				"date":         day.Format("2006-01-02"),
-				"only_active":  tourOnlyActive,
-				"endpoint":     requestURL,
-				"count":        len(events),
-				"active_count": activeCount,
-				"events":       events,
-				"warnings":     warnings,
+				"domain":        "tourism-events",
+				"source":        "Open Data Hub Tourism API",
+				"source_detail": "Tourism EventShort endpoint with local date and location checks",
+				"verdict":       verdict,
+				"date":          day.Format("2006-01-02"),
+				"only_active":   tourOnlyActive,
+				"endpoint":      requestURL,
+				"count":         len(events),
+				"active_count":  activeCount,
+				"events":        events,
+				"warnings":      warnings,
 			})
 		},
 	}

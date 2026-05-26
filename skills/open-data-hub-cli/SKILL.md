@@ -13,7 +13,7 @@ metadata:
             {
               "id": "go",
               "kind": "go",
-              "module": "github.com/galjos/odh-cli/cmd/odh@v0.2.2",
+              "module": "github.com/galjos/odh-cli/cmd/odh@v0.2.3",
               "bins": ["odh"],
               "label": "Install odh CLI (go)",
             },
@@ -33,10 +33,10 @@ odh version
 odh doctor --timeout 10s
 ```
 
-Need `odh v0.2.2+` for the current command contracts, source/provenance fields, traffic helpers, GTFS/transit, filtered latest measurements, comma-safe `--param`, and `transit journey --with-realtime`.
+Need `odh v0.2.3+` for the current command contracts, source/provenance fields, traffic helpers, GTFS/transit, filtered latest measurements, comma-safe `--param`, and `transit journey --with-realtime`.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/galjos/odh-cli/main/scripts/install.sh | sh -s -- --version v0.2.2 --dir "$HOME/bin"
+curl -fsSL https://raw.githubusercontent.com/galjos/odh-cli/main/scripts/install.sh | sh -s -- --version v0.2.3 --dir "$HOME/bin"
 ```
 
 If running from the source repo, use `./odh`.
@@ -49,6 +49,7 @@ If running from the source repo, use `./odh`.
 - Nonzero exit means failure. Exit `2` usually means bad invocation.
 - Prefer discovery commands before guessing provider names, data types, stop IDs, or zone IDs.
 - Prefer returned `source`, `source_detail`, `endpoint`, `archive`, `realtime`, and `warnings` fields over inferred provenance.
+- Stable curated JSON fields are documented in `docs/json-contracts.md` in the repo.
 
 ## Discovery
 

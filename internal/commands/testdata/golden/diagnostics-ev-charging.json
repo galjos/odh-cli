@@ -1,0 +1,25 @@
+{
+  "active_only": true,
+  "current_count": 1,
+  "data_type": "number-available",
+  "domain": "ev-charging",
+  "endpoint": "https://example.test/v2/flat,node/EChargingStation/number-available/latest?limit=5",
+  "fresh_within": "999999h",
+  "measurements": [
+    {
+      "mvalidtime": "2999-05-16 08:00:00.000+0000",
+      "mvalue": 3,
+      "sactive": true,
+      "scode": "charger-1",
+      "sorigin": "ALPERIA"
+    }
+  ],
+  "origin": "ALPERIA",
+  "raw_count": 1,
+  "recommended_command": "odh mobility latest --station-type EChargingStation --data-type number-available --origin ALPERIA --active --fresh-within 999999h --sort newest",
+  "source": "Open Data Hub Mobility API",
+  "source_detail": "EChargingStation number-available latest measurements",
+  "station_type": "EChargingStation",
+  "verdict": "usable",
+  "warnings": []
+}

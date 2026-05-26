@@ -487,7 +487,8 @@ func (r *Runner) newA22Cmd() *cobra.Command {
 			}
 
 			return writeA22StatusOutput(cmd.OutOrStdout(), a22StatusOutput{
-				Source: "Open Data Hub Mobility API",
+				Source:       "Open Data Hub Mobility API",
+				SourceDetail: "A22 event feed and TrafficForecast latest feed",
 				Events: a22FeedOutput{
 					Endpoint: eventsURL,
 					Count:    len(events),
@@ -603,11 +604,12 @@ type a22FeedOutput struct {
 }
 
 type a22StatusOutput struct {
-	Source   string        `json:"source"`
-	Events   a22FeedOutput `json:"events"`
-	Forecast a22FeedOutput `json:"forecast"`
-	Warnings []string      `json:"warnings,omitempty"`
-	Format   string        `json:"-"`
+	Source       string        `json:"source"`
+	SourceDetail string        `json:"source_detail"`
+	Events       a22FeedOutput `json:"events"`
+	Forecast     a22FeedOutput `json:"forecast"`
+	Warnings     []string      `json:"warnings,omitempty"`
+	Format       string        `json:"-"`
 }
 
 func writeA22StatusOutput(stdout io.Writer, result a22StatusOutput) error {

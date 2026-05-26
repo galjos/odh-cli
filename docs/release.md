@@ -6,7 +6,7 @@ SPDX-License-Identifier: CC0-1.0
 
 # Release
 
-Releases are built from Git tags named `v*`, for example `v0.2.2`.
+Releases are built from Git tags named `v*`, for example `v0.2.3`.
 
 Before tagging, update `CHANGELOG.md` with the release date and the user-facing milestone summary.
 
@@ -15,20 +15,20 @@ Before tagging, update `CHANGELOG.md` with the release date and the user-facing 
 Build a stamped archive for the current platform:
 
 ```bash
-VERSION=v0.2.2 scripts/build-release.sh
+VERSION=v0.2.3 scripts/build-release.sh
 ```
 
 Cross-compile by setting `GOOS` and `GOARCH`:
 
 ```bash
-VERSION=v0.2.2 GOOS=linux GOARCH=amd64 scripts/build-release.sh
+VERSION=v0.2.3 GOOS=linux GOARCH=amd64 scripts/build-release.sh
 ```
 
 Artifacts are written to `dist/` as archives plus SHA-256 checksum files. Linux
 targets can also produce Debian packages:
 
 ```bash
-VERSION=v0.2.2 GOOS=linux GOARCH=amd64 scripts/build-deb.sh
+VERSION=v0.2.3 GOOS=linux GOARCH=amd64 scripts/build-deb.sh
 ```
 
 ## GitHub Release
@@ -36,8 +36,8 @@ VERSION=v0.2.2 GOOS=linux GOARCH=amd64 scripts/build-deb.sh
 Push a version tag:
 
 ```bash
-git tag v0.2.2
-git push origin v0.2.2
+git tag v0.2.3
+git push origin v0.2.3
 ```
 
 The release workflow builds Linux and macOS binaries for `amd64` and `arm64`,

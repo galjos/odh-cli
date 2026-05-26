@@ -10,6 +10,14 @@ All notable changes to `odh-cli` are documented here.
 
 ## Unreleased
 
+## v0.2.3 - 2026-05-26
+
+- Added JSON contract documentation for the key curated command outputs.
+- Added golden JSON contract tests for traffic search, Mobility latest,
+  diagnostics, A22 status, and Tourism type discovery.
+- Added provenance fields to diagnostics, A22 status, and Tourism type JSON
+  outputs.
+
 ## v0.2.2 - 2026-05-26
 
 - Added a supported hidden `odh completion` command for bash, zsh, fish, and PowerShell completions.

@@ -1,0 +1,23 @@
+{
+  "source": "Open Data Hub Mobility API",
+  "source_detail": "latest Mobility time-series measurements",
+  "station_type": "ParkingStation",
+  "data_type": "free",
+  "origin": "Municipality Merano",
+  "active_only": true,
+  "fresh_within": "999999h",
+  "sort": "newest",
+  "endpoint": "https://example.test/v2/flat,node/ParkingStation/free/latest?limit=5&offset=0",
+  "raw_count": 1,
+  "count": 1,
+  "measurements": [
+    {
+      "mvalidtime": "2999-05-16 08:00:00.000+0000",
+      "mvalue": 42,
+      "sactive": true,
+      "scode": "park-1",
+      "sname": "Park One",
+      "sorigin": "Municipality Merano"
+    }
+  ]
+}

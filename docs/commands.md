@@ -6,6 +6,9 @@ SPDX-License-Identifier: CC0-1.0
 
 # Commands
 
+For stable machine-readable fields on curated JSON outputs, see
+[json-contracts.md](json-contracts.md).
+
 ## `odh completion`
 
 Generates shell completion scripts. The command is hidden from the default help
@@ -56,7 +59,7 @@ Example output with `--network=false`:
 {
   "ok": true,
   "version": {
-    "version": "0.2.2-dev",
+    "version": "0.2.3-dev",
     "commit": "unknown",
     "date": "unknown",
     "goos": "darwin",
@@ -66,7 +69,7 @@ Example output with `--network=false`:
     {
       "name": "version",
       "ok": true,
-      "message": "0.2.2-dev"
+      "message": "0.2.3-dev"
     },
     {
       "name": "api_registry",

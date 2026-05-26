@@ -67,17 +67,20 @@ The CLI uses Cobra internally, but the automation contract stays stable:
 - diagnostics and errors go to stderr,
 - usage errors return exit code `2`,
 - runtime failures return exit code `1`,
-- current-data commands must not be served from the generic HTTP cache.
+- current-data commands must not be served from the generic HTTP cache,
+- curated JSON fields used by agents are documented in
+  [json-contracts.md](json-contracts.md) and should be protected by tests when
+  changed.
 
 The generic HTTP cache is only for low-risk discovery surfaces such as OpenAPI specs, Tourism taxonomy values, Mobility type/origin/station/datatype discovery, and similar static-ish metadata. Live feeds, latest measurements, traffic events, diagnostics, and GTFS-RT responses should remain fresh unless a command has an explicit domain-specific cache contract such as the static GTFS archive cache.
 
 ## Build Metadata
 
-Development builds default to `0.2.2-dev` with best-effort VCS metadata. Release builds can stamp metadata through Go linker flags:
+Development builds default to `0.2.3-dev` with best-effort VCS metadata. Release builds can stamp metadata through Go linker flags:
 
 ```bash
 go build \
-  -ldflags "-X github.com/galjos/odh-cli/internal/version.Version=0.2.2 -X github.com/galjos/odh-cli/internal/version.Commit=$(git rev-parse --short HEAD) -X github.com/galjos/odh-cli/internal/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  -ldflags "-X github.com/galjos/odh-cli/internal/version.Version=0.2.3 -X github.com/galjos/odh-cli/internal/version.Commit=$(git rev-parse --short HEAD) -X github.com/galjos/odh-cli/internal/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   -o odh ./cmd/odh
 ```
 
