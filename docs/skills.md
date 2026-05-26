@@ -29,7 +29,7 @@ The skill frontmatter also declares the `odh` runtime binary through `metadata.o
 ClawHub publishing uses the ClawHub CLI:
 
 ```bash
-clawhub skill publish "$(pwd)/skills/open-data-hub-cli" --version 0.2.3 --clawscan-note "Uses network access only through the odh CLI to query public Open Data Hub endpoints. Declares odh as a required binary and provides an OpenClaw Go installer hint."
+clawhub skill publish "$(pwd)/skills/open-data-hub-cli" --version 0.2.4 --clawscan-note "Uses network access only through the odh CLI to query public Open Data Hub endpoints. Declares odh as a required binary and provides an OpenClaw Go installer hint."
 ```
 
 Publishing to ClawHub makes the skill public under ClawHub's registry terms.

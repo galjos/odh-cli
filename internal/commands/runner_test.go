@@ -223,6 +223,55 @@ func TestRunCallUsesRegistryAndParams(t *testing.T) {
 	}
 }
 
+func TestRunGlobalTimeoutCancelsHTTPCall(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case <-r.Context().Done():
+			return
+		case <-time.After(time.Second):
+			_, _ = w.Write([]byte(`{"too":"late"}`))
+		}
+	}))
+	defer server.Close()
+
+	runner := newTestRunner(t, []apis.API{{Name: "test", BaseURL: server.URL, Public: true}})
+	var stdout, stderr bytes.Buffer
+	code := runner.Run(context.Background(), []string{"--timeout", "20ms", "call", "test", "/slow"}, &stdout, &stderr)
+	if code != 1 {
+		t.Fatalf("Run exit = %d, want 1, stdout = %s, stderr = %s", code, stdout.String(), stderr.String())
+	}
+	if stdout.Len() != 0 {
+		t.Fatalf("expected no stdout, got %s", stdout.String())
+	}
+	if !strings.Contains(stderr.String(), "context deadline exceeded") {
+		t.Fatalf("expected timeout error, got %s", stderr.String())
+	}
+}
+
+func TestRunGlobalTimeoutRejectsNegativeDuration(t *testing.T) {
+	runner := newTestRunner(t, nil)
+	var stdout, stderr bytes.Buffer
+	code := runner.Run(context.Background(), []string{"--timeout", "-1s", "apis"}, &stdout, &stderr)
+	if code != 2 {
+		t.Fatalf("Run exit = %d, want 2, stdout = %s, stderr = %s", code, stdout.String(), stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "--timeout must not be negative") {
+		t.Fatalf("unexpected stderr: %s", stderr.String())
+	}
+}
+
+func TestRunGlobalTimeoutCoexistsWithDoctorTimeout(t *testing.T) {
+	runner := newTestRunner(t, nil)
+	var stdout, stderr bytes.Buffer
+	code := runner.Run(context.Background(), []string{"--timeout", "1s", "doctor", "--network=false"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("Run exit = %d, stderr = %s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), `"ok": true`) {
+		t.Fatalf("unexpected stdout: %s", stdout.String())
+	}
+}
+
 func TestRunCallPreservesCommaValuesInParams(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/ODHActivityPoi" {

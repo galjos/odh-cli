@@ -10,6 +10,14 @@ All notable changes to `odh-cli` are documented here.
 
 ## Unreleased
 
+## v0.2.4 - 2026-05-26
+
+- Added a global opt-in `--timeout` flag for bounded agent and script runs.
+- Added release-wide `SHA256SUMS` manifests and GitHub artifact attestations
+  for release archives and Debian packages.
+- Documented release verification through checksum manifests and GitHub CLI
+  attestation checks.
+
 ## v0.2.3 - 2026-05-26
 
 - Added JSON contract documentation for the key curated command outputs.

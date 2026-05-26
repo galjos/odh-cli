@@ -30,6 +30,7 @@ This is a v0.2 project with a small, working, agent-friendly core:
 - report machine-readable build/version metadata,
 - generate shell completion scripts for `bash`, `zsh`, `fish`, and `powershell`,
 - run a non-interactive doctor check for registry and upstream reachability,
+- bound any command with an opt-in global `--timeout` for scripts and agents,
 - search a small curated dataset catalog for common entry points,
 - fetch OpenAPI specs as JSON,
 - call any registered API path with query parameters,
@@ -61,7 +62,7 @@ Install the latest GitHub release:
 curl -fsSL https://raw.githubusercontent.com/galjos/odh-cli/main/scripts/install.sh | sh
 ```
 
-The installer detects macOS/Linux and `amd64`/`arm64`, downloads the matching release archive, verifies the published SHA-256 checksum, and installs `odh` to `~/.local/bin` by default.
+The installer detects macOS/Linux and `amd64`/`arm64`, downloads the matching release archive, verifies the published SHA-256 checksum, and installs `odh` to `~/.local/bin` by default. Releases also include a `SHA256SUMS` manifest and GitHub artifact attestations for independent verification.
 
 Install with Homebrew:
 
@@ -72,14 +73,14 @@ brew install galjos/odh/odh
 Install a Linux Debian package from GitHub Releases:
 
 ```bash
-curl -LO https://github.com/galjos/odh-cli/releases/download/v0.2.3/odh_v0.2.3_linux_amd64.deb
-sudo apt install ./odh_v0.2.3_linux_amd64.deb
+curl -LO https://github.com/galjos/odh-cli/releases/download/v0.2.4/odh_v0.2.4_linux_amd64.deb
+sudo apt install ./odh_v0.2.4_linux_amd64.deb
 ```
 
 Install a specific version or directory:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/galjos/odh-cli/main/scripts/install.sh | sh -s -- --version v0.2.3 --dir "$HOME/bin"
+curl -fsSL https://raw.githubusercontent.com/galjos/odh-cli/main/scripts/install.sh | sh -s -- --version v0.2.4 --dir "$HOME/bin"
 ```
 
 Build from source instead:
@@ -112,7 +113,7 @@ Build with release metadata:
 
 ```bash
 go build \
-  -ldflags "-X github.com/galjos/odh-cli/internal/version.Version=0.2.3 -X github.com/galjos/odh-cli/internal/version.Commit=$(git rev-parse --short HEAD) -X github.com/galjos/odh-cli/internal/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  -ldflags "-X github.com/galjos/odh-cli/internal/version.Version=0.2.4 -X github.com/galjos/odh-cli/internal/version.Commit=$(git rev-parse --short HEAD) -X github.com/galjos/odh-cli/internal/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   -o odh ./cmd/odh
 ```
 
@@ -128,6 +129,12 @@ Check the local CLI and upstream API reachability:
 
 ```bash
 odh doctor
+```
+
+Bound a command in automation:
+
+```bash
+odh --timeout 15s traffic today --area ueberetsch-unterland --format table
 ```
 
 List known API surfaces:

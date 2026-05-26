@@ -9,6 +9,22 @@ SPDX-License-Identifier: CC0-1.0
 For stable machine-readable fields on curated JSON outputs, see
 [json-contracts.md](json-contracts.md).
 
+## Global Options
+
+Use global options before the subcommand:
+
+```bash
+odh --timeout 15s traffic today --area ueberetsch-unterland
+```
+
+Flags:
+
+- `--timeout duration` - optional overall command timeout; `0` disables it, which is the default.
+
+The global timeout is meant for agents, scripts, and CI jobs that need bounded
+runtime. Command-specific timeout flags, such as `odh doctor --timeout`, keep
+their local meaning.
+
 ## `odh completion`
 
 Generates shell completion scripts. The command is hidden from the default help
@@ -59,7 +75,7 @@ Example output with `--network=false`:
 {
   "ok": true,
   "version": {
-    "version": "0.2.3-dev",
+    "version": "0.2.4-dev",
     "commit": "unknown",
     "date": "unknown",
     "goos": "darwin",
@@ -69,7 +85,7 @@ Example output with `--network=false`:
     {
       "name": "version",
       "ok": true,
-      "message": "0.2.3-dev"
+      "message": "0.2.4-dev"
     },
     {
       "name": "api_registry",

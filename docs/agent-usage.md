@@ -29,6 +29,16 @@ Some discovery responses are cached locally for 24 hours to keep repeated agent 
 
 The HTTP client retries transient `429` and `5xx` failures with bounded exponential backoff. If a command still exits `1`, treat it as a real runtime failure and do not silently invent data.
 
+For bounded agent loops, put the global timeout before the subcommand:
+
+```bash
+odh --timeout 20s mobility latest --station-type ParkingStation --data-type free --format json
+```
+
+The default is no global command timeout so cold GTFS archive downloads can use
+their documented longer download window. Use a timeout when the caller has its
+own latency budget.
+
 ## Safe Starter Commands
 
 ```bash

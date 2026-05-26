@@ -49,10 +49,13 @@ The installer:
 - verifies the archive checksum,
 - installs `odh` into `~/.local/bin` unless another directory is configured.
 
+Each release also publishes an aggregate `SHA256SUMS` manifest and GitHub
+artifact attestations for the release archives and Debian packages.
+
 Install a specific release:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/galjos/odh-cli/main/scripts/install.sh | sh -s -- --version v0.2.3
+curl -fsSL https://raw.githubusercontent.com/galjos/odh-cli/main/scripts/install.sh | sh -s -- --version v0.2.4
 ```
 
 Install into a different directory:
@@ -65,7 +68,7 @@ For audited installs, download the script first and read it before running:
 
 ```bash
 curl -fsSLo install-odh.sh https://raw.githubusercontent.com/galjos/odh-cli/main/scripts/install.sh
-sh install-odh.sh --version v0.2.3 --dir "$HOME/bin"
+sh install-odh.sh --version v0.2.4 --dir "$HOME/bin"
 ```
 
 ## Debian Package
@@ -73,16 +76,30 @@ sh install-odh.sh --version v0.2.3 --dir "$HOME/bin"
 GitHub Releases include `.deb` packages for Linux `amd64` and `arm64`.
 
 ```bash
-curl -LO https://github.com/galjos/odh-cli/releases/download/v0.2.3/odh_v0.2.3_linux_amd64.deb
-curl -LO https://github.com/galjos/odh-cli/releases/download/v0.2.3/odh_v0.2.3_linux_amd64.deb.sha256
-shasum -a 256 -c odh_v0.2.3_linux_amd64.deb.sha256
-sudo apt install ./odh_v0.2.3_linux_amd64.deb
+curl -LO https://github.com/galjos/odh-cli/releases/download/v0.2.4/odh_v0.2.4_linux_amd64.deb
+curl -LO https://github.com/galjos/odh-cli/releases/download/v0.2.4/odh_v0.2.4_linux_amd64.deb.sha256
+shasum -a 256 -c odh_v0.2.4_linux_amd64.deb.sha256
+sudo apt install ./odh_v0.2.4_linux_amd64.deb
 ```
 
-Use `odh_v0.2.3_linux_arm64.deb` on ARM64 Linux.
+Use `odh_v0.2.4_linux_arm64.deb` on ARM64 Linux.
 
 This is a direct Debian package install, not an APT repository. It will not
 auto-upgrade through `apt upgrade` until a signed APT repository exists.
+
+## Release Verification
+
+Per-asset `.sha256` files are enough for normal installs. For a fuller manual
+check, download the aggregate manifest with the artifact you care about:
+
+```bash
+gh release download v0.2.4 --repo galjos/odh-cli --pattern SHA256SUMS --pattern 'odh_v0.2.4_darwin_arm64.tar.gz'
+grep 'odh_v0.2.4_darwin_arm64.tar.gz' SHA256SUMS
+shasum -a 256 odh_v0.2.4_darwin_arm64.tar.gz
+gh attestation verify odh_v0.2.4_darwin_arm64.tar.gz --repo galjos/odh-cli
+```
+
+The checksum printed by `shasum` must match the line from `SHA256SUMS`.
 
 ## Environment
 
@@ -93,7 +110,7 @@ auto-upgrade through `apt upgrade` until a signed APT repository exists.
 Example:
 
 ```bash
-ODH_VERSION=v0.2.3 ODH_INSTALL_DIR="$HOME/bin" sh scripts/install.sh
+ODH_VERSION=v0.2.4 ODH_INSTALL_DIR="$HOME/bin" sh scripts/install.sh
 ```
 
 ## Verify
@@ -125,7 +142,7 @@ but it is a supported install-time command.
 Agents or developer machines with Go installed can also use:
 
 ```bash
-go install github.com/galjos/odh-cli/cmd/odh@v0.2.3
+go install github.com/galjos/odh-cli/cmd/odh@v0.2.4
 ```
 
 This is the installer path declared in the OpenClaw skill metadata.

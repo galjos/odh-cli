@@ -54,14 +54,35 @@ func NewDefaultRunner() *Runner {
 
 // NewRootCmd builds the Cobra command hierarchy for the CLI.
 func (r *Runner) NewRootCmd() *cobra.Command {
+	var commandTimeout time.Duration
+	var commandTimeoutCancel context.CancelFunc
 	rootCmd := &cobra.Command{
 		Use:           "odh",
 		Short:         "odh is a JSON-first CLI for Open Data Hub APIs",
 		Long:          `odh is an unofficial JSON-first command-line interface for public Open Data Hub APIs.`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
+		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			if commandTimeout < 0 {
+				return usageErrorf("--timeout must not be negative")
+			}
+			if commandTimeout == 0 {
+				return nil
+			}
+			ctx, cancel := context.WithTimeout(cmd.Context(), commandTimeout)
+			commandTimeoutCancel = cancel
+			cmd.SetContext(ctx)
+			r.Client = r.Client.WithTimeout(commandTimeout)
+			return nil
+		},
+		PersistentPostRun: func(cmd *cobra.Command, args []string) {
+			if commandTimeoutCancel != nil {
+				commandTimeoutCancel()
+			}
+		},
 	}
 	rootCmd.CompletionOptions.DisableDefaultCmd = true
+	rootCmd.PersistentFlags().DurationVar(&commandTimeout, "timeout", 0, "overall command timeout; 0 disables")
 
 	rootCmd.AddCommand(r.newVersionCmd())
 	rootCmd.AddCommand(r.newDoctorCmd())
@@ -95,6 +116,10 @@ func (r *Runner) Run(ctx context.Context, args []string, stdout, stderr io.Write
 	if r.Client == nil {
 		r.Client = client.New(30 * time.Second)
 	}
+	baseClient := r.Client
+	defer func() {
+		r.Client = baseClient
+	}()
 
 	rootCmd := r.NewRootCmd()
 	rootCmd.SetArgs(args)
