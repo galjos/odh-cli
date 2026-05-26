@@ -72,3 +72,22 @@ go install github.com/galjos/odh-cli/cmd/odh@v0.2.0
 ```
 
 This is the installer path declared in the OpenClaw skill metadata.
+
+## Homebrew Formula Draft
+
+The repository includes [../Formula/odh.rb](../Formula/odh.rb) as a draft for a
+future Homebrew tap:
+
+```bash
+brew style Formula/odh.rb
+```
+
+It is not yet an official tap. Keep the script installer and Go installer as
+the supported installation paths until a tap repository exists. Once published
+in a tap, audit and test the tapped formula by name:
+
+```bash
+brew audit --strict --online galjos/<tap>/odh
+brew install --build-from-source --skip-link galjos/<tap>/odh
+brew test galjos/<tap>/odh
+```

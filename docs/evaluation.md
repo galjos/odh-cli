@@ -19,8 +19,10 @@ Current task themes:
 - South Tyrol traffic text search and stale-event handling.
 - Unterland / Ueberetsch roadworks and closure summaries.
 - A22 traffic data discovery and forecast caveats.
+- A22 current-feed limitations for past local incidents.
 - Public-transport delay-probability limitations.
 - Public-transport stop-ID disambiguation for station names with many matches.
+- Public-transport journey planning from realistic local-location prompts.
 - Mobility parking discovery.
 - Mobility latest freshness and inactive-station filtering for availability questions.
 - Data-quality diagnostics for EV availability, parking forecasts, and Tourism event caveats.

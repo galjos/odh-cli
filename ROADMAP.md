@@ -1,0 +1,43 @@
+<!--
+SPDX-FileCopyrightText: 2026 Josef Gallmetzer
+
+SPDX-License-Identifier: CC0-1.0
+-->
+
+# Roadmap
+
+`odh` should stay a clean, source-grounded CLI for Open Data Hub. Prefer better
+discovery, diagnostics, docs, and evals over broad natural-language shortcuts.
+
+## Near Term
+
+- Keep the agent eval set close to real OpenClaw/Mira questions and add a task
+  whenever an agent repeatedly struggles with the same command path.
+- Publish package-manager installation, starting with a Homebrew tap based on
+  the formula draft in `Formula/odh.rb`.
+- Improve metadata discovery for datasets, station types, origins, datatypes,
+  traffic zones, and documented caveats without duplicating the upstream APIs.
+- Keep the OpenClaw/ClawHub skill aligned with the latest released CLI and
+  require `odh doctor --timeout 10s` before answering data questions.
+
+## Tracking Issues
+
+- [#1](https://github.com/galjos/odh-cli/issues/1) Publish Homebrew tap for `odh`.
+- [#2](https://github.com/galjos/odh-cli/issues/2) Run and expand real-agent evals after v0.2.
+- [#3](https://github.com/galjos/odh-cli/issues/3) Improve dataset and source metadata discovery.
+- [#4](https://github.com/galjos/odh-cli/issues/4) Evaluate MCP server mode after CLI stabilizes.
+
+## Later
+
+- Explore MCP server mode once the CLI command surface and evals have stayed
+  stable across several real agent-use sessions.
+- Consider generated clients only if they reduce maintenance risk for verified
+  upstream APIs.
+
+## Explicit Non-Goals For Now
+
+- Historical A22 incident reconstruction from live feeds.
+- Historical train-delay probabilities without a real GTFS-RT archive.
+- Full live public-transport rerouting.
+- Hardcoded place aliases that duplicate what an agent can discover from
+  upstream zones, stops, coordinates, or plain text search.

@@ -47,7 +47,7 @@ This is a v0.2 project with a small, working, agent-friendly core:
 - summarize South Tyrol roadworks, closures, events, and traffic notices from Open Data Hub `PROVINCE_BZ` with zone discovery, date filtering, text search, deduplication, and stale-record warnings,
 - inspect A22 Mobility event and forecast feeds with explicit warnings when the data does not look like current traffic incidents.
 
-It does not yet include MCP, generated clients, Homebrew packaging, Docker images, a full upstream metadata catalog, authenticated write flows, full live public-transport rerouting, historical GTFS-RT delay archives, or historical A22 incident reconstruction.
+It does not yet include MCP, generated clients, an official Homebrew tap, Docker images, a full upstream metadata catalog, authenticated write flows, full live public-transport rerouting, historical GTFS-RT delay archives, or historical A22 incident reconstruction.
 
 See [CHANGELOG.md](CHANGELOG.md) for release notes.
 
@@ -72,6 +72,8 @@ Build from source instead:
 ```bash
 go build -o odh ./cmd/odh
 ```
+
+The repository also contains a Homebrew formula draft in [Formula/odh.rb](Formula/odh.rb). It is intended for tap publishing and local formula validation; an official tap has not been published yet.
 
 Run directly during development:
 

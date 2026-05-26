@@ -88,13 +88,13 @@ Check the result with:
 ./odh doctor --network=false
 ```
 
-## Release Notes
+## Project Direction
 
-v0.1 intentionally avoids generated clients and package-manager publishing. It includes a small audited core plus focused discovery and diagnostic commands for the public Tourism, Mobility, and GTFS APIs.
+v0.2 intentionally keeps the command surface narrow. It includes a small audited core plus focused discovery, diagnostic, traffic, A22, GTFS, and transit commands for the public Tourism, Mobility, and GTFS APIs.
 
-The next useful milestones are:
+Use [../ROADMAP.md](../ROADMAP.md) for the maintained project roadmap. The next useful milestones are:
 
-- more curated commands for common endpoints,
+- agent evals based on repeated real OpenClaw/Mira failures,
+- package-manager distribution, starting with a Homebrew tap,
 - richer dataset metadata once a suitable public upstream catalog endpoint is selected,
-- MCP server mode reusing the same internal packages,
-- package-manager distribution.
+- MCP server mode only after the CLI surface stays stable.

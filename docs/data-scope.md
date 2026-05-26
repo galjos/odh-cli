@@ -57,7 +57,7 @@ When location matters:
 
 ## Current CLI Coverage
 
-`odh` v0.1 focuses on public, read-only access to:
+`odh` v0.2 focuses on public, read-only access to:
 
 - Tourism content through `tourism.opendatahub.com`.
 - Mobility time-series data through `mobility.api.opendatahub.com`.

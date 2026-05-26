@@ -19,7 +19,7 @@ Open Data Hub is maintained by NOI Techpark and exposes datasets in domains such
 | `transmodel` | | `https://transmodel.api.opendatahub.com` | `https://transmodel.api.opendatahub.com/apispec` |
 | `alpinebits` | | `https://alpinebits.opendatahub.com` | |
 
-Tourism, Mobility, and GTFS have curated commands in v0.1 because those are the public endpoints verified by the current smoke tests.
+Tourism, Mobility, and GTFS have curated commands in v0.2 because those are the public endpoints verified by the current smoke tests.
 
 ## API Notes
 
@@ -44,7 +44,7 @@ Standards APIs:
 
 - `gtfs` has curated wrappers for dataset listing, GTFS-RT realtime feeds, stop search, static departures, direct static timetable matches, and static transfer journeys.
 - `gbfs`, `transmodel`, and `alpinebits` are registered so agents can discover their base URLs consistently.
-- v0.1 does not yet provide curated wrappers for `gbfs`, `transmodel`, or `alpinebits`.
+- v0.2 does not yet provide curated wrappers for `gbfs`, `transmodel`, or `alpinebits`.
 - `odh transit delay-stats` intentionally reports unsupported because the live GTFS API does not provide a historical GTFS-RT archive for probability calculations.
 
 The Mobility commands include a narrow A22 diagnostic path:

@@ -217,6 +217,46 @@
         "Claims nearby events from records without GPS.",
         "Uses the traffic layer for Tourism events."
       ]
+    },
+    {
+      "id": "transit-pin-to-kaltenbrunn-static-caveat",
+      "prompt": "From a location near Sinich/Merano, how do I get to Kaltenbrunn/Fontanefredde, Truden by public transport only?",
+      "expected_command_path": [
+        "odh transit stops search \"Merano Maia Bassa\" --json",
+        "odh transit stops search \"Fontanefredde\" --json",
+        "odh transit journey --from-stop-id <maia_bassa_parent_or_stop_id> --to-stop-id <fontanefredde_stop_id> --date <today> --time <now> --max-transfers 3 --with-realtime --json"
+      ],
+      "pass_criteria": [
+        "Uses stop search to resolve exact GTFS stop IDs instead of relying only on ambiguous place names.",
+        "Uses transit journey for transfer planning instead of direct trip lookup.",
+        "Mentions that routing is static GTFS with optional current GTFS-RT annotations, not full live rerouting.",
+        "Does not invent walking legs beyond what the user location and stop search support."
+      ],
+      "common_failures": [
+        "Uses a direct-trip command and misses required transfers.",
+        "Treats missing GTFS-RT matches as proof that service is on time.",
+        "Routes from central Merano without acknowledging the user started near Sinich/Maia Bassa."
+      ]
+    },
+    {
+      "id": "a22-past-local-incident-caveat",
+      "prompt": "There was an A22 incident near Neumarkt/Pfatten yesterday around 11:00. Can you check why the CLI did not find it?",
+      "expected_command_path": [
+        "odh a22 status --json",
+        "odh mobility datatypes --station-type TrafficSensor --origin A22 --json",
+        "odh traffic search neumarkt --today --include-stale --json"
+      ],
+      "pass_criteria": [
+        "Uses A22 status for current/live-oriented A22 data and recognizes that forecast rows are not incident evidence.",
+        "Explains that current ODH/A22 feeds may not retain yesterday's local incident history.",
+        "Does not add a historical reconstruction feature just to answer one missed incident.",
+        "Suggests dated official/external archives only as a separate source, not as ODH CLI truth."
+      ],
+      "common_failures": [
+        "Backfills a reason from current forecast data.",
+        "Claims the CLI can answer historical A22 incident questions from live feeds.",
+        "Proposes a broad scraper or archive collector without evidence that this belongs in the clean CLI."
+      ]
     }
   ]
 }

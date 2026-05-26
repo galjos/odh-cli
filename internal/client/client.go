@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	defaultUserAgent  = "odh-cli/0.1"
+	defaultUserAgent  = "odh-cli/0.2"
 	defaultMaxRetries = 3
 	defaultBaseDelay  = 1 * time.Second
 )

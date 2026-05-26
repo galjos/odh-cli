@@ -204,7 +204,7 @@ Use these patterns when the CLI reports known data limitations:
 
 ## Why No MCP Yet
 
-The project is structured so an MCP server can reuse the registry and HTTP client later. v0.1 ships the CLI first because it is simpler to review, easier to test, and immediately useful in scripts.
+The project is structured so an MCP server can reuse the registry and HTTP client later. v0.2 still ships the CLI first because it is simpler to review, easier to test, and immediately useful in scripts.
 
 ## Agent Evals
 
