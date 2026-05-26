@@ -1,6 +1,6 @@
 ---
 name: open-data-hub-cli
-description: Use this skill when working with Open Data Hub, NOI Techpark data, ODH APIs, Tourism API, Mobility API, A22 traffic data, or when an agent should query Open Data Hub through the odh command-line tool instead of scraping websites.
+description: Query Open Data Hub/NOI Techpark data through `odh`: Tourism, Mobility, traffic, A22, parking, EV charging, STA GTFS, and transit.
 homepage: https://github.com/galjos/odh-cli
 metadata:
   {
@@ -24,207 +24,113 @@ metadata:
 
 # Open Data Hub CLI
 
-Use `odh` for public Open Data Hub API work. It is non-interactive, suitable for scripts and agents, and supports JSON output through `--json` or `--format json`. Several curated discovery/answer commands default to compact table output to avoid huge raw JSON dumps.
+Use `odh` instead of scraping Open Data Hub pages. Most practical data is South Tyrol / Autonomous Province of Bolzano; verify record-level location from coordinates, origin, or metadata.
 
-Open Data Hub is maintained by NOI Techpark. Most practical Tourism and Mobility tasks are about South Tyrol / the Autonomous Province of Bolzano, but do not claim every returned record is located there unless coordinates, location fields, origin metadata, or official docs support it.
-
-The CLI retries transient `429` and `5xx` HTTP failures. Some low-risk discovery metadata such as OpenAPI specs, Tourism taxonomies, and Mobility station/type discovery can be cached locally for 24 hours. Current-data commands such as traffic, latest measurements, diagnostics, and GTFS-RT should still be treated as fresh upstream calls.
-
-## First Checks
-
-Run these before relying on the CLI:
+## Setup
 
 ```bash
 odh version
 odh doctor --timeout 10s
 ```
 
-The traffic discovery, GTFS, transit, filtered mobility-latest, comma-safe `--param`, GTFS progress diagnostics, and transit `--with-realtime` annotations require `odh` `v0.1.13` or newer. If `odh version` reports an older release, install the current release into a directory that is already on PATH:
+Need `odh v0.1.13+` for traffic helpers, GTFS/transit, filtered latest measurements, comma-safe `--param`, and `transit journey --with-realtime`.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/galjos/odh-cli/main/scripts/install.sh | sh -s -- --version v0.1.13 --dir "$HOME/bin"
 ```
 
-If `odh` is not installed in a normal shell, install the latest release:
+If running from the source repo, use `./odh`.
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/galjos/odh-cli/main/scripts/install.sh | sh
-```
+## Output Rules
 
-Or build it from source:
+- Curated commands may default to table. Add `--json` or `--format json` before parsing output.
+- This applies especially to `traffic`, `a22 status`, `transit`, `tourism types`, `mobility types`, and `mobility datatypes`.
+- Treat stderr as diagnostics, not data.
+- Nonzero exit means failure. Exit `2` usually means bad invocation.
+- Prefer discovery commands before guessing provider names, data types, stop IDs, or zone IDs.
 
-```bash
-go build -o odh ./cmd/odh
-```
-
-In OpenClaw, this skill declares `odh` as a required binary. If OpenClaw marks the skill as needing setup, use the offered installer before trying to answer with Open Data Hub data.
-
-If OpenClaw's Go installer reports success but `odh version` is still old, a previous binary is probably earlier on PATH than `~/go/bin/odh`. Use the release installer above with `--dir "$HOME/bin"` or update PATH so the newer binary is resolved first.
-
-When running from a source checkout, use `./odh` instead of `odh`.
-
-## API Discovery
-
-List known API surfaces:
+## Discovery
 
 ```bash
 odh apis
 odh datasets search parking
-```
-
-Fetch OpenAPI specs as JSON:
-
-```bash
 odh openapi mobility
 odh openapi tourism
+odh mobility types --kind station
+odh mobility origins --station-type ParkingStation
+odh mobility datatypes --station-type TrafficSensor --origin A22 --limit 1000 --json
 ```
 
-Use `odh call` for known endpoints rather than scraping a UI:
+Use `odh call <api> <path> --param key=value` for known endpoints. `--param` is repeatable and values may contain commas.
+
+## Traffic
+
+Roadworks, closures, and road events:
 
 ```bash
-odh call tourism /v1/ODHActivityPoi \
-  --param pagenumber=1 \
-  --param pagesize=1 \
-  --param seed=42 \
-  --param fields=Detail.en.Title,GpsInfo
+odh traffic zones --json
+odh traffic categories --json
+odh traffic today --area ueberetsch-unterland --type roadworks --json
+odh traffic search badia --today --zone-id 6 --json
+odh traffic today --near 46.42,11.25 --radius 15km --json
 ```
 
-`--param` is repeatable and preserves comma-separated API values, so Tourism field lists can be passed as one flag.
+Prefer `traffic` over raw `mobility events --origin PROVINCE_BZ`. Surface stale/source warnings. Do not present stale open-ended rows as confirmed current closures.
 
-For geographic claims, inspect returned fields. Useful examples:
-
-- Tourism: `GpsInfo`, `LocationInfo`, `RegionInfo`, `MunicipalityInfo`, `LicenseInfo`.
-- Mobility: `sorigin`, `scode`, `stype`, `scoordinate`, `smetadata`.
-
-## Curated Commands
-
-Tourism point of interest:
+A22:
 
 ```bash
-odh tourism poi --limit 1 --seed 42 --fields Detail.en.Title,GpsInfo
-odh tourism types --dataset event --limit 10
-odh tourism types --dataset event --limit 10 --json
+odh a22 status --limit 10 --json
+odh mobility events --origin A22 --latest --limit 20
 ```
 
-Mobility latest measurements:
+`a22 status` is current/live-oriented. Do not infer live incidents from `TrafficForecast`. For past local A22 incidents, say ODH/A22 live feeds may not retain history and use dated external sources if needed.
 
-```bash
-odh mobility latest \
-  --station-type EChargingStation \
-  --data-type number-available \
-  --origin ALPERIA \
-  --active \
-  --fresh-within 24h \
-  --sort newest \
-  --request-limit 1000 \
-  --limit 5 \
-  --format table
-```
+## Mobility Measurements
 
-For EV charging, parking, or other availability questions, discover the station type and origin first, then use `mobility latest` with `--active`, `--fresh-within`, and `--sort newest`. Raw upstream latest rows can include old inactive stations before current measurements. Add `--format table` for a compact direct answer, or `--json` for structured parsing. If filtered output includes `warnings`, surface them in the answer. If the CLI prints a datatype hint, follow it instead of retrying the same empty query.
-
-Data-quality diagnostics:
+For current availability, discover origin/datatype first, then filter freshness:
 
 ```bash
 odh diagnostics ev-charging --origin ALPERIA --fresh-within 24h
 odh diagnostics parking-forecasts --origin "Municipality Merano" --fresh-within 2h --forecast-minutes 60
-odh diagnostics tourism-events --date 2026-05-18 --limit 20
+odh mobility latest --station-type ParkingStation --data-type free --origin "Municipality Merano" --active --fresh-within 2h --sort newest --request-limit 10000 --limit 10 --format table
 ```
 
-Use diagnostics before answering EV availability, parking forecast, or Tourism event-discovery questions. Parse `verdict` and `warnings`. Treat `unavailable` as "no reliable current data from the checked request", not as zero availability or proof that the entire upstream domain has no data. For `parking-forecasts`, a `current_only` verdict means current parking occupancy can be used but fresh forecast rows should not be reported. For `tourism-events`, inspect `date_status` and `location_status`; missing GPS makes radius or precise place claims weak.
+Raw latest rows can contain stale inactive stations. Surface `warnings`. If diagnostics says `current_only`, report current occupancy but not stale forecasts.
 
-Mobility type and data-type discovery:
+Tourism events:
 
 ```bash
-odh mobility types --kind event
-odh mobility origins --station-type TrafficSensor
-odh mobility stations --station-type ParkingStation --limit 5
-odh mobility datatypes --station-type TrafficSensor --origin A22 --limit 1000
-odh mobility datatypes --station-type TrafficSensor --origin A22 --limit 1000 --json
+odh diagnostics tourism-events --date 2026-05-18 --limit 20
+odh tourism poi --limit 1 --seed 42 --fields Detail.en.Title,GpsInfo
 ```
 
-Use `--limit 1000` for datatype discovery when completeness matters. Smaller limits are fine for inspection, but warnings about inspected record limits mean an agent should rerun with a higher limit.
+Check `date_status`, `location_status`, and `GpsInfo` before making “near me today” claims.
 
-Public transport GTFS and STA timetable data:
+## Transit
 
 ```bash
 odh gtfs datasets
 odh gtfs realtime --dataset sta-time-tables --feed trip-updates --limit 5
-odh transit stops search auer
-odh transit departures --stop "Ora, Stazione di Ora" --date 2026-05-16 --around 14:05 --mode train
-odh transit trip --from auer --to brenner --date 2026-05-16 --time 14:05 --mode train
-odh transit journey --from auer --to brenner --date 2026-05-16 --time 14:05 --max-transfers 2
 odh transit stops search merano --limit 10
-odh transit departures --stop-id <stop_id-from-search> --date 2026-05-16 --around 13:00 --mode train
-odh transit trip --from-stop-id <origin-stop-id> --to-stop-id <destination-stop-id> --date 2026-05-16 --time 13:00 --mode train
-odh transit journey --from-stop-id <origin-stop-id> --to-stop-id <destination-stop-id> --date 2026-05-16 --time 13:00 --max-transfers 3
-odh transit journey --from-stop-id <origin-stop-id> --to-stop-id <destination-stop-id> --date 2026-05-16 --time 13:00 --max-transfers 3 --with-realtime --json
-odh transit delay-stats --from auer --to brenner --time 14:05 --weekday saturday
+odh transit departures --stop-id <stop_id> --date 2026-05-16 --around 13:00 --mode train --json
+odh transit trip --from-stop-id <from_id> --to-stop-id <to_id> --date 2026-05-16 --time 13:00 --mode train --json
+odh transit journey --from-stop-id <from_id> --to-stop-id <to_id> --date 2026-05-16 --time 13:00 --max-transfers 3 --with-realtime --json
+odh transit delay-stats --from auer --to brenner --time 14:05 --weekday saturday --json
 ```
 
-Use these commands when the user asks about trains, buses, public-transport stops, STA timetables, GTFS, GTFS-RT, live trip updates, or whether delay probability can be computed. The first transit command may download a large static GTFS archive and cache it for 24 hours; the CLI writes a progress diagnostic to stderr while a cold archive is loading, and agents should retry once if the upstream download is interrupted. Transit commands default to compact table output; add `--json` when you need stop-match arrays, archive metadata, or match-mode fields. If the output warns that a stop query matched many stops, run `odh transit stops search <query> --limit 5` and rerun with `--stop-id`, `--from-stop-id`, or `--to-stop-id`. Parent station IDs are valid and expand to their child platform stops. This is the preferred agent pattern for ambiguous station names like Merano and Bolzano. Use `odh transit journey` for multi-leg public-transport routing; it supports `--max-transfers`, `--min-transfer`, `--max-duration`, and same-station or nearby-stop transfers. For current same-day routing questions, add `--with-realtime --json`; this annotates the returned static journey legs with matching current GTFS-RT delays, service alerts, adjusted times, and transfer-risk hints. Missing realtime entities do not prove trips are on time, and the CLI does not reroute around delays. Use `odh transit trip` only when direct-trip evidence is needed. `odh transit delay-stats` currently returns `supported: false` because delay probability requires historical GTFS-RT snapshots, not just the current live feed. Do not infer historical delay probability from one realtime response.
+Use stop IDs when names are ambiguous. `journey --with-realtime` annotates static routes with current GTFS-RT; it does not live-reroute. Missing realtime entities do not prove on-time service. Historical delay probability is unsupported without archived GTFS-RT; use `delay-stats` and do not guess.
 
-South Tyrol traffic events, roadworks, closures, and road events:
-
-```bash
-odh traffic zones
-odh traffic categories
-odh traffic today --area ueberetsch-unterland --type roadworks --format table
-odh traffic today --zone-id 6 --type closure --json
-odh traffic events --area unterland --from 2026-05-16 --to 2026-05-16 --type closure --json
-odh traffic search "road closed badia" --today --zone-id 6 --json
-odh traffic today --near 46.42,11.25 --radius 15km --format json
-odh traffic today --area bozen-unterland --json
-```
-
-Prefer these commands over raw `odh mobility events --origin PROVINCE_BZ` when a user asks for roadworks, roadblocks, closures, or traffic events. Use `odh traffic zones` to discover upstream `PROVINCE_BZ` zone IDs and `--zone-id` for broad regional filters. Use `odh traffic categories` to discover valid `--type` values. Use `odh traffic search <text>` for towns, roads, place names, and natural-language wording. The CLI intentionally does not hardcode local village aliases; if a user uses a multilingual or local place name, broaden it in the agent layer and then query with `traffic search` and/or `--zone-id`. Traffic commands query Open Data Hub `PROVINCE_BZ`, default to table output, and support `--json` for structured parsing. The traffic layer filters by date, maps upstream categories to stable names, deduplicates repeated event rows, hides stale open-ended records by default, and warns about stale or date-mismatched records. If the user needs an exact official public traffic bulletin, compare with the official traffic service outside this CLI and state the source used.
-
-A22 traffic diagnostics:
-
-```bash
-odh mobility events --origin A22 --latest --limit 20
-odh a22 status --limit 10
-```
-
-## Interpretation Rules
-
-- Parse stdout as JSON only after adding `--json` or `--format json` to commands that default to table output, including `traffic`, `a22 status`, `transit`, `tourism types`, and `mobility types` / `mobility datatypes`.
-- Treat nonzero exit codes as failures.
-- Treat exit code `2` as a bad invocation and exit code `1` as a runtime/upstream problem.
-- Treat stderr as diagnostics, not data.
-- Prefer `odh` and official OpenAPI specs over scraping Open Data Hub web pages.
-- Treat South Tyrol as the common regional context, not as a universal record-level guarantee.
-- Verify location-sensitive answers from coordinates, origins, and metadata in the JSON.
-- For roadworks and closures, prefer `odh traffic today` or `odh traffic events` before falling back to raw Mobility events.
-- For public transport, prefer `odh gtfs` and `odh transit` before falling back to raw API calls.
-- For historical delay probability, report the `odh transit delay-stats` caveat instead of guessing.
-- Use `odh diagnostics` for EV availability, parking forecasts, and Tourism event caveats before making factual current-data claims.
-- Do not infer live A22 traffic from `TrafficForecast` rows alone.
-- Prefer `odh a22 status` for A22 because it reports current-event availability and warns when forecast rows are not current incident data. Use its default table for direct answers, or `--json --raw` when raw upstream rows are required.
-- Use `--where` and repeatable `--param key=value` instead of manually constructing query strings when a curated command supports them. `--param` values may contain commas.
-
-## Answer Patterns
-
-- Historical train delays: report that `odh transit delay-stats` is unsupported without archived GTFS-RT history; do not estimate probability or usual delay minutes from one live feed snapshot.
-- Stale traffic rows: mention stale or hidden open-ended rows only as caveated context, not as confirmed current closures; compare with the official traffic service when the user needs a complete live bulletin.
-- Parking forecasts: if diagnostics return `current_only`, report fresh current occupancy and do not present stale forecast rows as live predictions.
-- A22 status: if `odh a22 status` reports no current event rows, say so directly and keep forecast rows separate from current incidents.
-- Tourism events: if diagnostics show date-inconsistent rows or missing GPS, avoid precise "near me today" claims unless returned dates and coordinates support them.
-
-## Agent Evals
-
-The upstream project includes agent eval tasks in `evals/agent/tasks.json` and a live smoke runner:
+## Evals
 
 ```bash
 scripts/run-agent-evals.sh
 ```
 
-Use those evals to decide whether a repeated agent failure belongs in docs, skill guidance, agent reasoning, or a narrow CLI feature. Do not ask for natural-language helper commands unless the evals show repeated friction that cannot be solved by existing discovery commands.
+Use evals to decide if repeated failures need docs, skill guidance, agent reasoning, or a narrow CLI feature.
 
-## Official References
+## References
 
 - https://opendatahub.com/api/
-- https://opendatahub.com/services/data-access/
-- https://opendatahub.com/about-us/
 - https://docs.opendatahub.com/en/latest/datasets.html
 - https://docs.opendatahub.com/en/latest/howto/mobility/getstarted.html
