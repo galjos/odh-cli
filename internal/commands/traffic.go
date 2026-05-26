@@ -100,7 +100,16 @@ func (r *Runner) newTrafficCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "traffic",
 		Short: "Opinionated Open Data Hub traffic commands",
-		RunE:  requireSubcommand,
+		Long: `Opinionated helpers for Open Data Hub PROVINCE_BZ traffic events.
+
+Use these commands for roadworks, closures, road events, bike notices, and
+traffic notices before falling back to raw mobility event calls. Results are
+deduplicated and stale open-ended rows are hidden by default.`,
+		Example: `  odh traffic zones
+  odh traffic categories
+  odh traffic today --area ueberetsch-unterland --type roadworks
+  odh traffic search badia --today --json`,
+		RunE: requireSubcommand,
 	}
 
 	var zonesFormat string
@@ -108,7 +117,9 @@ func (r *Runner) newTrafficCmd() *cobra.Command {
 	zonesCmd := &cobra.Command{
 		Use:   "zones",
 		Short: "List traffic zones",
-		Args:  cobra.NoArgs,
+		Example: `  odh traffic zones
+  odh traffic zones --json`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if zonesJSON {
 				zonesFormat = "json"
@@ -133,7 +144,9 @@ func (r *Runner) newTrafficCmd() *cobra.Command {
 	categoriesCmd := &cobra.Command{
 		Use:   "categories",
 		Short: "List traffic event categories",
-		Args:  cobra.NoArgs,
+		Example: `  odh traffic categories
+  odh traffic categories --format markdown`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if catsJSON {
 				catsFormat = "json"
@@ -158,7 +171,14 @@ func (r *Runner) newTrafficCmd() *cobra.Command {
 	todayCmd := &cobra.Command{
 		Use:   "today",
 		Short: "Query today's traffic events",
-		Args:  cobra.NoArgs,
+		Long: `Query traffic events active today from Open Data Hub PROVINCE_BZ.
+
+Use --area, --zone-id, --road, --type, or --near to narrow the answer. The
+default table is meant for humans; use --json for agents and scripts.`,
+		Example: `  odh traffic today --area ueberetsch-unterland --type roadworks
+  odh traffic today --near 46.42,11.25 --radius 15km --json
+  odh --timeout 20s traffic today --area bozen-unterland --format markdown`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if todayJSON {
 				todayQuery.Format = "json"
@@ -181,7 +201,13 @@ func (r *Runner) newTrafficCmd() *cobra.Command {
 	eventsCmd := &cobra.Command{
 		Use:   "events",
 		Short: "Query traffic events by date",
-		Args:  cobra.NoArgs,
+		Long: `Query Open Data Hub PROVINCE_BZ traffic events for an explicit date range.
+
+If neither --from nor --to is set, the command defaults to today.`,
+		Example: `  odh traffic events --from 2026-05-16 --to 2026-05-16 --area bozen-unterland --json
+  odh traffic events --road SP13 --type closure --format table
+  odh traffic events --zone-id 4 --include-stale --json`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if eventsJSON {
 				eventsQuery.Format = "json"
@@ -212,7 +238,14 @@ func (r *Runner) newTrafficCmd() *cobra.Command {
 	searchCmd := &cobra.Command{
 		Use:   "search <query>",
 		Short: "Search traffic events by text",
-		Args:  cobra.MinimumNArgs(1),
+		Long: `Search traffic events by road, place, message text, or upstream metadata.
+
+By default, search checks today's events. Add --from/--to for a different date
+range or --include-stale when you explicitly want hidden open-ended rows.`,
+		Example: `  odh traffic search badia --today --json
+  odh traffic search "St. Pauls" --from 2026-05-16 --to 2026-05-16 --include-stale
+  odh traffic search neustift --zone-id 6 --type closure --format table`,
+		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if searchJSON {
 				searchQuery.Format = "json"

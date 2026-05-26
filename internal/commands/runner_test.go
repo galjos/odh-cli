@@ -97,6 +97,61 @@ func TestRunHelpDoesNotExposeCompletionCommand(t *testing.T) {
 	}
 }
 
+func TestRunHelpIncludesPracticalExamples(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+		want []string
+	}{
+		{
+			name: "root",
+			args: []string{"--help"},
+			want: []string{"odh --timeout 20s traffic today", "odh transit journey"},
+		},
+		{
+			name: "traffic today",
+			args: []string{"traffic", "today", "--help"},
+			want: []string{"odh traffic today --area ueberetsch-unterland", "Use --area, --zone-id, --road, --type, or --near"},
+		},
+		{
+			name: "mobility latest",
+			args: []string{"mobility", "latest", "--help"},
+			want: []string{"odh mobility latest --station-type ParkingStation", "stale or inactive rows first"},
+		},
+		{
+			name: "transit journey",
+			args: []string{"transit", "journey", "--help"},
+			want: []string{"odh transit journey --from-stop-id", "does not reroute around live delays"},
+		},
+		{
+			name: "diagnostics parking",
+			args: []string{"diagnostics", "parking-forecasts", "--help"},
+			want: []string{"odh diagnostics parking-forecasts", "current_only"},
+		},
+		{
+			name: "a22 status",
+			args: []string{"a22", "status", "--help"},
+			want: []string{"odh a22 status --limit 10 --json", "forecast data"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			runner := newTestRunner(t, nil)
+			var stdout, stderr bytes.Buffer
+			code := runner.Run(context.Background(), tt.args, &stdout, &stderr)
+			if code != 0 {
+				t.Fatalf("Run exit = %d, stderr = %s", code, stderr.String())
+			}
+			for _, want := range tt.want {
+				if !strings.Contains(stdout.String(), want) {
+					t.Fatalf("help output missing %q:\n%s", want, stdout.String())
+				}
+			}
+		})
+	}
+}
+
 func TestRunCompletionGeneratesShellScript(t *testing.T) {
 	runner := newTestRunner(t, nil)
 	var stdout, stderr bytes.Buffer

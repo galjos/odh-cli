@@ -23,6 +23,8 @@ This means agents can call `odh`, add `--json` when they need to parse stdout st
 
 Machine-readable command recipes live in [../evals/agent/recipes.json](../evals/agent/recipes.json). Use them as canonical starting paths for repeated traffic, transit, parking, EV, A22, and Tourism-event questions. They are recipes, not final answers: agents still need to inspect returned data and warnings.
 
+Task-oriented examples are documented in [how-to.md](how-to.md).
+
 Stable JSON fields for curated outputs are documented in [json-contracts.md](json-contracts.md). Prefer those fields over scraping table output.
 
 Some discovery responses are cached locally for 24 hours to keep repeated agent loops fast. This cache is limited to static-ish metadata such as OpenAPI specs, Tourism taxonomy values, and Mobility type/origin/station/datatype discovery. Do not assume current-data commands are cached: latest measurements, traffic events, diagnostics, and GTFS-RT should be treated as fresh upstream calls unless a command documents an explicit cache.

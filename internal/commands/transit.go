@@ -144,14 +144,24 @@ func (r *Runner) newTransitCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "transit",
 		Short: "GTFS-based transit routing and search",
-		RunE:  requireSubcommand,
+		Long: `GTFS-based public transport helpers for the STA timetable data exposed by Open Data Hub.
+
+Routing uses the static GTFS timetable archive. Add --with-realtime on journey
+to annotate matching trips with current GTFS-RT delays and alerts; it does not
+perform live delay-aware rerouting.`,
+		Example: `  odh transit stops search auer
+  odh transit departures --stop-id Parentit:22021:301 --date 2026-05-21 --around 16:40 --mode train
+  odh transit journey --from-stop-id Parentit:22021:301 --to-stop-id it:22021:730:0:1150 --date 2026-05-21 --time 16:40 --with-realtime --json`,
+		RunE: requireSubcommand,
 	}
 
 	// stops
 	stopsCmd := &cobra.Command{
 		Use:   "stops",
 		Short: "GTFS stop commands",
-		RunE:  requireSubcommand,
+		Example: `  odh transit stops search merano
+  odh transit stops search auer --limit 10 --json`,
+		RunE: requireSubcommand,
 	}
 	var searchDataset string
 	var searchLimit int
@@ -162,7 +172,15 @@ func (r *Runner) newTransitCmd() *cobra.Command {
 	searchCmd := &cobra.Command{
 		Use:   "search <query>",
 		Short: "Search GTFS stops by name",
-		Args:  cobra.MinimumNArgs(1),
+		Long: `Search static GTFS stops and parent stations.
+
+Use this before routing when a place name is ambiguous. Re-run departures,
+trip, or journey with --stop-id, --from-stop-id, or --to-stop-id for exact
+agent-friendly results.`,
+		Example: `  odh transit stops search merano
+  odh transit stops search auer --limit 10 --json
+  odh transit stops search "Ora, Stazione" --format markdown`,
+		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			applyJSONShortcut(&searchFormat, searchJSON)
 			format, err := normalizeOutputFormat(searchFormat)
@@ -218,7 +236,14 @@ func (r *Runner) newTransitCmd() *cobra.Command {
 	departuresCmd := &cobra.Command{
 		Use:   "departures",
 		Short: "List departures from a stop",
-		Args:  cobra.NoArgs,
+		Long: `List static GTFS departures near a time from a selected stop.
+
+Use --stop-id for exact results after running odh transit stops search. Name
+queries can match many stops in cities such as Merano or Bolzano.`,
+		Example: `  odh transit departures --stop-id Parentit:22021:301 --date 2026-05-21 --around 16:40 --mode train --json
+  odh transit departures --stop "Ora, Stazione" --date 2026-05-21 --around 18:00 --mode bus --format table
+  odh transit departures --stop merano --window 30m --limit 10`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			applyJSONShortcut(&depFormat, depJSON)
 			format, err := normalizeOutputFormat(depFormat)
@@ -301,7 +326,13 @@ func (r *Runner) newTransitCmd() *cobra.Command {
 	tripCmd := &cobra.Command{
 		Use:   "trip",
 		Short: "Search direct trips between stops",
-		Args:  cobra.NoArgs,
+		Long: `Search direct static GTFS trips between two stops.
+
+This command does not perform transfer routing. Use odh transit journey when a
+route may require train or bus transfers.`,
+		Example: `  odh transit trip --from auer --to brenner --date 2026-05-16 --time 14:05 --mode train --json
+  odh transit trip --from-stop-id Parentit:22021:301 --to-stop-id it:22021:730:0:1150 --date 2026-05-21 --time 16:40`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			applyJSONShortcut(&tripFormat, tripJSON)
 			format, err := normalizeOutputFormat(tripFormat)
@@ -406,7 +437,15 @@ func (r *Runner) newTransitCmd() *cobra.Command {
 	journeyCmd := &cobra.Command{
 		Use:   "journey",
 		Short: "Plan static GTFS journeys with transfers",
-		Args:  cobra.NoArgs,
+		Long: `Plan public transport journeys using static GTFS timetable data.
+
+Use exact stop IDs when possible. Add --with-realtime to annotate returned legs
+with current GTFS-RT trip updates and alerts; the route search itself remains
+static and does not reroute around live delays.`,
+		Example: `  odh transit journey --from-stop-id Parentit:22021:301 --to-stop-id it:22021:730:0:1150 --date 2026-05-21 --time 16:40 --max-transfers 3 --with-realtime --json
+  odh transit journey --from "Merano Maia Bassa" --to "Fontanefredde, Bivio Trodena" --date 2026-05-21 --time 16:40 --format table
+  odh --timeout 45s transit journey --from-stop-id <from_id> --to-stop-id <to_id> --time 14:05 --max-duration 6h`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			applyJSONShortcut(&journeyFormat, journeyJSON)
 			format, err := normalizeOutputFormat(journeyFormat)
@@ -534,7 +573,14 @@ func (r *Runner) newTransitCmd() *cobra.Command {
 		Use:     "delay-stats",
 		Aliases: []string{"delay-probability"},
 		Short:   "Historical delay statistics",
-		Args:    cobra.NoArgs,
+		Long: `Explain whether historical delay probability can be computed from current Open Data Hub transit feeds.
+
+The current CLI does not invent delay probabilities without an archived GTFS-RT
+history. Use this command when an agent needs a machine-readable limitation
+instead of guessing.`,
+		Example: `  odh transit delay-stats --from auer --to brenner --time 14:05 --weekday saturday --json
+  odh transit delay-stats --from "Ora, Stazione" --to Brennero --time 14:05 --since 90d`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			applyJSONShortcut(&dsFormat, dsJSON)
 			format, err := normalizeOutputFormat(dsFormat)

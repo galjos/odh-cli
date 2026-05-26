@@ -9,6 +9,8 @@ SPDX-License-Identifier: CC0-1.0
 For stable machine-readable fields on curated JSON outputs, see
 [json-contracts.md](json-contracts.md).
 
+For task-oriented recipes, see [how-to.md](how-to.md).
+
 ## Global Options
 
 Use global options before the subcommand:
@@ -75,7 +77,7 @@ Example output with `--network=false`:
 {
   "ok": true,
   "version": {
-    "version": "0.2.4-dev",
+    "version": "0.2.5-dev",
     "commit": "unknown",
     "date": "unknown",
     "goos": "darwin",
@@ -85,7 +87,7 @@ Example output with `--network=false`:
     {
       "name": "version",
       "ok": true,
-      "message": "0.2.4-dev"
+      "message": "0.2.5-dev"
     },
     {
       "name": "api_registry",

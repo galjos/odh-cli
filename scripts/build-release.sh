@@ -5,7 +5,7 @@
 
 set -euo pipefail
 
-VERSION="${VERSION:-0.2.4-dev}"
+VERSION="${VERSION:-0.2.5-dev}"
 COMMIT="${COMMIT:-$(git rev-parse --short HEAD)}"
 DATE="${DATE:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}"
 TARGET_OS="${GOOS:-$(go env GOOS)}"

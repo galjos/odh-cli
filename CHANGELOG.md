@@ -10,6 +10,13 @@ All notable changes to `odh-cli` are documented here.
 
 ## Unreleased
 
+## v0.2.5 - 2026-05-26
+
+- Added practical built-in `--help` examples for traffic, Mobility, transit,
+  diagnostics, and A22 commands.
+- Added a task-oriented `docs/how-to.md` manual for common human and agent
+  workflows.
+
 ## v0.2.4 - 2026-05-26
 
 - Added a global opt-in `--timeout` flag for bounded agent and script runs.

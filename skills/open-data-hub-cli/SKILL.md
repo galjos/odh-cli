@@ -13,7 +13,7 @@ metadata:
             {
               "id": "go",
               "kind": "go",
-              "module": "github.com/galjos/odh-cli/cmd/odh@v0.2.4",
+              "module": "github.com/galjos/odh-cli/cmd/odh@v0.2.5",
               "bins": ["odh"],
               "label": "Install odh CLI (go)",
             },
@@ -33,10 +33,10 @@ odh version
 odh doctor --timeout 10s
 ```
 
-Need `odh v0.2.4+` for the current command contracts, source/provenance fields, traffic helpers, GTFS/transit, filtered latest measurements, comma-safe `--param`, and `transit journey --with-realtime`.
+Need `odh v0.2.5+` for the current command contracts, source/provenance fields, traffic helpers, GTFS/transit, filtered latest measurements, comma-safe `--param`, and `transit journey --with-realtime`.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/galjos/odh-cli/main/scripts/install.sh | sh -s -- --version v0.2.4 --dir "$HOME/bin"
+curl -fsSL https://raw.githubusercontent.com/galjos/odh-cli/main/scripts/install.sh | sh -s -- --version v0.2.5 --dir "$HOME/bin"
 ```
 
 If running from the source repo, use `./odh`.
@@ -48,6 +48,7 @@ If running from the source repo, use `./odh`.
 - Treat stderr as diagnostics, not data.
 - Nonzero exit means failure. Exit `2` usually means bad invocation.
 - For bounded agent loops, put the global timeout before the subcommand, for example `odh --timeout 20s traffic today --area bozen-unterland --json`.
+- When unsure about command shape, run `odh <command> --help`; current help includes task-focused examples.
 - Prefer discovery commands before guessing provider names, data types, stop IDs, or zone IDs.
 - Prefer returned `source`, `source_detail`, `endpoint`, `archive`, `realtime`, and `warnings` fields over inferred provenance.
 - Stable curated JSON fields are documented in `docs/json-contracts.md` in the repo.

@@ -57,9 +57,13 @@ func (r *Runner) NewRootCmd() *cobra.Command {
 	var commandTimeout time.Duration
 	var commandTimeoutCancel context.CancelFunc
 	rootCmd := &cobra.Command{
-		Use:           "odh",
-		Short:         "odh is a JSON-first CLI for Open Data Hub APIs",
-		Long:          `odh is an unofficial JSON-first command-line interface for public Open Data Hub APIs.`,
+		Use:   "odh",
+		Short: "odh is a JSON-first CLI for Open Data Hub APIs",
+		Long:  `odh is an unofficial JSON-first command-line interface for public Open Data Hub APIs.`,
+		Example: `  odh apis
+  odh datasets search parking
+  odh --timeout 20s traffic today --area ueberetsch-unterland --format table
+  odh transit journey --from-stop-id Parentit:22021:301 --to-stop-id it:22021:730:0:1150 --date 2026-05-21 --time 16:40 --with-realtime --json`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {

@@ -25,7 +25,15 @@ func (r *Runner) newDiagnosticsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "diagnostics",
 		Short: "Data quality and reliability checks",
-		RunE:  requireSubcommand,
+		Long: `Diagnostics for Open Data Hub data quality and common agent caveats.
+
+Use diagnostics before making strong claims about EV availability, parking
+forecasts, or Tourism event discovery. These commands return JSON so agents can
+surface warnings instead of hiding upstream data gaps.`,
+		Example: `  odh diagnostics ev-charging --origin ALPERIA --fresh-within 24h
+  odh diagnostics parking-forecasts --origin "Municipality Merano" --fresh-within 2h
+  odh diagnostics tourism-events --date 2026-05-18 --limit 20`,
+		RunE: requireSubcommand,
 	}
 
 	var evOrigin string
@@ -36,7 +44,14 @@ func (r *Runner) newDiagnosticsCmd() *cobra.Command {
 		Use:     "ev-charging",
 		Aliases: []string{"ev", "charging"},
 		Short:   "Check EV charging data reliability",
-		Args:    cobra.NoArgs,
+		Long: `Check whether Open Data Hub has fresh active EV availability rows.
+
+This command is intentionally conservative: if no fresh active rows are found,
+do not report stale inactive rows as current charger availability.`,
+		Example: `  odh diagnostics ev-charging --origin ALPERIA --fresh-within 24h
+  odh diagnostics ev-charging --fresh-within 2h --limit 20
+  odh diagnostics ev-charging --origin ALPERIA --request-limit 10000`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			result, err := r.fetchFilteredMobilityLatest(cmd.Context(), mobilityLatestFilter{
 				StationType:  "EChargingStation",
@@ -93,7 +108,14 @@ func (r *Runner) newDiagnosticsCmd() *cobra.Command {
 		Use:     "parking-forecasts",
 		Aliases: []string{"parking-forecast", "parking"},
 		Short:   "Check parking forecast reliability",
-		Args:    cobra.NoArgs,
+		Long: `Check current parking occupancy and parking forecast freshness.
+
+If forecasts are stale but current occupancy is fresh, the verdict reports
+current_only so agents can answer availability without inventing forecasts.`,
+		Example: `  odh diagnostics parking-forecasts --origin "Municipality Merano" --fresh-within 2h
+  odh diagnostics parking-forecasts --origin "Municipality Merano" --forecast-minutes 60 --limit 10
+  odh diagnostics parking-forecasts --fresh-within 30m --request-limit 10000`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if parkMinutes <= 0 {
 				return fmt.Errorf("--forecast-minutes must be greater than zero")
@@ -168,7 +190,15 @@ func (r *Runner) newDiagnosticsCmd() *cobra.Command {
 		Use:     "tourism-events",
 		Aliases: []string{"events"},
 		Short:   "Check tourism event data reliability",
-		Args:    cobra.NoArgs,
+		Long: `Check Tourism event rows for date and location caveats.
+
+Open Data Hub Tourism events can have surprising onlyactive semantics and
+missing GpsInfo. Use this before claiming that an event is active today or near
+a precise location.`,
+		Example: `  odh diagnostics tourism-events --date 2026-05-18 --limit 20
+  odh diagnostics tourism-events --date 2026-05-18 --only-active=false
+  odh diagnostics tourism-events --date 2026-05-18 --page 2 --limit 20`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			day, err := time.Parse("2006-01-02", strings.TrimSpace(tourDate))
 			if err != nil {

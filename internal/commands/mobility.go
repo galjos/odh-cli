@@ -22,7 +22,16 @@ func (r *Runner) newMobilityCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "mobility",
 		Short: "Curated Mobility API commands",
-		RunE:  requireSubcommand,
+		Long: `Curated helpers for the Open Data Hub Mobility API.
+
+Use discovery commands before guessing station types, origins, or data types.
+Use mobility latest with --active and --fresh-within for current availability
+questions; raw latest rows can include stale inactive stations.`,
+		Example: `  odh mobility types --kind station
+  odh mobility origins --station-type ParkingStation
+  odh mobility datatypes --station-type TrafficSensor --origin A22 --limit 1000
+  odh mobility latest --station-type ParkingStation --data-type free --origin "Municipality Merano" --active --fresh-within 2h --format table`,
+		RunE: requireSubcommand,
 	}
 
 	// types
@@ -33,7 +42,10 @@ func (r *Runner) newMobilityCmd() *cobra.Command {
 	typesCmd := &cobra.Command{
 		Use:   "types",
 		Short: "Discover Mobility type values",
-		Args:  cobra.NoArgs,
+		Example: `  odh mobility types --kind station
+  odh mobility types --kind event --json
+  odh mobility types --kind edge --format markdown`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			applyJSONShortcut(&typesFormat, typesJSON)
 			format, err := normalizeOutputFormat(typesFormat)
@@ -80,7 +92,10 @@ func (r *Runner) newMobilityCmd() *cobra.Command {
 	originsCmd := &cobra.Command{
 		Use:   "origins",
 		Short: "Discover Mobility station origins",
-		Args:  cobra.NoArgs,
+		Example: `  odh mobility origins --station-type ParkingStation
+  odh mobility origins --station-type TrafficSensor --limit 1000
+  odh mobility origins --station-type EChargingStation --param fields=sorigin,sname`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if strings.TrimSpace(originsStationType) == "" {
 				return fmt.Errorf("--station-type is required")
@@ -135,7 +150,10 @@ func (r *Runner) newMobilityCmd() *cobra.Command {
 	stationsCmd := &cobra.Command{
 		Use:   "stations",
 		Short: "List Mobility stations",
-		Args:  cobra.NoArgs,
+		Example: `  odh mobility stations --station-type ParkingStation --limit 10
+  odh mobility stations --station-type TrafficSensor --origin A22
+  odh mobility stations --station-type EChargingStation --where 'sactive.eq.true'`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if strings.TrimSpace(stationsStationType) == "" {
 				return fmt.Errorf("--station-type is required")
@@ -200,7 +218,14 @@ func (r *Runner) newMobilityCmd() *cobra.Command {
 	datatypesCmd := &cobra.Command{
 		Use:   "datatypes",
 		Short: "Summarize Mobility data types",
-		Args:  cobra.NoArgs,
+		Long: `Summarize measurement data types for a Mobility station type.
+
+This is the safest way to discover data_type values before calling
+odh mobility latest.`,
+		Example: `  odh mobility datatypes --station-type ParkingStation --origin "Municipality Merano"
+  odh mobility datatypes --station-type TrafficSensor --origin A22 --limit 1000 --json
+  odh mobility datatypes --station-type EChargingStation --format table`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			applyJSONShortcut(&datatypesFormat, datatypesJSON)
 			format, err := normalizeOutputFormat(datatypesFormat)
@@ -263,7 +288,13 @@ func (r *Runner) newMobilityCmd() *cobra.Command {
 	eventsCmd := &cobra.Command{
 		Use:   "events",
 		Short: "List Mobility events",
-		Args:  cobra.NoArgs,
+		Long: `List raw Mobility API events for an origin.
+
+For South Tyrol roadworks and closures, prefer odh traffic today/search/events
+because it deduplicates records and surfaces stale-data warnings.`,
+		Example: `  odh mobility events --origin A22 --latest --limit 20
+  odh mobility events --origin PROVINCE_BZ --latest --limit 10`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if strings.TrimSpace(eventsOrigin) == "" {
 				return fmt.Errorf("--origin is required")
@@ -327,7 +358,15 @@ func (r *Runner) newMobilityCmd() *cobra.Command {
 	latestCmd := &cobra.Command{
 		Use:   "latest",
 		Short: "Query latest Mobility time-series measurements",
-		Args:  cobra.NoArgs,
+		Long: `Query latest Mobility measurements for a station type and data type.
+
+Use --origin, --active, --fresh-within, --sort newest, and --request-limit for
+agent-friendly current availability checks. Without local filters the upstream
+feed can return stale or inactive rows first.`,
+		Example: `  odh mobility latest --station-type ParkingStation --data-type free --origin "Municipality Merano" --active --fresh-within 2h --sort newest --request-limit 10000 --format table
+  odh mobility latest --station-type EChargingStation --data-type number-available --origin ALPERIA --active --fresh-within 24h --sort newest --json
+  odh mobility latest --station-type TrafficSensor --data-type vehicle-count --origin A22 --limit 5 --json`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			applyJSONShortcut(&latestFormat, latestJSON)
 			format, err := normalizeOutputFormat(latestFormat)
@@ -444,7 +483,14 @@ func (r *Runner) newA22Cmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "a22",
 		Short: "A22 Mobility commands",
-		RunE:  requireSubcommand,
+		Long: `Helpers for A22 data exposed through the Open Data Hub Mobility API.
+
+Use these commands as ODH/A22 feed diagnostics. The A22 forecast feed is not the
+same as a live incident bulletin and should not be used as historical evidence.`,
+		Example: `  odh a22 status
+  odh a22 status --limit 10 --json
+  odh a22 status --raw --json`,
+		RunE: requireSubcommand,
 	}
 
 	var statusLimit int
@@ -454,7 +500,14 @@ func (r *Runner) newA22Cmd() *cobra.Command {
 	statusCmd := &cobra.Command{
 		Use:   "status",
 		Short: "Check A22 status",
-		Args:  cobra.NoArgs,
+		Long: `Check current A22 event rows and TrafficForecast rows from Open Data Hub.
+
+The command keeps event and forecast feeds separate and warns when forecast data
+should not be presented as current incidents.`,
+		Example: `  odh a22 status
+  odh a22 status --limit 10 --json
+  odh a22 status --raw --json`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			applyJSONShortcut(&statusFormat, statusJSON)
 			format, err := normalizeOutputFormat(statusFormat)

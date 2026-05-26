@@ -73,14 +73,14 @@ brew install galjos/odh/odh
 Install a Linux Debian package from GitHub Releases:
 
 ```bash
-curl -LO https://github.com/galjos/odh-cli/releases/download/v0.2.4/odh_v0.2.4_linux_amd64.deb
-sudo apt install ./odh_v0.2.4_linux_amd64.deb
+curl -LO https://github.com/galjos/odh-cli/releases/download/v0.2.5/odh_v0.2.5_linux_amd64.deb
+sudo apt install ./odh_v0.2.5_linux_amd64.deb
 ```
 
 Install a specific version or directory:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/galjos/odh-cli/main/scripts/install.sh | sh -s -- --version v0.2.4 --dir "$HOME/bin"
+curl -fsSL https://raw.githubusercontent.com/galjos/odh-cli/main/scripts/install.sh | sh -s -- --version v0.2.5 --dir "$HOME/bin"
 ```
 
 Build from source instead:
@@ -113,7 +113,7 @@ Build with release metadata:
 
 ```bash
 go build \
-  -ldflags "-X github.com/galjos/odh-cli/internal/version.Version=0.2.4 -X github.com/galjos/odh-cli/internal/version.Commit=$(git rev-parse --short HEAD) -X github.com/galjos/odh-cli/internal/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  -ldflags "-X github.com/galjos/odh-cli/internal/version.Version=0.2.5 -X github.com/galjos/odh-cli/internal/version.Commit=$(git rev-parse --short HEAD) -X github.com/galjos/odh-cli/internal/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   -o odh ./cmd/odh
 ```
 
@@ -284,6 +284,9 @@ odh a22 status --limit 10
 - commands avoid hidden browser state and web scraping.
 
 See [docs/agent-usage.md](docs/agent-usage.md) for details.
+
+Task-oriented examples for common traffic, parking, EV, transit, Tourism, and
+raw API questions are in [docs/how-to.md](docs/how-to.md).
 
 Stable JSON fields for curated outputs are documented in [docs/json-contracts.md](docs/json-contracts.md).
 
