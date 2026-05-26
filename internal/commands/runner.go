@@ -76,6 +76,7 @@ func (r *Runner) NewRootCmd() *cobra.Command {
 	rootCmd.AddCommand(r.newTrafficCmd())
 	rootCmd.AddCommand(r.newMobilityCmd())
 	rootCmd.AddCommand(r.newA22Cmd())
+	rootCmd.AddCommand(r.newCompletionCmd())
 
 	return rootCmd
 }
@@ -127,6 +128,7 @@ func isUsageError(err error) bool {
 		"accepts ",
 		"requires at least ",
 		"requires exactly ",
+		"invalid argument ",
 		"requires key=value",
 		"must use key=value",
 		" is required",

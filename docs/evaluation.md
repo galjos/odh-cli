@@ -14,6 +14,8 @@ The evaluation layer answers one question: can an agent use the existing CLI cor
 
 The task set is in [../evals/agent/tasks.json](../evals/agent/tasks.json). It contains user-style prompts, expected command paths, pass criteria, and common failure modes.
 
+The recipe set is in [../evals/agent/recipes.json](../evals/agent/recipes.json). It contains machine-readable command recipes, parse targets, and caveats that agents can use as stable starting paths before composing a final answer.
+
 Current task themes:
 
 - South Tyrol traffic text search and stale-event handling.
@@ -42,6 +44,8 @@ ODH_EVAL_BIN=odh scripts/run-agent-evals.sh
 ```
 
 The smoke runner is intentionally live: it calls public unauthenticated Open Data Hub endpoints. It should not be treated like a hermetic unit test or required in normal CI.
+
+The smoke runner also validates the recipe file shape so recipes remain a maintained artifact rather than stale documentation.
 
 ## Manual Scoring
 

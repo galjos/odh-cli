@@ -6,6 +6,26 @@ SPDX-License-Identifier: CC0-1.0
 
 # Commands
 
+## `odh completion`
+
+Generates shell completion scripts. The command is hidden from the default help
+screen to keep first-run help focused, but it is supported for installation and
+package-manager integration.
+
+```bash
+odh completion zsh
+odh completion bash
+odh completion fish
+odh completion powershell
+```
+
+Supported shells:
+
+- `bash`
+- `zsh`
+- `fish`
+- `powershell`
+
 ## `odh version`
 
 Prints build metadata. JSON is the default so scripts can capture exact binary provenance.
@@ -36,7 +56,7 @@ Example output with `--network=false`:
 {
   "ok": true,
   "version": {
-    "version": "0.2.1-dev",
+    "version": "0.2.2-dev",
     "commit": "unknown",
     "date": "unknown",
     "goos": "darwin",
@@ -46,7 +66,7 @@ Example output with `--network=false`:
     {
       "name": "version",
       "ok": true,
-      "message": "0.2.1-dev"
+      "message": "0.2.2-dev"
     },
     {
       "name": "api_registry",

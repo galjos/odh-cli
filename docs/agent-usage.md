@@ -21,6 +21,8 @@ SPDX-License-Identifier: CC0-1.0
 
 This means agents can call `odh`, add `--json` when they need to parse stdout structurally, and treat stderr plus exit code as failure context.
 
+Machine-readable command recipes live in [../evals/agent/recipes.json](../evals/agent/recipes.json). Use them as canonical starting paths for repeated traffic, transit, parking, EV, A22, and Tourism-event questions. They are recipes, not final answers: agents still need to inspect returned data and warnings.
+
 Some discovery responses are cached locally for 24 hours to keep repeated agent loops fast. This cache is limited to static-ish metadata such as OpenAPI specs, Tourism taxonomy values, and Mobility type/origin/station/datatype discovery. Do not assume current-data commands are cached: latest measurements, traffic events, diagnostics, and GTFS-RT should be treated as fresh upstream calls unless a command documents an explicit cache.
 
 The HTTP client retries transient `429` and `5xx` failures with bounded exponential backoff. If a command still exits `1`, treat it as a real runtime failure and do not silently invent data.
@@ -149,6 +151,8 @@ odh transit journey --from-stop-id <origin-stop-id> --to-stop-id <destination-st
 The transit layer reads the static STA GTFS archive and caches it locally for 24 hours. A cold cache download can be large, so transit commands allow a longer archive-download timeout than normal API calls and write a progress diagnostic to stderr while the archive is loading. Stop search supports common German/Italian aliases such as `auer` / `ora`, `brenner` / `brennero`, and `bozen` / `bolzano`.
 
 Transit commands default to compact table output. Add `--json` when you need `matched_stops`, `from_stops`, `to_stops`, `archive`, or exact match-mode fields as structured data.
+
+Transit JSON includes `source`, `source_detail`, `timetable_type`, archive metadata, and warnings. When `--with-realtime` is used, the `realtime` object includes GTFS-RT endpoints, feed timestamp, and matched entity counts.
 
 If `transit departures`, `transit trip`, or `transit journey` returns a warning that a stop query matched many stops, narrow the stop wording with `odh transit stops search <query> --limit 5` and rerun with the returned `stop_id`: `--stop-id` for departures, or `--from-stop-id` / `--to-stop-id` for trip and journey matching. Parent station IDs are valid and expand to their child platform stops. This is the preferred agent pattern for ambiguous station names such as Merano or Bolzano.
 

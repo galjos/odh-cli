@@ -15,8 +15,10 @@ import (
 )
 
 const gtfsRealtimeStaleAfter = 15 * time.Minute
+const transitRealtimeSource = "Open Data Hub GTFS Realtime API"
 
 type transitRealtimeFeedInfo struct {
+	Source                  string `json:"source"`
 	TripUpdatesEndpoint     string `json:"trip_updates_endpoint,omitempty"`
 	ServiceAlertsEndpoint   string `json:"service_alerts_endpoint,omitempty"`
 	TripUpdateEntityCount   int    `json:"trip_update_entity_count"`
@@ -84,7 +86,7 @@ type gtfsRealtimeInformedEntity struct {
 }
 
 func (r *Runner) annotateTransitJourneysRealtime(ctx context.Context, dataset string, serviceDate time.Time, journeys []transitJourney, minTransfer time.Duration, warnings []string) (*transitRealtimeFeedInfo, []string) {
-	info := &transitRealtimeFeedInfo{}
+	info := &transitRealtimeFeedInfo{Source: transitRealtimeSource}
 	if len(journeys) == 0 {
 		return info, warnings
 	}

@@ -97,6 +97,30 @@ func TestRunHelpDoesNotExposeCompletionCommand(t *testing.T) {
 	}
 }
 
+func TestRunCompletionGeneratesShellScript(t *testing.T) {
+	runner := newTestRunner(t, nil)
+	var stdout, stderr bytes.Buffer
+	code := runner.Run(context.Background(), []string{"completion", "zsh"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("Run exit = %d, stderr = %s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "#compdef odh") {
+		t.Fatalf("unexpected completion output: %s", stdout.String())
+	}
+}
+
+func TestRunCompletionRejectsUnsupportedShell(t *testing.T) {
+	runner := newTestRunner(t, nil)
+	var stdout, stderr bytes.Buffer
+	code := runner.Run(context.Background(), []string{"completion", "tcsh"}, &stdout, &stderr)
+	if code != 2 {
+		t.Fatalf("Run exit = %d, stderr = %s, stdout = %s", code, stderr.String(), stdout.String())
+	}
+	if !strings.Contains(stderr.String(), "invalid argument") {
+		t.Fatalf("unexpected stderr: %s", stderr.String())
+	}
+}
+
 func TestRunDatasetsSearchFindsParking(t *testing.T) {
 	runner := newTestRunner(t, nil)
 	var stdout, stderr bytes.Buffer

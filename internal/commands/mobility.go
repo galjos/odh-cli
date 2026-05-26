@@ -556,6 +556,8 @@ type mobilityLatestFilter struct {
 }
 
 type mobilityLatestResult struct {
+	Source       string           `json:"source"`
+	SourceDetail string           `json:"source_detail"`
 	StationType  string           `json:"station_type"`
 	DataType     string           `json:"data_type"`
 	Origin       string           `json:"origin,omitempty"`
@@ -924,6 +926,8 @@ func filterMobilityLatest(records []map[string]any, filter mobilityLatestFilter)
 		warnings = append(warnings, mobilityLatestDatatypeHints(filter.StationType, filter.DataType)...)
 	}
 	return mobilityLatestResult{
+		Source:       "Open Data Hub Mobility API",
+		SourceDetail: "latest Mobility time-series measurements",
 		StationType:  filter.StationType,
 		DataType:     filter.DataType,
 		Origin:       origin,

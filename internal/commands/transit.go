@@ -31,6 +31,8 @@ const (
 	defaultGTFSCacheTTL   = 24 * time.Hour
 	gtfsRefreshRetryDelay = 15 * time.Minute
 	maxGTFSArchiveBytes   = 200 * 1024 * 1024
+	transitSource         = "Open Data Hub GTFS API"
+	transitSourceDetail   = "STA static GTFS timetable archive"
 )
 
 var gtfsDownloadTimeout = 2 * time.Minute
@@ -181,12 +183,14 @@ func (r *Runner) newTransitCmd() *cobra.Command {
 			}
 			matches := searchGTFSStops(stops, query, searchLimit)
 			return writeTransitStopsSearchOutput(cmd.OutOrStdout(), transitStopsSearchOutput{
-				Dataset: searchDataset,
-				Query:   query,
-				Archive: archive,
-				Count:   len(matches),
-				Stops:   matches,
-				Format:  format,
+				Source:       transitSource,
+				SourceDetail: transitSourceDetail,
+				Dataset:      searchDataset,
+				Query:        query,
+				Archive:      archive,
+				Count:        len(matches),
+				Stops:        matches,
+				Format:       format,
 			})
 		},
 	}
@@ -246,6 +250,9 @@ func (r *Runner) newTransitCmd() *cobra.Command {
 			}
 			warnings := appendTransitStopMatchWarning(nil, "stop", "stop-id", selector, result.StopMatchMode, len(result.Stops))
 			return writeTransitDeparturesOutput(cmd.OutOrStdout(), transitDeparturesOutput{
+				Source:        transitSource,
+				SourceDetail:  transitSourceDetail,
+				TimetableType: "static_gtfs",
 				Dataset:       depDataset,
 				StopQuery:     depStopQuery,
 				StopID:        depStopID,
@@ -339,6 +346,9 @@ func (r *Runner) newTransitCmd() *cobra.Command {
 			warnings = appendTransitStopMatchWarning(warnings, "to", "to-stop-id", toSelector, result.ToMatchMode, len(result.ToStops))
 			warnings = append(warnings, "historical delay probability is not available from the live GTFS API without an archived GTFS-RT snapshot dataset")
 			return writeTransitTripOutput(cmd.OutOrStdout(), transitTripOutput{
+				Source:        transitSource,
+				SourceDetail:  transitSourceDetail,
+				TimetableType: "static_gtfs",
 				Dataset:       tripDataset,
 				FromQuery:     tripFromQuery,
 				FromStopID:    tripFromStopID,
@@ -466,6 +476,9 @@ func (r *Runner) newTransitCmd() *cobra.Command {
 				warnings = append(warnings, "journey planning uses static GTFS timetable data only; add --with-realtime to annotate matching trips with current GTFS-RT delays and alerts")
 			}
 			return writeTransitJourneyOutput(cmd.OutOrStdout(), transitJourneyOutput{
+				Source:        transitSource,
+				SourceDetail:  transitSourceDetail,
+				TimetableType: "static_gtfs",
 				Dataset:       journeyDataset,
 				FromQuery:     journeyFromQuery,
 				FromStopID:    journeyFromStopID,
@@ -529,6 +542,7 @@ func (r *Runner) newTransitCmd() *cobra.Command {
 				return err
 			}
 			return writeTransitDelayStatsOutput(cmd.OutOrStdout(), transitDelayStatsOutput{
+				Source:    transitSource,
 				Supported: false,
 				Reason:    "Open Data Hub GTFS exposes current static GTFS and live GTFS-RT feeds, but this CLI has no historical GTFS-RT archive to compute probabilities from.",
 				Requested: map[string]string{
@@ -622,15 +636,20 @@ type transitJourneyResult struct {
 }
 
 type transitStopsSearchOutput struct {
-	Dataset string          `json:"dataset"`
-	Query   string          `json:"query"`
-	Archive gtfsArchiveInfo `json:"archive"`
-	Count   int             `json:"count"`
-	Stops   []gtfsStop      `json:"stops"`
-	Format  string          `json:"-"`
+	Source       string          `json:"source"`
+	SourceDetail string          `json:"source_detail"`
+	Dataset      string          `json:"dataset"`
+	Query        string          `json:"query"`
+	Archive      gtfsArchiveInfo `json:"archive"`
+	Count        int             `json:"count"`
+	Stops        []gtfsStop      `json:"stops"`
+	Format       string          `json:"-"`
 }
 
 type transitDeparturesOutput struct {
+	Source        string             `json:"source"`
+	SourceDetail  string             `json:"source_detail"`
+	TimetableType string             `json:"timetable_type"`
 	Dataset       string             `json:"dataset"`
 	StopQuery     string             `json:"stop_query,omitempty"`
 	StopID        string             `json:"stop_id,omitempty"`
@@ -648,6 +667,9 @@ type transitDeparturesOutput struct {
 }
 
 type transitTripOutput struct {
+	Source        string             `json:"source"`
+	SourceDetail  string             `json:"source_detail"`
+	TimetableType string             `json:"timetable_type"`
 	Dataset       string             `json:"dataset"`
 	FromQuery     string             `json:"from_query,omitempty"`
 	FromStopID    string             `json:"from_stop_id,omitempty"`
@@ -669,6 +691,9 @@ type transitTripOutput struct {
 }
 
 type transitJourneyOutput struct {
+	Source        string                   `json:"source"`
+	SourceDetail  string                   `json:"source_detail"`
+	TimetableType string                   `json:"timetable_type"`
 	Dataset       string                   `json:"dataset"`
 	FromQuery     string                   `json:"from_query,omitempty"`
 	FromStopID    string                   `json:"from_stop_id,omitempty"`
@@ -694,6 +719,7 @@ type transitJourneyOutput struct {
 }
 
 type transitDelayStatsOutput struct {
+	Source       string            `json:"source"`
 	Supported    bool              `json:"supported"`
 	Reason       string            `json:"reason"`
 	Requested    map[string]string `json:"requested"`

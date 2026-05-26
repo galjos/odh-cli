@@ -1,0 +1,159 @@
+{
+  "schema_version": 1,
+  "purpose": "Machine-readable command recipes for agents using odh. These are stable starting paths, not natural-language answers.",
+  "recipes": [
+    {
+      "id": "traffic-today-area",
+      "question_pattern": "Roadworks, closures, or traffic events today in a South Tyrol traffic area.",
+      "commands": [
+        "odh traffic zones --json",
+        "odh traffic categories --json",
+        "odh traffic today --area ueberetsch-unterland --json"
+      ],
+      "parse": [
+        "events[].type",
+        "events[].road",
+        "events[].place",
+        "events[].start",
+        "events[].end",
+        "warnings[]"
+      ],
+      "caveats": [
+        "Source is Open Data Hub PROVINCE_BZ traffic events.",
+        "Warnings must be surfaced when stale or hidden rows exist.",
+        "Compare with the official traffic service before claiming a complete live bulletin."
+      ]
+    },
+    {
+      "id": "traffic-place-search",
+      "question_pattern": "Why is a road closed or restricted near a named place today?",
+      "commands": [
+        "odh traffic zones --json",
+        "odh traffic search <place-or-road-text> --today --json",
+        "odh traffic search <place-or-road-text> --today --zone-id <zone-id> --json",
+        "odh traffic search <broader-local-name> --today --zone-id <zone-id> --include-stale --json"
+      ],
+      "parse": [
+        "count",
+        "events[]",
+        "warnings[]"
+      ],
+      "caveats": [
+        "Do not invent a reason when no current literal match is returned.",
+        "Use broader multilingual place text in the agent layer rather than expecting hardcoded CLI aliases.",
+        "Stale open-ended rows are context, not confirmed current closures."
+      ]
+    },
+    {
+      "id": "transit-current-journey",
+      "question_pattern": "Plan a current public-transport journey with possible transfers.",
+      "commands": [
+        "odh transit stops search <origin-name> --limit 10 --json",
+        "odh transit stops search <destination-name> --limit 10 --json",
+        "odh transit journey --from-stop-id <origin-stop-id-or-parent> --to-stop-id <destination-stop-id-or-parent> --date <YYYY-MM-DD> --time <HH:MM> --max-transfers 3 --with-realtime --json"
+      ],
+      "parse": [
+        "journeys[].legs[]",
+        "journeys[].realtime_transfers[]",
+        "realtime",
+        "warnings[]"
+      ],
+      "caveats": [
+        "Routing is static GTFS.",
+        "GTFS-RT only annotates matching current trips and service alerts.",
+        "Missing realtime entities do not prove a trip is on time."
+      ]
+    },
+    {
+      "id": "transit-historical-delay",
+      "question_pattern": "Estimate historical delay probability or usual delay minutes.",
+      "commands": [
+        "odh transit trip --from <origin> --to <destination> --date <YYYY-MM-DD> --time <HH:MM> --mode train --json",
+        "odh transit delay-stats --from <origin> --to <destination> --time <HH:MM> --weekday <weekday> --json"
+      ],
+      "parse": [
+        "supported",
+        "reason",
+        "available_now",
+        "next_step"
+      ],
+      "caveats": [
+        "Do not infer delay probabilities from one live GTFS-RT response.",
+        "Historical probabilities need an archived GTFS-RT snapshot dataset."
+      ]
+    },
+    {
+      "id": "parking-current-plus-forecast",
+      "question_pattern": "Show current parking availability and only include a forecast if it is reliable.",
+      "commands": [
+        "odh diagnostics parking-forecasts --origin \"Municipality Merano\" --fresh-within 2h --forecast-minutes 60 --request-limit 10000 --limit 10",
+        "odh mobility latest --station-type ParkingStation --data-type free --origin \"Municipality Merano\" --active --fresh-within 2h --sort newest --request-limit 10000 --limit 10 --format table"
+      ],
+      "parse": [
+        "verdict",
+        "current.current_count",
+        "forecast.current_count",
+        "warnings[]"
+      ],
+      "caveats": [
+        "If the diagnostic is current_only, report current occupancy but not stale forecast rows.",
+        "Treat unavailable diagnostics as unavailable data, not zero availability."
+      ]
+    },
+    {
+      "id": "ev-current-availability",
+      "question_pattern": "Find current EV charging availability without stale inactive stations.",
+      "commands": [
+        "odh mobility origins --station-type EChargingStation --limit 1000",
+        "odh mobility datatypes --station-type EChargingStation --origin ALPERIA --limit 1000 --json",
+        "odh diagnostics ev-charging --origin ALPERIA --fresh-within 24h --request-limit 10000 --limit 10",
+        "odh mobility latest --station-type EChargingStation --data-type number-available --origin ALPERIA --active --fresh-within 24h --sort newest --request-limit 10000 --limit 10 --json"
+      ],
+      "parse": [
+        "verdict",
+        "measurements[]",
+        "warnings[]"
+      ],
+      "caveats": [
+        "Fresh active filtered-zero output is not proof that the entire upstream domain has no chargers.",
+        "Surface request-limit and stale-row warnings."
+      ]
+    },
+    {
+      "id": "a22-current-status",
+      "question_pattern": "Check whether Open Data Hub has current A22 incidents.",
+      "commands": [
+        "odh mobility datatypes --station-type TrafficSensor --origin A22 --limit 1000 --json",
+        "odh a22 status --limit 10 --json"
+      ],
+      "parse": [
+        "events.count",
+        "events.summary[]",
+        "forecast.count",
+        "warnings[]"
+      ],
+      "caveats": [
+        "TrafficForecast rows are forecast data, not live incident evidence.",
+        "A22 live/current feeds should not be treated as historical incident archives."
+      ]
+    },
+    {
+      "id": "tourism-events-data-quality",
+      "question_pattern": "Find Tourism events today and decide whether active-date and location claims are reliable.",
+      "commands": [
+        "odh diagnostics tourism-events --date <YYYY-MM-DD> --limit 20",
+        "odh call tourism /v1/EventShort --param pagenumber=1 --param pagesize=20 --param onlyactive=true"
+      ],
+      "parse": [
+        "verdict",
+        "events[].date_status",
+        "events[].location_status",
+        "warnings[]"
+      ],
+      "caveats": [
+        "onlyactive=true can still need local date checks.",
+        "Do not make precise near-me claims for records without GpsInfo."
+      ]
+    }
+  ]
+}

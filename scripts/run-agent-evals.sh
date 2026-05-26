@@ -8,9 +8,15 @@ set -eu
 
 repo_root="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 tasks_file="$repo_root/evals/agent/tasks.json"
+recipes_file="$repo_root/evals/agent/recipes.json"
 
 if [ ! -f "$tasks_file" ]; then
   echo "missing eval task file: $tasks_file" >&2
+  exit 1
+fi
+
+if [ ! -f "$recipes_file" ]; then
+  echo "missing eval recipe file: $recipes_file" >&2
   exit 1
 fi
 
@@ -62,6 +68,17 @@ if [ "$task_count" -lt 5 ]; then
   exit 1
 fi
 pass "loaded $task_count agent eval tasks"
+
+recipe_count="$(jq '.recipes | length' "$recipes_file")"
+if [ "$recipe_count" -lt 5 ]; then
+  echo "not ok - expected at least 5 agent recipes" >&2
+  exit 1
+fi
+jq -e '.recipes[] | select((.id | type != "string") or (.commands | type != "array") or (.caveats | type != "array"))' "$recipes_file" >/dev/null && {
+  echo "not ok - every agent recipe needs id, commands, and caveats" >&2
+  exit 1
+}
+pass "loaded $recipe_count agent recipes"
 
 run_odh traffic zones --json >"$tmpdir/traffic-zones.json"
 assert_json_filter "traffic zones exposes upstream zone ids" "$tmpdir/traffic-zones.json" '.zones[] | select(.zone_id == "6" and .name == "Pustertal")'

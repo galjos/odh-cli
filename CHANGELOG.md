@@ -10,6 +10,13 @@ All notable changes to `odh-cli` are documented here.
 
 ## Unreleased
 
+## v0.2.2 - 2026-05-26
+
+- Added a supported hidden `odh completion` command for bash, zsh, fish, and PowerShell completions.
+- Added machine-readable agent recipes in `evals/agent/recipes.json` and validation in the agent eval smoke runner.
+- Added explicit source/provenance metadata to transit JSON outputs and filtered Mobility latest output.
+- Documented completions, agent recipes, and provenance fields.
+
 ## v0.2.1 - 2026-05-26
 
 - Added a maintained roadmap and documented the public Homebrew tap.

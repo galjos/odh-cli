@@ -20,6 +20,7 @@ The goal is not to make `odh` answer broad natural-language questions directly. 
 ## Files
 
 - `tasks.json` - real user-style prompts, expected command paths, scoring criteria, and common failure modes.
+- `recipes.json` - machine-readable command recipes, parse targets, and caveats for common agent workflows.
 - `../../scripts/run-agent-evals.sh` - live command-affordance checks for the CLI surfaces used by the eval tasks.
 
 ## Run The Smoke Evals
@@ -41,6 +42,8 @@ ODH_EVAL_BIN=odh scripts/run-agent-evals.sh
 ## Manual Agent Eval Protocol
 
 Use each `prompt` in `tasks.json` as a fresh agent task. The agent may use the `odh` CLI and public official sources when the task explicitly requires comparison, but it should not scrape unrelated websites by default.
+
+Use `recipes.json` as a stable command-path library. Recipes are not final answers; they tell an agent which commands to run, which fields to parse, and which caveats must be reflected in the answer.
 
 Score each task as:
 

@@ -28,12 +28,14 @@ This is a v0.2 project with a small, working, agent-friendly core:
 
 - list known Open Data Hub APIs,
 - report machine-readable build/version metadata,
+- generate shell completion scripts for `bash`, `zsh`, `fish`, and `powershell`,
 - run a non-interactive doctor check for registry and upstream reachability,
 - search a small curated dataset catalog for common entry points,
 - fetch OpenAPI specs as JSON,
 - call any registered API path with query parameters,
 - retry transient HTTP `429` and `5xx` failures with bounded exponential backoff,
 - cache low-risk discovery responses such as OpenAPI specs, taxonomies, and station metadata for 24 hours,
+- include source, endpoint, warning, and data-kind metadata on curated JSON outputs where provenance matters,
 - query a random Tourism POI,
 - discover Tourism taxonomies such as POI, event, accommodation, venue, article, and tag types,
 - discover Mobility station, event, and edge types,
@@ -70,14 +72,14 @@ brew install galjos/odh/odh
 Install a Linux Debian package from GitHub Releases:
 
 ```bash
-curl -LO https://github.com/galjos/odh-cli/releases/download/v0.2.1/odh_v0.2.1_linux_amd64.deb
-sudo apt install ./odh_v0.2.1_linux_amd64.deb
+curl -LO https://github.com/galjos/odh-cli/releases/download/v0.2.2/odh_v0.2.2_linux_amd64.deb
+sudo apt install ./odh_v0.2.2_linux_amd64.deb
 ```
 
 Install a specific version or directory:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/galjos/odh-cli/main/scripts/install.sh | sh -s -- --version v0.2.1 --dir "$HOME/bin"
+curl -fsSL https://raw.githubusercontent.com/galjos/odh-cli/main/scripts/install.sh | sh -s -- --version v0.2.2 --dir "$HOME/bin"
 ```
 
 Build from source instead:
@@ -95,11 +97,22 @@ go run ./cmd/odh version
 
 When running from a source checkout, pass the `odh` subcommand directly after `./cmd/odh`; do not insert an extra `--` before the subcommand.
 
+Install shell completions:
+
+```bash
+mkdir -p ~/.zfunc
+odh completion zsh > ~/.zfunc/_odh
+mkdir -p ~/.local/share/bash-completion/completions
+odh completion bash > ~/.local/share/bash-completion/completions/odh
+mkdir -p ~/.config/fish/completions
+odh completion fish > ~/.config/fish/completions/odh.fish
+```
+
 Build with release metadata:
 
 ```bash
 go build \
-  -ldflags "-X github.com/galjos/odh-cli/internal/version.Version=0.2.1 -X github.com/galjos/odh-cli/internal/version.Commit=$(git rev-parse --short HEAD) -X github.com/galjos/odh-cli/internal/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  -ldflags "-X github.com/galjos/odh-cli/internal/version.Version=0.2.2 -X github.com/galjos/odh-cli/internal/version.Commit=$(git rev-parse --short HEAD) -X github.com/galjos/odh-cli/internal/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   -o odh ./cmd/odh
 ```
 
@@ -307,5 +320,7 @@ Installation details are in [docs/install.md](docs/install.md).
 Release builds are documented in [docs/release.md](docs/release.md).
 
 Agent evaluation is documented in [docs/evaluation.md](docs/evaluation.md).
+
+Machine-readable agent recipes are in [evals/agent/recipes.json](evals/agent/recipes.json).
 
 The agent skill bundle is in [skills/open-data-hub-cli/SKILL.md](skills/open-data-hub-cli/SKILL.md).

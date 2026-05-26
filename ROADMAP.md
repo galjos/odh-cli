@@ -13,6 +13,9 @@ discovery, diagnostics, docs, and evals over broad natural-language shortcuts.
 
 - Keep the agent eval set close to real OpenClaw/Mira questions and add a task
   whenever an agent repeatedly struggles with the same command path.
+- Keep `evals/agent/recipes.json` aligned with the highest-value command paths
+  so agents have machine-readable examples without adding natural-language CLI
+  shortcuts.
 - Keep package-manager installation current through the
   [`galjos/homebrew-odh`](https://github.com/galjos/homebrew-odh) tap.
 - Improve metadata discovery for datasets, station types, origins, datatypes,

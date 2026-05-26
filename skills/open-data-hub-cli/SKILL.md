@@ -13,7 +13,7 @@ metadata:
             {
               "id": "go",
               "kind": "go",
-              "module": "github.com/galjos/odh-cli/cmd/odh@v0.2.1",
+              "module": "github.com/galjos/odh-cli/cmd/odh@v0.2.2",
               "bins": ["odh"],
               "label": "Install odh CLI (go)",
             },
@@ -33,10 +33,10 @@ odh version
 odh doctor --timeout 10s
 ```
 
-Need `odh v0.2.1+` for traffic helpers, GTFS/transit, filtered latest measurements, comma-safe `--param`, and `transit journey --with-realtime`.
+Need `odh v0.2.2+` for the current command contracts, source/provenance fields, traffic helpers, GTFS/transit, filtered latest measurements, comma-safe `--param`, and `transit journey --with-realtime`.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/galjos/odh-cli/main/scripts/install.sh | sh -s -- --version v0.2.1 --dir "$HOME/bin"
+curl -fsSL https://raw.githubusercontent.com/galjos/odh-cli/main/scripts/install.sh | sh -s -- --version v0.2.2 --dir "$HOME/bin"
 ```
 
 If running from the source repo, use `./odh`.
@@ -48,6 +48,7 @@ If running from the source repo, use `./odh`.
 - Treat stderr as diagnostics, not data.
 - Nonzero exit means failure. Exit `2` usually means bad invocation.
 - Prefer discovery commands before guessing provider names, data types, stop IDs, or zone IDs.
+- Prefer returned `source`, `source_detail`, `endpoint`, `archive`, `realtime`, and `warnings` fields over inferred provenance.
 
 ## Discovery
 
@@ -127,7 +128,7 @@ Use stop IDs when names are ambiguous. `journey --with-realtime` annotates stati
 scripts/run-agent-evals.sh
 ```
 
-Use evals to decide if repeated failures need docs, skill guidance, agent reasoning, or a narrow CLI feature.
+Use `evals/agent/tasks.json` for manual scoring and `evals/agent/recipes.json` as machine-readable command recipes. Use evals to decide if repeated failures need docs, skill guidance, agent reasoning, or a narrow CLI feature.
 
 ## References
 
