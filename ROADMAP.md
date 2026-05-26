@@ -26,6 +26,7 @@ discovery, diagnostics, docs, and evals over broad natural-language shortcuts.
 - [#2](https://github.com/galjos/odh-cli/issues/2) Run and expand real-agent evals after v0.2.
 - [#3](https://github.com/galjos/odh-cli/issues/3) Improve dataset and source metadata discovery.
 - [#4](https://github.com/galjos/odh-cli/issues/4) Evaluate MCP server mode after CLI stabilizes.
+- [#5](https://github.com/galjos/odh-cli/issues/5) Publish a signed APT repository.
 
 ## Later
 

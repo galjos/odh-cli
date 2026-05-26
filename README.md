@@ -67,10 +67,17 @@ Install with Homebrew:
 brew install galjos/odh/odh
 ```
 
+Install a Linux Debian package from GitHub Releases:
+
+```bash
+curl -LO https://github.com/galjos/odh-cli/releases/download/v0.2.1/odh_v0.2.1_linux_amd64.deb
+sudo apt install ./odh_v0.2.1_linux_amd64.deb
+```
+
 Install a specific version or directory:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/galjos/odh-cli/main/scripts/install.sh | sh -s -- --version v0.2.0 --dir "$HOME/bin"
+curl -fsSL https://raw.githubusercontent.com/galjos/odh-cli/main/scripts/install.sh | sh -s -- --version v0.2.1 --dir "$HOME/bin"
 ```
 
 Build from source instead:
@@ -92,7 +99,7 @@ Build with release metadata:
 
 ```bash
 go build \
-  -ldflags "-X github.com/galjos/odh-cli/internal/version.Version=0.2.0 -X github.com/galjos/odh-cli/internal/version.Commit=$(git rev-parse --short HEAD) -X github.com/galjos/odh-cli/internal/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  -ldflags "-X github.com/galjos/odh-cli/internal/version.Version=0.2.1 -X github.com/galjos/odh-cli/internal/version.Commit=$(git rev-parse --short HEAD) -X github.com/galjos/odh-cli/internal/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   -o odh ./cmd/odh
 ```
 
