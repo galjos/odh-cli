@@ -21,6 +21,7 @@ The goal is not to make `odh` answer broad natural-language questions directly. 
 
 - `tasks.json` - real user-style prompts, expected command paths, scoring criteria, and common failure modes.
 - `recipes.json` - machine-readable command recipes, parse targets, and caveats for common agent workflows.
+- `results/` - dated reports from scored manual eval rounds.
 - `../../scripts/run-agent-evals.sh` - live command-affordance checks for the CLI surfaces used by the eval tasks.
 
 ## Run The Smoke Evals

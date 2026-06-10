@@ -10,6 +10,10 @@ All notable changes to `odh-cli` are documented here.
 
 ## Unreleased
 
+- Recorded the first scored real-agent eval round (12 tasks, 11 pass,
+  1 partial, 0 fail) in `evals/agent/results/2026-06-10.md` and documented
+  the results convention in `docs/evaluation.md`.
+
 ## v0.2.5 - 2026-05-26
 
 - Added practical built-in `--help` examples for traffic, Mobility, transit,

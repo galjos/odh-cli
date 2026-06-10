@@ -55,6 +55,11 @@ For each prompt in `tasks.json`, run a fresh agent attempt and score it:
 - `partial` - useful data, but a missed warning, weak source handling, or unnecessary raw call.
 - `fail` - guessed answer, stale data presented as current, unsupported capability invented, or wrong command family.
 
+Record scored rounds in `evals/agent/results/` as one dated file per round,
+including setup, per-task scores, failure analysis, and fix-category
+decisions. The first round is
+[../evals/agent/results/2026-06-10.md](../evals/agent/results/2026-06-10.md).
+
 Record the failed command path and the reason. Then decide the fix category:
 
 - Docs or skill guidance.
