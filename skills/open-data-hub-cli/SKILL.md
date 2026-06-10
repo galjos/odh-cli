@@ -13,7 +13,7 @@ metadata:
             {
               "id": "go",
               "kind": "go",
-              "module": "github.com/galjos/odh-cli/cmd/odh@v0.2.5",
+              "module": "github.com/galjos/odh-cli/cmd/odh@v0.3.0",
               "bins": ["odh"],
               "label": "Install odh CLI (go)",
             },
@@ -33,13 +33,15 @@ odh version
 odh doctor --timeout 10s
 ```
 
-Need `odh v0.2.5+` for the current command contracts, source/provenance fields, traffic helpers, GTFS/transit, filtered latest measurements, comma-safe `--param`, and `transit journey --with-realtime`.
+Need `odh v0.3.0+` for the current command contracts, source/provenance fields, traffic helpers, GTFS/transit, filtered latest measurements, comma-safe `--param`, `transit journey --with-realtime`, and MCP server mode.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/galjos/odh-cli/main/scripts/install.sh | sh -s -- --version v0.2.5 --dir "$HOME/bin"
+curl -fsSL https://raw.githubusercontent.com/galjos/odh-cli/main/scripts/install.sh | sh -s -- --version v0.3.0 --dir "$HOME/bin"
 ```
 
 If running from the source repo, use `./odh`.
+
+Agent hosts that prefer MCP over shell commands can run the same curated surface as Model Context Protocol tools with `odh mcp serve`; tool outputs follow the same JSON contracts and warnings as the CLI.
 
 ## Output Rules
 
@@ -64,6 +66,8 @@ odh mobility types --kind station
 odh mobility origins --station-type ParkingStation
 odh mobility datatypes --station-type TrafficSensor --origin A22 --limit 1000 --json
 ```
+
+Always run `odh mobility origins --station-type <type>` before filtering any query with `--origin`, even when the origin seems obvious (A22, ALPERIA, PROVINCE_BZ): origin names are upstream vocabulary, and a catalogued origin or datatype is not proof that open measurement rows exist.
 
 Use `odh call <api> <path> --param key=value` for known endpoints. `--param` is repeatable and values may contain commas.
 

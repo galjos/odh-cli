@@ -10,6 +10,10 @@ All notable changes to `odh-cli` are documented here.
 
 ## Unreleased
 
+- Aligned the agent skill with the v0.3.0 release: version references, the
+  origin-discovery rule from the 2026-06-10 eval round, and the MCP server
+  mode option.
+
 ## v0.3.0 - 2026-06-10
 
 First MCP-capable milestone release.
