@@ -10,6 +10,11 @@ All notable changes to `odh-cli` are documented here.
 
 ## Unreleased
 
+- Trimmed the documentation to essentials: rewrote the README, removed
+  `ROADMAP.md` (planned work lives in GitHub issues) and the redundant
+  `docs/commands.md`, `docs/how-to.md`, `docs/apis.md`, `docs/install.md`,
+  `docs/data-scope.md`, and `docs/data-quality.md` (covered by `--help`,
+  the README, and the remaining docs).
 - Aligned the agent skill with the v0.3.0 release: version references, the
   origin-discovery rule from the 2026-06-10 eval round, and the MCP server
   mode option.

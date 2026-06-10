@@ -55,9 +55,7 @@ scripts/run-agent-evals.sh
 
 Set `ODH_EVAL_BIN=odh` to test an installed binary instead of the local source tree.
 
-The task set and scoring rubric are documented in [evaluation.md](evaluation.md).
-
-Use [data-quality.md](data-quality.md) when deciding whether a repeated agent failure should be handled as a diagnostic warning rather than a new natural-language command.
+The task set and scoring rubric are documented in [evaluation.md](evaluation.md). Prefer diagnostic warnings over new natural-language commands when a repeated agent failure traces back to upstream data quality.
 
 ## CLI Contract
 
@@ -93,11 +91,4 @@ Check the result with:
 
 ## Project Direction
 
-v0.2 intentionally keeps the command surface narrow. It includes a small audited core plus focused discovery, diagnostic, traffic, A22, GTFS, and transit commands for the public Tourism, Mobility, and GTFS APIs.
-
-Use [../ROADMAP.md](../ROADMAP.md) for the maintained project roadmap. The next useful milestones are:
-
-- agent evals based on repeated real OpenClaw/Mira failures,
-- keep the Homebrew tap current for new releases,
-- richer dataset metadata once a suitable public upstream catalog endpoint is selected,
-- MCP server mode only after the CLI surface stays stable.
+The command surface stays intentionally narrow: a small audited core plus focused discovery, diagnostic, traffic, A22, GTFS, transit, and MCP commands for the public Tourism, Mobility, and GTFS APIs. Add command surface only when repeated eval failures show the same missing bounded upstream vocabulary or mechanical data-access step. Planned work is tracked in [GitHub issues](https://github.com/galjos/odh-cli/issues).
