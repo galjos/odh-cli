@@ -101,6 +101,7 @@ func (r *Runner) NewRootCmd() *cobra.Command {
 	rootCmd.AddCommand(r.newTrafficCmd())
 	rootCmd.AddCommand(r.newMobilityCmd())
 	rootCmd.AddCommand(r.newA22Cmd())
+	rootCmd.AddCommand(r.newMCPCmd())
 	rootCmd.AddCommand(r.newCompletionCmd())
 
 	return rootCmd

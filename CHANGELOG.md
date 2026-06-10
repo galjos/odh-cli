@@ -10,6 +10,11 @@ All notable changes to `odh-cli` are documented here.
 
 ## Unreleased
 
+- Added an MCP server mode: `odh mcp serve` exposes the curated command
+  surface as Model Context Protocol tools over stdio, executing each tool
+  call in-process so MCP outputs match the documented CLI JSON contracts.
+- Added `odh mcp tools` to list the MCP tool surface with input schemas.
+- Documented MCP setup and behavior in `docs/mcp.md`.
 - Recorded the first scored real-agent eval round (12 tasks, 11 pass,
   1 partial, 0 fail) in `evals/agent/results/2026-06-10.md` and documented
   the results convention in `docs/evaluation.md`.

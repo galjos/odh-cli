@@ -28,13 +28,13 @@ discovery, diagnostics, docs, and evals over broad natural-language shortcuts.
 - [#1](https://github.com/galjos/odh-cli/issues/1) Publish Homebrew tap for `odh` - done.
 - [#2](https://github.com/galjos/odh-cli/issues/2) Run and expand real-agent evals after v0.2 - first scored round in [evals/agent/results/2026-06-10.md](evals/agent/results/2026-06-10.md).
 - [#3](https://github.com/galjos/odh-cli/issues/3) Improve dataset and source metadata discovery.
-- [#4](https://github.com/galjos/odh-cli/issues/4) Evaluate MCP server mode after CLI stabilizes.
+- [#4](https://github.com/galjos/odh-cli/issues/4) Evaluate MCP server mode after CLI stabilizes - first implementation shipped as `odh mcp serve` after the 2026-06-10 eval round confirmed a stable command surface.
 - [#5](https://github.com/galjos/odh-cli/issues/5) Publish a signed APT repository.
 
 ## Later
 
-- Explore MCP server mode once the CLI command surface and evals have stayed
-  stable across several real agent-use sessions.
+- Grow MCP server mode (`odh mcp serve`) based on real MCP-client sessions,
+  keeping the tool surface aligned with the curated CLI commands.
 - Consider generated clients only if they reduce maintenance risk for verified
   upstream APIs.
 

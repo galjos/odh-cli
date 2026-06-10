@@ -48,9 +48,10 @@ This is a v0.2 project with a small, working, agent-friendly core:
 - search STA timetable stops, inspect static GTFS departures and direct trip matches, and plan static transfer journeys,
 - annotate static transit journeys with matching current GTFS-RT trip updates and service alerts,
 - summarize South Tyrol roadworks, closures, events, and traffic notices from Open Data Hub `PROVINCE_BZ` with zone discovery, date filtering, text search, deduplication, and stale-record warnings,
-- inspect A22 Mobility event and forecast feeds with explicit warnings when the data does not look like current traffic incidents.
+- inspect A22 Mobility event and forecast feeds with explicit warnings when the data does not look like current traffic incidents,
+- run as a Model Context Protocol server that exposes the curated command surface as MCP tools (`odh mcp serve`).
 
-It does not yet include MCP, generated clients, Docker images, a full upstream metadata catalog, authenticated write flows, full live public-transport rerouting, historical GTFS-RT delay archives, or historical A22 incident reconstruction.
+It does not yet include generated clients, Docker images, a full upstream metadata catalog, authenticated write flows, full live public-transport rerouting, historical GTFS-RT delay archives, or historical A22 incident reconstruction.
 
 See [CHANGELOG.md](CHANGELOG.md) for release notes.
 
@@ -284,6 +285,15 @@ odh a22 status --limit 10
 - commands avoid hidden browser state and web scraping.
 
 See [docs/agent-usage.md](docs/agent-usage.md) for details.
+
+For MCP clients, run `odh` as a Model Context Protocol server:
+
+```bash
+claude mcp add odh -- odh mcp serve
+odh mcp tools
+```
+
+Tool outputs over MCP are the same documented JSON contracts as the CLI. See [docs/mcp.md](docs/mcp.md).
 
 Task-oriented examples for common traffic, parking, EV, transit, Tourism, and
 raw API questions are in [docs/how-to.md](docs/how-to.md).

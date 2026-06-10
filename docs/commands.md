@@ -690,6 +690,25 @@ Flags:
 - `--json` - shortcut for `--format json`.
 - `--raw` - include raw upstream event and forecast rows in JSON output.
 
+## `odh mcp serve`
+
+Runs `odh` as a Model Context Protocol server on stdin/stdout, exposing the curated command surface as MCP tools. Each tool call executes the matching CLI command in-process, so tool outputs follow the same JSON contracts as the CLI; stderr diagnostics are returned as a second content block and nonzero exit codes become MCP tool errors.
+
+```bash
+odh mcp serve
+claude mcp add odh -- odh mcp serve
+```
+
+The server is meant to be launched by an MCP client. Do not combine it with the global `--timeout` flag, which would bound the lifetime of the whole server. Details are in [mcp.md](mcp.md).
+
+## `odh mcp tools`
+
+Lists the MCP tool surface as JSON, including tool names, descriptions, and input schemas, without speaking the MCP protocol.
+
+```bash
+odh mcp tools
+```
+
 ## Exit Codes
 
 - `0` - success.
