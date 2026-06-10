@@ -10,6 +10,10 @@ All notable changes to `odh-cli` are documented here.
 
 ## Unreleased
 
+## v0.3.0 - 2026-06-10
+
+First MCP-capable milestone release.
+
 - Added an MCP server mode: `odh mcp serve` exposes the curated command
   surface as Model Context Protocol tools over stdio, executing each tool
   call in-process so MCP outputs match the documented CLI JSON contracts.

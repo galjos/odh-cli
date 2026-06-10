@@ -24,7 +24,7 @@ See [docs/data-scope.md](docs/data-scope.md) for the official-source summary use
 
 ## Status
 
-This is a v0.2 project with a small, working, agent-friendly core:
+This is a v0.3 project with a small, working, agent-friendly core:
 
 - list known Open Data Hub APIs,
 - report machine-readable build/version metadata,
@@ -74,14 +74,14 @@ brew install galjos/odh/odh
 Install a Linux Debian package from GitHub Releases:
 
 ```bash
-curl -LO https://github.com/galjos/odh-cli/releases/download/v0.2.5/odh_v0.2.5_linux_amd64.deb
-sudo apt install ./odh_v0.2.5_linux_amd64.deb
+curl -LO https://github.com/galjos/odh-cli/releases/download/v0.3.0/odh_v0.3.0_linux_amd64.deb
+sudo apt install ./odh_v0.3.0_linux_amd64.deb
 ```
 
 Install a specific version or directory:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/galjos/odh-cli/main/scripts/install.sh | sh -s -- --version v0.2.5 --dir "$HOME/bin"
+curl -fsSL https://raw.githubusercontent.com/galjos/odh-cli/main/scripts/install.sh | sh -s -- --version v0.3.0 --dir "$HOME/bin"
 ```
 
 Build from source instead:
@@ -114,7 +114,7 @@ Build with release metadata:
 
 ```bash
 go build \
-  -ldflags "-X github.com/galjos/odh-cli/internal/version.Version=0.2.5 -X github.com/galjos/odh-cli/internal/version.Commit=$(git rev-parse --short HEAD) -X github.com/galjos/odh-cli/internal/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  -ldflags "-X github.com/galjos/odh-cli/internal/version.Version=0.3.0 -X github.com/galjos/odh-cli/internal/version.Commit=$(git rev-parse --short HEAD) -X github.com/galjos/odh-cli/internal/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   -o odh ./cmd/odh
 ```
 
