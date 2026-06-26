@@ -8,7 +8,7 @@ SPDX-License-Identifier: CC0-1.0
 
 All notable changes to `odh-cli` are documented here.
 
-## Unreleased
+## v0.3.1 - 2026-06-26
 
 - Trimmed the documentation to essentials: rewrote the README, removed
   `ROADMAP.md` (planned work lives in GitHub issues) and the redundant
