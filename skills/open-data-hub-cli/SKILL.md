@@ -35,11 +35,14 @@ odh doctor --timeout 10s
 
 Need `odh v0.4.0+` for the current command contracts, dataset guidance, source/provenance fields, traffic helpers, GTFS/transit, filtered latest measurements, comma-safe `--param`, `transit journey --with-realtime`, and MCP server mode.
 
+Preferred manual install options:
+
 ```bash
-curl -fsSL https://raw.githubusercontent.com/galjos/odh-cli/main/scripts/install.sh | sh -s -- --version v0.4.0 --dir "$HOME/bin"
+go install github.com/galjos/odh-cli/cmd/odh@v0.4.0
+brew install galjos/odh/odh
 ```
 
-If running from the source repo, use `./odh`.
+Agent hosts can also use the declared OpenClaw Go installer metadata in this skill. If running from the source repo, use `./odh`.
 
 Agent hosts that prefer MCP over shell commands can run the same curated surface as Model Context Protocol tools with `odh mcp serve`; tool outputs follow the same JSON contracts and warnings as the CLI.
 
