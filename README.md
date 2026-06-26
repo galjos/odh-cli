@@ -6,6 +6,10 @@ SPDX-License-Identifier: CC0-1.0
 
 # odh-cli
 
+[![CI](https://github.com/galjos/odh-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/galjos/odh-cli/actions/workflows/ci.yml)
+[![Release](https://github.com/galjos/odh-cli/actions/workflows/release.yml/badge.svg)](https://github.com/galjos/odh-cli/actions/workflows/release.yml)
+[![Upstream smoke](https://github.com/galjos/odh-cli/actions/workflows/upstream-smoke.yml/badge.svg)](https://github.com/galjos/odh-cli/actions/workflows/upstream-smoke.yml)
+
 `odh` is an unofficial command-line interface for public Open Data Hub APIs, with compact human output for curated workflows and JSON output for scripts and agents.
 
 This is a community project, not affiliated with or endorsed by NOI Techpark or Open Data Hub. Most practical Tourism and Mobility data is centered on South Tyrol; verify record-level geography from returned coordinates and origins rather than assuming it.
