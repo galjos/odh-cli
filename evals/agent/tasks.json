@@ -3,6 +3,27 @@
   "purpose": "Evaluate whether agents can use odh as a clean Open Data Hub data-access CLI without requiring the CLI to encode local reasoning.",
   "tasks": [
     {
+      "id": "dataset-guide-discovery-first",
+      "prompt": "Before querying Open Data Hub for EV charging availability, show the discovery and verification path an agent should follow.",
+      "expected_command_path": [
+        "odh datasets guide \"ev charging availability\" --format json",
+        "odh mobility origins --station-type EChargingStation --limit 1000 --json",
+        "odh mobility datatypes --station-type EChargingStation --limit 1000 --json",
+        "odh diagnostics ev-charging --fresh-within 24h"
+      ],
+      "pass_criteria": [
+        "Uses datasets guide before guessing station types, origins, or datatypes.",
+        "Carries the guide's caveats into the answer.",
+        "Treats the guide as a starting path rather than proof that fresh measurement rows exist.",
+        "Runs or recommends verification commands before making current-availability claims."
+      ],
+      "common_failures": [
+        "Skips dataset/source discovery and guesses an origin.",
+        "Treats a catalog match as evidence of fresh open measurements.",
+        "Asks the user to provide upstream vocabulary that can be discovered."
+      ]
+    },
+    {
       "id": "traffic-badia-road-closed",
       "prompt": "Why is the road closed in Badia today?",
       "expected_command_path": [

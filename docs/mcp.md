@@ -52,7 +52,7 @@ Open Data Hub endpoints, exactly like the CLI.
 ## Tool Surface
 
 The tool surface mirrors the curated commands: discovery
-(`apis_list`, `datasets_search`, `mobility_types`, `mobility_origins`,
+(`apis_list`, `datasets_search`, `datasets_guide`, `mobility_types`, `mobility_origins`,
 `mobility_datatypes`, `tourism_types`, `traffic_zones`,
 `traffic_categories`, `gtfs_datasets`, `transit_stops_search`), data
 queries (`mobility_latest`, `mobility_stations`, `mobility_events`,

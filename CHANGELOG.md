@@ -8,6 +8,17 @@ SPDX-License-Identifier: CC0-1.0
 
 All notable changes to `odh-cli` are documented here.
 
+## v0.4.0 - 2026-06-26
+
+- Added `odh datasets guide <query>` to turn a data question into a curated
+  discovery and verification path with dataset matches, commands to run next,
+  and caveats that must be carried into answers.
+- Exposed the same guidance through the MCP `datasets_guide` tool.
+- Added discovery-first eval coverage and a live upstream smoke workflow for
+  Open Data Hub command health.
+- Updated README, agent docs, and the published skill guidance for the new
+  dataset/source discovery flow.
+
 ## v0.3.1 - 2026-06-26
 
 - Trimmed the documentation to essentials: rewrote the README, removed

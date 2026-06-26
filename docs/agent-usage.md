@@ -23,6 +23,8 @@ This means agents can call `odh`, add `--json` when they need to parse stdout st
 
 Machine-readable command recipes live in [../evals/agent/recipes.json](../evals/agent/recipes.json). Use them as canonical starting paths for repeated traffic, transit, parking, EV, A22, and Tourism-event questions. They are recipes, not final answers: agents still need to inspect returned data and warnings.
 
+For unfamiliar source questions, start with `odh datasets guide <topic> --format json`. It returns matching catalog entries, discovery commands, verification commands, and caveats. Treat that guide as a command-path planner, not proof that open rows exist.
+
 Stable JSON fields for curated outputs are documented in [json-contracts.md](json-contracts.md). Prefer those fields over scraping table output. Task-oriented examples are in each command's `--help`.
 
 Some discovery responses are cached locally for 24 hours to keep repeated agent loops fast. This cache is limited to static-ish metadata such as OpenAPI specs, Tourism taxonomy values, and Mobility type/origin/station/datatype discovery. Do not assume current-data commands are cached: latest measurements, traffic events, diagnostics, and GTFS-RT should be treated as fresh upstream calls unless a command documents an explicit cache.
@@ -45,6 +47,7 @@ own latency budget.
 odh version
 odh doctor --timeout 5s
 odh apis
+odh datasets guide "ev charging availability" --format json
 odh datasets search parking
 odh openapi mobility
 odh tourism types --dataset event --limit 10
@@ -99,6 +102,7 @@ odh call tourism /v1/ODHActivityPoi \
 When the endpoint is not known yet, start with catalog and type discovery:
 
 ```bash
+odh datasets guide <topic> --format json
 odh datasets search <topic>
 odh tourism types --dataset event
 odh mobility types --kind station
@@ -216,9 +220,9 @@ Use these patterns when the CLI reports known data limitations:
 - A22 status: "Open Data Hub returned no current A22 event rows. Forecast rows are forecast data, not current incidents, so I should not infer congestion or closures from them alone."
 - Tourism events: "The Tourism event diagnostic is unavailable or caveated because `onlyactive=true` returned date-inconsistent rows or records without GPS. I should avoid precise 'near me today' claims unless returned dates and coordinates support them."
 
-## Why No MCP Yet
+## MCP Mode
 
-The project is structured so an MCP server can reuse the registry and HTTP client later. v0.2 still ships the CLI first because it is simpler to review, easier to test, and immediately useful in scripts.
+For hosts that support Model Context Protocol tools, use `odh mcp serve`. The MCP surface mirrors the curated CLI commands, forces JSON for table-default commands, and includes `datasets_guide` for discovery-first command planning.
 
 ## Agent Evals
 

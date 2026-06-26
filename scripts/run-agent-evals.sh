@@ -80,6 +80,10 @@ jq -e '.recipes[] | select((.id | type != "string") or (.commands | type != "arr
 }
 pass "loaded $recipe_count agent recipes"
 
+run_odh datasets guide "ev charging availability" --format json >"$tmpdir/dataset-guide.json"
+assert_json_filter "datasets guide returns EV discovery and verification path" "$tmpdir/dataset-guide.json" '.matches[] | select(.dataset.id == "mobility.charging" and (.discovery[] | test("EChargingStation")) and (.verify[] | test("diagnostics ev-charging")) and (.caveats | length > 0))'
+assert_json_filter "datasets guide warns that catalog matches are not proof" "$tmpdir/dataset-guide.json" 'any(.warnings[]; contains("not proof"))'
+
 run_odh traffic zones --json >"$tmpdir/traffic-zones.json"
 assert_json_filter "traffic zones exposes upstream zone ids" "$tmpdir/traffic-zones.json" '.zones[] | select(.zone_id == "6" and .name == "Pustertal")'
 

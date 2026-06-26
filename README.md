@@ -12,7 +12,7 @@ This is a community project, not affiliated with or endorsed by NOI Techpark or 
 
 ## Features
 
-- Discovery: known APIs, curated dataset catalog, OpenAPI specs, Tourism taxonomies, Mobility station/event/edge types, origins, and data types.
+- Discovery: known APIs, curated dataset catalog, guided dataset/source paths, OpenAPI specs, Tourism taxonomies, Mobility station/event/edge types, origins, and data types.
 - Raw access: call any registered API path with query parameters.
 - Mobility: stations, latest time-series measurements with active/freshness/sorting filters for availability questions.
 - Traffic: deduplicated South Tyrol roadworks, closures, and road events from `PROVINCE_BZ` with zone discovery, date filtering, text search, and stale-record warnings; A22 event/forecast inspection with explicit caveats.
@@ -29,13 +29,13 @@ Not included: authenticated write flows, live transit rerouting, historical GTFS
 curl -fsSL https://raw.githubusercontent.com/galjos/odh-cli/main/scripts/install.sh | sh
 ```
 
-The installer detects macOS/Linux and `amd64`/`arm64`, verifies the published SHA-256 checksum, and installs to `~/.local/bin`. Pass `--version v0.3.1 --dir "$HOME/bin"` to pin a version or directory.
+The installer detects macOS/Linux and `amd64`/`arm64`, verifies the published SHA-256 checksum, and installs to `~/.local/bin`. Pass `--version v0.4.0 --dir "$HOME/bin"` to pin a version or directory.
 
 Alternatives:
 
 ```bash
 brew install galjos/odh/odh
-sudo apt install ./odh_v0.3.1_linux_amd64.deb   # from GitHub Releases
+sudo apt install ./odh_v0.4.0_linux_amd64.deb   # from GitHub Releases
 go build -o odh ./cmd/odh                       # from source
 ```
 
@@ -46,6 +46,7 @@ Releases include per-asset checksums, a `SHA256SUMS` manifest, and GitHub artifa
 ```bash
 odh doctor
 odh apis
+odh datasets guide parking --format json
 odh datasets search parking
 odh call tourism /v1/ODHActivityPoi --param pagesize=1 --param fields=Detail.en.Title,GpsInfo
 odh mobility origins --station-type ParkingStation

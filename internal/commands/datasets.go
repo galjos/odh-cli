@@ -24,6 +24,13 @@ type datasetEntry struct {
 	Keywords    []string `json:"-"`
 }
 
+type datasetGuideEntry struct {
+	Dataset   datasetEntry `json:"dataset"`
+	Discovery []string     `json:"discovery"`
+	Verify    []string     `json:"verify"`
+	Caveats   []string     `json:"caveats,omitempty"`
+}
+
 func (r *Runner) newDatasetsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "datasets",
@@ -61,8 +68,43 @@ func (r *Runner) newDatasetsCmd() *cobra.Command {
 	searchCmd.Flags().StringVar(&searchDomain, "domain", "", "optional domain filter, for example tourism or mobility")
 	searchCmd.Flags().StringVar(&searchFormat, "format", "json", "output format: json or table")
 
+	var guideDomain string
+	var guideFormat string
+	var guideLimit int
+	guideCmd := &cobra.Command{
+		Use:   "guide <query>",
+		Short: "Suggest discovery and verification commands for a dataset question",
+		Long: `Suggest a discovery-first command path for a data question.
+
+The guide is based on the curated dataset catalog. It returns matching datasets,
+the discovery commands to run before guessing upstream vocabulary, verification
+commands that check whether open rows exist, and caveats that should be carried
+into agent answers.`,
+		Args: cobra.MinimumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if guideLimit < 0 {
+				return usageErrorf("--limit must not be negative")
+			}
+			query := strings.Join(args, " ")
+			entries := filterDatasetsByDomain(datasetCatalog(), guideDomain)
+			entries = filterDatasetsByQuery(entries, query)
+			if guideLimit > 0 && len(entries) > guideLimit {
+				entries = entries[:guideLimit]
+			}
+			guides := make([]datasetGuideEntry, 0, len(entries))
+			for _, entry := range entries {
+				guides = append(guides, datasetGuideFor(entry))
+			}
+			return writeDatasetGuide(cmd, query, guides, guideFormat)
+		},
+	}
+	guideCmd.Flags().StringVar(&guideDomain, "domain", "", "optional domain filter, for example tourism or mobility")
+	guideCmd.Flags().StringVar(&guideFormat, "format", "json", "output format: json or table")
+	guideCmd.Flags().IntVar(&guideLimit, "limit", 3, "maximum number of matching datasets to guide; 0 means no limit")
+
 	cmd.AddCommand(listCmd)
 	cmd.AddCommand(searchCmd)
+	cmd.AddCommand(guideCmd)
 	return cmd
 }
 
@@ -74,6 +116,36 @@ func writeDatasetEntries(cmd *cobra.Command, entries []datasetEntry, format stri
 		fmt.Fprintln(cmd.OutOrStdout(), "ID\tDOMAIN\tAPI\tTITLE")
 		for _, entry := range entries {
 			fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\t%s\t%s\n", entry.ID, entry.Domain, entry.API, entry.Title)
+		}
+		return nil
+	default:
+		return fmt.Errorf("unsupported format %q", format)
+	}
+}
+
+func writeDatasetGuide(cmd *cobra.Command, query string, guides []datasetGuideEntry, format string) error {
+	switch format {
+	case "json":
+		return output.WriteJSON(cmd.OutOrStdout(), map[string]any{
+			"source":   "odh curated dataset catalog",
+			"query":    query,
+			"count":    len(guides),
+			"matches":  guides,
+			"warnings": datasetGuideWarnings(),
+		})
+	case "table":
+		fmt.Fprintln(cmd.OutOrStdout(), "ID\tTITLE\tFIRST_DISCOVERY\tFIRST_VERIFY")
+		for _, guide := range guides {
+			fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\t%s\t%s\n",
+				guide.Dataset.ID,
+				guide.Dataset.Title,
+				firstString(guide.Discovery),
+				firstString(guide.Verify),
+			)
+		}
+		if len(guides) > 0 {
+			fmt.Fprintln(cmd.OutOrStdout())
+			fmt.Fprintln(cmd.OutOrStdout(), "Run --format json for the full discovery path and caveats.")
 		}
 		return nil
 	default:
@@ -118,6 +190,126 @@ func filterDatasetsByQuery(entries []datasetEntry, query string) []datasetEntry 
 		}
 	}
 	return filtered
+}
+
+func datasetGuideFor(entry datasetEntry) datasetGuideEntry {
+	guidance := datasetGuideEntry{Dataset: entry}
+	switch entry.ID {
+	case "gtfs.transit":
+		guidance.Discovery = []string{
+			"odh datasets search train",
+			"odh gtfs datasets --json",
+			"odh transit stops search <place> --limit 10",
+		}
+		guidance.Verify = []string{
+			"odh transit departures --stop <stop-name-or-id> --date <YYYY-MM-DD> --around <HH:MM> --json",
+			"odh gtfs realtime --dataset sta-time-tables --feed trip-updates --limit 5 --json",
+		}
+		guidance.Caveats = []string{
+			"Static GTFS routing is timetable-based; --with-realtime annotates static journeys but does not reroute live.",
+			"GTFS-RT is a current snapshot, not a historical delay archive.",
+		}
+	case "mobility.a22":
+		guidance.Discovery = []string{
+			"odh datasets search a22",
+			"odh mobility origins --station-type TrafficSensor --limit 1000 --json",
+			"odh mobility datatypes --station-type TrafficSensor --origin A22 --limit 1000 --json",
+		}
+		guidance.Verify = []string{
+			"odh a22 status --limit 10 --json",
+		}
+		guidance.Caveats = []string{
+			"TrafficForecast rows are forecast data, not proof of current incidents.",
+			"Open Data Hub does not provide a historical A22 incident archive through this CLI.",
+		}
+	case "mobility.charging":
+		guidance.Discovery = []string{
+			"odh mobility origins --station-type EChargingStation --limit 1000 --json",
+			"odh mobility datatypes --station-type EChargingStation --limit 1000 --json",
+			"odh mobility datatypes --station-type EChargingPlug --limit 1000 --json",
+		}
+		guidance.Verify = []string{
+			"odh diagnostics ev-charging --fresh-within 24h",
+			"odh mobility latest --station-type EChargingStation --data-type number-available --active --fresh-within 24h --sort newest --limit 5 --json",
+		}
+		guidance.Caveats = []string{
+			"Open Data Hub exposes EV availability data, not public per-kWh tariff data.",
+			"A catalogued datatype is not proof that fresh open measurements exist; verify with latest rows or diagnostics.",
+		}
+	case "mobility.parking":
+		guidance.Discovery = []string{
+			"odh mobility origins --station-type ParkingStation --limit 1000 --json",
+			"odh mobility datatypes --station-type ParkingStation --limit 1000 --json",
+		}
+		guidance.Verify = []string{
+			"odh diagnostics parking-forecasts --fresh-within 2h",
+			"odh mobility latest --station-type ParkingStation --active --fresh-within 2h --sort newest --limit 5 --json",
+		}
+		guidance.Caveats = []string{
+			"Parking forecasts may be stale or unavailable even when current occupancy is fresh.",
+			"Report current and forecast freshness separately.",
+		}
+	case "mobility.traffic-events":
+		guidance.Discovery = []string{
+			"odh traffic zones --json",
+			"odh traffic categories --json",
+		}
+		guidance.Verify = []string{
+			"odh traffic today --area <area> --type <category> --json",
+			"odh traffic search <text> --today --json",
+		}
+		guidance.Caveats = []string{
+			"Open Data Hub PROVINCE_BZ is a public bulletin feed, not a complete live road bulletin.",
+			"Stale open-ended rows are hidden by default; carry warnings into answers.",
+		}
+	case "tourism.events":
+		guidance.Discovery = []string{
+			"odh tourism types --dataset event --json",
+			"odh tourism types --dataset event-topic --json",
+		}
+		guidance.Verify = []string{
+			"odh diagnostics tourism-events --day <YYYY-MM-DD>",
+			"odh call tourism /v1/EventShort --param pagenumber=1 --param pagesize=5",
+		}
+		guidance.Caveats = []string{
+			"Tourism API active flags may not match the user's requested date; run diagnostics for date-sensitive event answers.",
+			"Verify coordinates before making local geography claims.",
+		}
+	case "tourism.poi":
+		guidance.Discovery = []string{
+			"odh tourism types --dataset poi --json",
+			"odh tourism types --dataset tag --json",
+		}
+		guidance.Verify = []string{
+			"odh tourism poi --limit 5 --fields Detail.en.Title,GpsInfo",
+		}
+		guidance.Caveats = []string{
+			"Tourism POI records may have multilingual fields and sparse coordinates; inspect returned fields before answering.",
+		}
+	default:
+		guidance.Discovery = append([]string{}, entry.Commands...)
+		guidance.Verify = append([]string{}, entry.Commands...)
+		guidance.Caveats = []string{
+			"Start with discovery commands, then verify open rows before answering from the catalog alone.",
+			"Prefer returned source and warning fields over inferred provenance.",
+		}
+	}
+	return guidance
+}
+
+func datasetGuideWarnings() []string {
+	return []string{
+		"This guide is a curated starting path, not proof that open rows exist.",
+		"Run the discovery commands before guessing upstream station types, origins, datatypes, zone IDs, or taxonomies.",
+		"Run the verification commands and carry source, freshness, and warning fields into the final answer.",
+	}
+}
+
+func firstString(values []string) string {
+	if len(values) == 0 {
+		return ""
+	}
+	return values[0]
 }
 
 func datasetCatalog() []datasetEntry {
@@ -216,7 +408,7 @@ func datasetCatalog() []datasetEntry {
 				"odh mobility datatypes --station-type ParkingStation",
 			},
 			Endpoints: []string{"/v2/flat/ParkingStation", "/v2/flat/ParkingStation/*/latest"},
-			Keywords:  []string{"parking", "car park", "capacity", "free spaces"},
+			Keywords:  []string{"parking", "car park", "capacity", "free spaces", "availability", "forecast", "forecasts"},
 		},
 		{
 			ID:          "mobility.charging",

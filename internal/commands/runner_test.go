@@ -215,6 +215,70 @@ func TestRunDatasetsSearchFindsGTFS(t *testing.T) {
 	}
 }
 
+func TestRunDatasetsGuideReturnsDiscoveryPath(t *testing.T) {
+	runner := newTestRunner(t, nil)
+	var stdout, stderr bytes.Buffer
+	code := runner.Run(context.Background(), []string{"datasets", "guide", "ev charging availability"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("Run exit = %d, stderr = %s", code, stderr.String())
+	}
+	var decoded struct {
+		Source  string `json:"source"`
+		Query   string `json:"query"`
+		Count   int    `json:"count"`
+		Matches []struct {
+			Dataset struct {
+				ID string `json:"id"`
+			} `json:"dataset"`
+			Discovery []string `json:"discovery"`
+			Verify    []string `json:"verify"`
+			Caveats   []string `json:"caveats"`
+		} `json:"matches"`
+		Warnings []string `json:"warnings"`
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &decoded); err != nil {
+		t.Fatalf("invalid JSON: %v\n%s", err, stdout.String())
+	}
+	if decoded.Source != "odh curated dataset catalog" || decoded.Query != "ev charging availability" || decoded.Count == 0 {
+		t.Fatalf("unexpected guide envelope: %+v", decoded)
+	}
+	found := false
+	for _, match := range decoded.Matches {
+		if match.Dataset.ID == "mobility.charging" {
+			found = true
+			if !containsString(match.Discovery, "odh mobility datatypes --station-type EChargingStation --limit 1000 --json") {
+				t.Fatalf("charging guide did not include datatype discovery: %+v", match.Discovery)
+			}
+			if !containsString(match.Verify, "odh diagnostics ev-charging --fresh-within 24h") {
+				t.Fatalf("charging guide did not include diagnostic verification: %+v", match.Verify)
+			}
+			if len(match.Caveats) == 0 {
+				t.Fatal("charging guide should include caveats")
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("mobility.charging guide not found in %s", stdout.String())
+	}
+	if len(decoded.Warnings) == 0 {
+		t.Fatal("guide should include global warnings")
+	}
+}
+
+func TestRunDatasetsGuideTable(t *testing.T) {
+	runner := newTestRunner(t, nil)
+	var stdout, stderr bytes.Buffer
+	code := runner.Run(context.Background(), []string{"datasets", "guide", "parking forecast", "--format", "table", "--limit", "1"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("Run exit = %d, stderr = %s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "FIRST_DISCOVERY") ||
+		!strings.Contains(stdout.String(), "mobility.parking") ||
+		!strings.Contains(stdout.String(), "odh mobility origins --station-type ParkingStation") {
+		t.Fatalf("unexpected stdout: %s", stdout.String())
+	}
+}
+
 func TestRunDatasetsListSupportsDomainAndTable(t *testing.T) {
 	runner := newTestRunner(t, nil)
 	var stdout, stderr bytes.Buffer

@@ -66,6 +66,14 @@ func TestBuildArgs(t *testing.T) {
 			want:      []string{"version"},
 		},
 		{
+			tool:      "datasets_guide",
+			arguments: `{"query":"ev charging availability","domain":"mobility","limit":1}`,
+			want: []string{
+				"datasets", "guide", "ev charging availability",
+				"--domain", "mobility", "--limit", "1",
+			},
+		},
+		{
 			tool:      "traffic_search",
 			arguments: `{"query":"road closed badia","today":true,"zone_id":"6","include_stale":false,"limit":500}`,
 			want: []string{

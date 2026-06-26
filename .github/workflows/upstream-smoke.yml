@@ -1,0 +1,41 @@
+# SPDX-FileCopyrightText: 2026 Josef Gallmetzer
+#
+# SPDX-License-Identifier: CC0-1.0
+
+name: Upstream smoke
+
+on:
+  schedule:
+    - cron: "43 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  live-data:
+    name: Live data smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Check dataset guidance
+        run: |
+          go run ./cmd/odh datasets guide "ev charging availability" --format json > dataset-guide.json
+          jq -e '.matches[] | select(.dataset.id == "mobility.charging" and (.discovery[] | contains("EChargingStation")) and (.verify[] | contains("diagnostics ev-charging")))' dataset-guide.json
+
+      - name: Run live command tests
+        env:
+          ODH_LIVE_TESTS: "1"
+        run: go test ./internal/commands -run Live -count=1 -timeout 10m
+
+      - name: Run live agent smoke evals
+        run: scripts/run-agent-evals.sh

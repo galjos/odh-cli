@@ -55,7 +55,7 @@ func TestMCPToolsListsToolSurface(t *testing.T) {
 			t.Fatalf("tool %q schema type is not object", tool.Name)
 		}
 	}
-	for _, name := range []string{"doctor", "traffic_search", "mobility_latest", "transit_journey", "diagnostics_ev_charging"} {
+	for _, name := range []string{"doctor", "datasets_guide", "traffic_search", "mobility_latest", "transit_journey", "diagnostics_ev_charging"} {
 		if !names[name] {
 			t.Fatalf("expected tool %q in listing", name)
 		}

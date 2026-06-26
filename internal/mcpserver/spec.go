@@ -218,6 +218,16 @@ var toolSpecs = []toolSpec{
 		},
 	},
 	{
+		name: "datasets_guide",
+		desc: "Suggest a discovery-first command path for an Open Data Hub data question. Returns matching datasets, discovery commands, verification commands, and caveats so agents avoid guessing upstream vocabulary.",
+		base: []string{"datasets", "guide"},
+		params: []param{
+			{name: "query", typ: paramString, desc: "free-text data question, for example: parking forecast or A22 traffic", required: true},
+			{name: "domain", flag: "domain", typ: paramString, desc: "optional domain filter, for example tourism or mobility"},
+			{name: "limit", flag: "limit", typ: paramInteger, desc: "maximum number of matching datasets to guide; 0 means no limit"},
+		},
+	},
+	{
 		name: "call_api",
 		desc: "Call any registered Open Data Hub API path with query parameters and return raw upstream JSON. Escape hatch for data the curated tools do not cover; prefer curated tools when one fits.",
 		base: []string{"call"},
