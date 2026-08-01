@@ -125,19 +125,24 @@ questions; raw latest rows can include stale inactive stations.`,
 			}
 			records := extractDataList(value)
 			origins := summarizeOrigins(records)
-			return output.WriteJSON(cmd.OutOrStdout(), map[string]any{
+			payload := map[string]any{
 				"station_type": originsStationType,
 				"endpoint":     requestURL,
 				"record_count": len(records),
 				"count":        len(origins),
 				"origins":      origins,
-			})
+			}
+			if warning := mobilityTruncationWarning("inspected", "station records", originsLimit, len(records), "origin completeness"); warning != "" {
+				payload["warnings"] = []string{warning}
+			}
+			return output.WriteJSON(cmd.OutOrStdout(), payload)
 		},
 	}
 	originsCmd.Flags().StringVar(&originsStationType, "station-type", "", "station type, for example TrafficSensor")
 	originsCmd.Flags().StringVar(&originsRepresentation, "representation", "flat", "API representation")
 	originsCmd.Flags().IntVar(&originsLimit, "limit", 1000, "maximum station records to inspect")
 	originsCmd.Flags().StringArrayVar(&originsParams, "param", nil, "additional query parameter as key=value; repeatable; values may contain commas")
+	acceptJSONFlag(originsCmd)
 
 	// stations
 	var stationsStationType string
@@ -190,13 +195,17 @@ questions; raw latest rows can include stale inactive stations.`,
 			}
 			records := extractDataList(value)
 			stations := filterStationsByOrigin(records, stationsOrigin)
-			return output.WriteJSON(cmd.OutOrStdout(), map[string]any{
+			payload := map[string]any{
 				"station_type": stationsStationType,
 				"origin":       strings.TrimSpace(stationsOrigin),
 				"record_count": len(records),
 				"count":        len(stations),
 				"stations":     stations,
-			})
+			}
+			if warning := mobilityTruncationWarning("returned", "station rows", stationsLimit, len(records), "station completeness"); warning != "" {
+				payload["warnings"] = []string{warning}
+			}
+			return output.WriteJSON(cmd.OutOrStdout(), payload)
 		},
 	}
 	stationsCmd.Flags().StringVar(&stationsStationType, "station-type", "", "station type, for example ParkingStation")
@@ -206,6 +215,7 @@ questions; raw latest rows can include stale inactive stations.`,
 	stationsCmd.Flags().IntVar(&stationsOffset, "offset", 0, "pagination offset")
 	stationsCmd.Flags().StringVar(&stationsWhere, "where", "", "Open Data Hub where filter")
 	stationsCmd.Flags().StringArrayVar(&stationsParams, "param", nil, "additional query parameter as key=value; repeatable; values may contain commas")
+	acceptJSONFlag(stationsCmd)
 
 	// datatypes
 	var datatypesStationType string
@@ -326,11 +336,18 @@ because it deduplicates records and surfaces stale-data warnings.`,
 				return err
 			}
 			events := extractDataList(value)
+			warnings := []string{
+				timeseriesEventFeedWarning(newestRecordTimestamp(events), announcementSourceForOrigin(eventsOrigin)),
+			}
+			if warning := mobilityTruncationWarning("returned", "event rows", eventsLimit, len(events), "event completeness"); warning != "" {
+				warnings = append(warnings, warning)
+			}
 			return output.WriteJSON(cmd.OutOrStdout(), map[string]any{
-				"origin": eventsOrigin,
-				"latest": eventsLatest,
-				"count":  len(events),
-				"events": events,
+				"origin":   eventsOrigin,
+				"latest":   eventsLatest,
+				"count":    len(events),
+				"events":   events,
+				"warnings": warnings,
 			})
 		},
 	}
@@ -485,8 +502,9 @@ func (r *Runner) newA22Cmd() *cobra.Command {
 		Short: "A22 Mobility commands",
 		Long: `Helpers for A22 data exposed through the Open Data Hub Mobility API.
 
-Use these commands as ODH/A22 feed diagnostics. The A22 forecast feed is not the
-same as a live incident bulletin and should not be used as historical evidence.`,
+Use these commands as ODH/A22 feed diagnostics. Neither the A22 event feed nor
+the forecast feed is a live incident bulletin, and neither is a historical
+incident archive.`,
 		Example: `  odh a22 status
   odh a22 status --limit 10 --json
   odh a22 status --raw --json`,
@@ -500,10 +518,11 @@ same as a live incident bulletin and should not be used as historical evidence.`
 	statusCmd := &cobra.Command{
 		Use:   "status",
 		Short: "Check A22 status",
-		Long: `Check current A22 event rows and TrafficForecast rows from Open Data Hub.
+		Long: `Check the A22 event feed and the TrafficForecast feed from Open Data Hub.
 
-The command keeps event and forecast feeds separate and warns when forecast data
-should not be presented as current incidents.`,
+The command keeps the two feeds separate, reports the date of the newest event
+row it received, and warns when forecast data should not be presented as current
+incidents.`,
 		Example: `  odh a22 status
   odh a22 status --limit 10 --json
   odh a22 status --raw --json`,
@@ -528,8 +547,9 @@ should not be presented as current incidents.`,
 			}
 
 			warnings := make([]string, 0)
+			warnings = append(warnings, timeseriesEventFeedWarning(newestRecordTimestamp(events), "a22"))
 			if len(events) == 0 {
-				warnings = append(warnings, "Open Data Hub returned no current A22 events.")
+				warnings = append(warnings, "Open Data Hub returned no A22 event rows for this request.")
 			}
 			for _, forecast := range forecasts {
 				validTime := parseODHTime(asString(forecast["mvalidtime"]))
@@ -673,7 +693,7 @@ func writeA22StatusOutput(stdout io.Writer, result a22StatusOutput) error {
 		tw := tabwriter.NewWriter(stdout, 0, 0, 2, ' ', 0)
 		fmt.Fprintln(tw, "FEED\tNAME\tVALUE\tVALID_TIME")
 		if len(result.Events.Summary) == 0 {
-			fmt.Fprintln(tw, "events\t-\tno current events\t-")
+			fmt.Fprintln(tw, "events\t-\tno rows returned\t-")
 		}
 		for _, item := range result.Events.Summary {
 			fmt.Fprintf(tw, "events\t%s\t%s\t%s\n", item.Name, item.Value, item.ValidTime)
@@ -690,7 +710,7 @@ func writeA22StatusOutput(stdout io.Writer, result a22StatusOutput) error {
 		fmt.Fprintln(stdout, "| feed | name | value | valid_time |")
 		fmt.Fprintln(stdout, "| --- | --- | --- | --- |")
 		if len(result.Events.Summary) == 0 {
-			fmt.Fprintln(stdout, "| events | - | no current events | - |")
+			fmt.Fprintln(stdout, "| events | - | no rows returned | - |")
 		}
 		for _, item := range result.Events.Summary {
 			fmt.Fprintf(stdout, "| events | %s | %s | %s |\n",
@@ -844,10 +864,22 @@ func mobilityDatatypeDiscoveryWarnings(stationType string, summaries []datatypeS
 	if len(summaries) == 0 {
 		warnings = append(warnings, fmt.Sprintf("no datatype rows matched; inspect raw station records with odh mobility stations --station-type %s --limit 5 --json", strings.TrimSpace(stationType)))
 	}
-	if limit > 0 && limit < 1000 && recordCount >= limit {
-		warnings = append(warnings, fmt.Sprintf("inspected %d records because --limit=%d; rerun with --limit 1000 when datatype completeness matters", recordCount, limit))
+	if warning := mobilityTruncationWarning("inspected", "records", limit, recordCount, "datatype completeness"); warning != "" {
+		warnings = append(warnings, warning)
 	}
 	return warnings
+}
+
+// mobilityTruncationWarning reports that the result filled --limit exactly, so
+// further rows may exist upstream and were never requested. It fires for the
+// default limit too. It says "may exist" rather than "were not seen" because a
+// full page is also what an upstream with exactly --limit rows looks like: from
+// here the two are indistinguishable.
+func mobilityTruncationWarning(verb, noun string, limit, recordCount int, subject string) string {
+	if limit < 1 || recordCount < limit {
+		return ""
+	}
+	return fmt.Sprintf("%s %d %s, which matched --limit=%d exactly; further rows may exist upstream and were not requested, so rerun with a higher --limit when %s matters", verb, recordCount, noun, limit, subject)
 }
 
 func mobilityLatestDatatypeHints(stationType, dataType string) []string {

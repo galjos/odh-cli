@@ -318,7 +318,7 @@ var toolSpecs = []toolSpec{
 	},
 	{
 		name: "mobility_events",
-		desc: "Query raw Mobility events for an origin, for example A22. The A22 feed is current-only and must not be treated as a historical incident archive; prefer a22_status for current/forecast semantics.",
+		desc: "Query raw Mobility events for an origin, for example A22. This Timeseries event feed is not a live bulletin and not a historical incident archive: an empty or unchanged result proves nothing about current conditions, and the response's own warnings report the newest row date it received. For current notices use call_api with api=tourism, path=/v1/Announcement, param source=a22 (or source=PROVINCE_BZ for provincial roads) and rawsort=-LastChange.",
 		base: []string{"mobility", "events"},
 		params: []param{
 			{name: "origin", flag: "origin", typ: paramString, desc: "event origin, for example A22"},
@@ -427,7 +427,7 @@ var toolSpecs = []toolSpec{
 	},
 	{
 		name:      "a22_status",
-		desc:      "Inspect A22 Brenner motorway event and forecast feeds. Forecast rows are not current incident evidence, and an empty event feed means no events were published, not clear roads.",
+		desc:      "Inspect A22 Brenner motorway event and forecast feeds. Forecast rows are not current incident evidence. The event feed is a Timeseries feed, not a live bulletin: an empty or stale event result is not evidence that no incidents exist or that roads are clear, and the response's warnings report the newest row date it received. Report it as \"this feed returned no data\" and check current notices with call_api, api=tourism, path=/v1/Announcement, param source=a22 and rawsort=-LastChange.",
 		base:      []string{"a22", "status"},
 		forceJSON: true,
 		params: []param{

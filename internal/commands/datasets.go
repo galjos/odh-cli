@@ -268,7 +268,7 @@ func datasetGuideFor(entry datasetEntry) datasetGuideEntry {
 			"odh tourism types --dataset event-topic --json",
 		}
 		guidance.Verify = []string{
-			"odh diagnostics tourism-events --day <YYYY-MM-DD>",
+			"odh diagnostics tourism-events --date <YYYY-MM-DD>",
 			"odh call tourism /v1/EventShort --param pagenumber=1 --param pagesize=5",
 		}
 		guidance.Caveats = []string{
@@ -428,7 +428,7 @@ func datasetCatalog() []datasetEntry {
 			Domain:      "mobility",
 			API:         "mobility",
 			Title:       "A22 traffic diagnostics",
-			Description: "A22 current event checks, traffic sensor discovery, and traffic forecast caveats.",
+			Description: "A22 event feed checks, traffic sensor discovery, and traffic forecast caveats.",
 			Commands: []string{
 				"odh a22 status --limit 10",
 				"odh mobility origins --station-type TrafficSensor",

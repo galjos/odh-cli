@@ -132,6 +132,56 @@ func TestGetCachedUsesFreshCache(t *testing.T) {
 	}
 }
 
+func TestGetCachedReturnsHTTPError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = io.WriteString(w, `{"code":400,"description":"Syntax error in WHERE-clause"}`)
+	}))
+	defer server.Close()
+
+	c := NewWithHTTPClient(server.Client(), "test-agent")
+	c.cacheStore = cache.New(t.TempDir())
+	resp, err := c.GetCached(context.Background(), server.URL, time.Hour)
+	if err == nil {
+		t.Fatal("GetCached returned nil error for HTTP 400; the error body would be parsed as data")
+	}
+	var httpErr *HTTPError
+	if !errors.As(err, &httpErr) {
+		t.Fatalf("error is %T, want *HTTPError", err)
+	}
+	if httpErr.StatusCode != http.StatusBadRequest {
+		t.Fatalf("StatusCode = %d, want 400", httpErr.StatusCode)
+	}
+	if !strings.Contains(httpErr.Body, "Syntax error in WHERE-clause") {
+		t.Fatalf("error body = %q, want it to carry the upstream description", httpErr.Body)
+	}
+	if resp.FromCache {
+		t.Fatal("failed response unexpectedly reported FromCache")
+	}
+}
+
+func TestGetCachedDoesNotCacheFailedResponses(t *testing.T) {
+	attempts := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		attempts++
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = io.WriteString(w, `{"code":400}`)
+	}))
+	defer server.Close()
+
+	c := NewWithHTTPClient(server.Client(), "test-agent")
+	c.cacheStore = cache.New(t.TempDir())
+	if _, err := c.GetCached(context.Background(), server.URL, time.Hour); err == nil {
+		t.Fatal("first GetCached returned nil error for HTTP 400")
+	}
+	if _, err := c.GetCached(context.Background(), server.URL, time.Hour); err == nil {
+		t.Fatal("second GetCached returned nil error; the 400 body was served from cache")
+	}
+	if attempts != 2 {
+		t.Fatalf("attempts = %d, want 2 (an error body must not populate the cache)", attempts)
+	}
+}
+
 func TestGetWithLimitRejectsOversizedBody(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte("abcdef"))

@@ -279,6 +279,91 @@ func TestRunDatasetsGuideTable(t *testing.T) {
 	}
 }
 
+func TestDatasetCatalogCommandStringsParse(t *testing.T) {
+	seen := map[string]struct{}{}
+	commands := make([]string, 0)
+	for _, entry := range datasetCatalog() {
+		guide := datasetGuideFor(entry)
+		for _, command := range append(append(append([]string{}, entry.Commands...), guide.Discovery...), guide.Verify...) {
+			if _, exists := seen[command]; exists {
+				continue
+			}
+			seen[command] = struct{}{}
+			commands = append(commands, command)
+		}
+	}
+	if len(commands) == 0 {
+		t.Fatal("dataset catalog produced no command strings")
+	}
+	for _, command := range commands {
+		t.Run(command, func(t *testing.T) {
+			assertCommandStringParses(t, command)
+		})
+	}
+}
+
+// assertCommandStringParses resolves a suggested command string against a fresh
+// copy of the real command tree and fails on unknown flags or bad argument counts.
+// It never runs the command, so no network call is made.
+func assertCommandStringParses(t *testing.T, command string) {
+	t.Helper()
+	fields, err := splitCommandString(command)
+	if err != nil {
+		t.Fatalf("command %q: %v", command, err)
+	}
+	if len(fields) == 0 || fields[0] != "odh" {
+		t.Fatalf("command %q must start with odh", command)
+	}
+	rootCmd := newTestRunner(t, nil).NewRootCmd()
+	target, remaining, err := rootCmd.Find(fields[1:])
+	if err != nil {
+		t.Fatalf("command %q: %v", command, err)
+	}
+	if target == rootCmd {
+		t.Fatalf("command %q did not resolve to a subcommand", command)
+	}
+	if err := target.ParseFlags(remaining); err != nil {
+		t.Fatalf("command %q: %v", command, err)
+	}
+	if err := target.ValidateArgs(target.Flags().Args()); err != nil {
+		t.Fatalf("command %q: %v", command, err)
+	}
+}
+
+func splitCommandString(command string) ([]string, error) {
+	fields := make([]string, 0, 8)
+	current := strings.Builder{}
+	started := false
+	quote := rune(0)
+	for _, r := range command {
+		switch {
+		case quote != 0 && r == quote:
+			quote = 0
+		case quote != 0:
+			current.WriteRune(r)
+		case r == '"' || r == '\'':
+			quote = r
+			started = true
+		case r == ' ' || r == '\t':
+			if started {
+				fields = append(fields, current.String())
+				current.Reset()
+				started = false
+			}
+		default:
+			current.WriteRune(r)
+			started = true
+		}
+	}
+	if quote != 0 {
+		return nil, fmt.Errorf("unbalanced quote")
+	}
+	if started {
+		fields = append(fields, current.String())
+	}
+	return fields, nil
+}
+
 func TestRunDatasetsListSupportsDomainAndTable(t *testing.T) {
 	runner := newTestRunner(t, nil)
 	var stdout, stderr bytes.Buffer
@@ -1654,9 +1739,65 @@ func TestRunMobilityDatatypesWarnsWhenSmallLimitMayHideValues(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("Run exit = %d, stderr = %s", code, stderr.String())
 	}
-	if !strings.Contains(stdout.String(), "rerun with --limit 1000") {
+	if !strings.Contains(stdout.String(), "inspected 1 records, which matched --limit=1 exactly") ||
+		!strings.Contains(stdout.String(), "rerun with a higher --limit when datatype completeness matters") {
 		t.Fatalf("expected limit warning, got: %s", stdout.String())
 	}
+}
+
+func TestRunMobilityDatatypesWarnsAtDefaultLimit(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v2/flat/TrafficSensor/*" {
+			t.Fatalf("unexpected path %q", r.URL.Path)
+		}
+		if got := r.URL.Query().Get("limit"); got != "1000" {
+			t.Fatalf("unexpected limit %q", got)
+		}
+		records := make([]string, 0, 1000)
+		for i := 0; i < 1000; i++ {
+			records = append(records, fmt.Sprintf(`{"scode":"A22:%d","sorigin":"A22","tname":"Average Flow","tdescription":"Flow","tunit":"vehicles / hour"}`, i))
+		}
+		_, _ = w.Write([]byte(`{"data":[` + strings.Join(records, ",") + `]}`))
+	}))
+	defer server.Close()
+
+	runner := newTestRunner(t, []apis.API{{Name: "mobility", BaseURL: server.URL, Public: true}})
+	var stdout, stderr bytes.Buffer
+	code := runner.Run(context.Background(), []string{"mobility", "datatypes", "--station-type", "TrafficSensor", "--json"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("Run exit = %d, stderr = %s", code, stderr.String())
+	}
+	var decoded struct {
+		RecordCount int      `json:"record_count"`
+		Warnings    []string `json:"warnings"`
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &decoded); err != nil {
+		t.Fatalf("invalid JSON: %v\n%s", err, stdout.String())
+	}
+	if decoded.RecordCount != 1000 {
+		t.Fatalf("unexpected record_count %d", decoded.RecordCount)
+	}
+	if !containsWarning(decoded.Warnings, "inspected 1000 records, which matched --limit=1000 exactly") {
+		t.Fatalf("expected default-limit truncation warning, got %#v", decoded.Warnings)
+	}
+}
+
+// TestMobilityDatatypeHintCommandStringParses pins the command that datatypes
+// suggests when nothing matched. It carries --json, so mobility stations has to
+// keep accepting that flag even though it only ever emits JSON.
+func TestMobilityDatatypeHintCommandStringParses(t *testing.T) {
+	warnings := mobilityDatatypeDiscoveryWarnings("ParkingStation", nil, 5, 1)
+	command := ""
+	for _, warning := range warnings {
+		if index := strings.Index(warning, "odh mobility stations "); index >= 0 {
+			command = warning[index:]
+			break
+		}
+	}
+	if command == "" {
+		t.Fatalf("expected a suggested stations command, got %#v", warnings)
+	}
+	assertCommandStringParses(t, command)
 }
 
 func TestRunMobilityOriginsSummarizesStationOrigins(t *testing.T) {
@@ -1733,6 +1874,94 @@ func TestRunMobilityStationsFiltersByOrigin(t *testing.T) {
 	}
 }
 
+func TestRunMobilityOriginsWarnsWhenLimitCapsRecords(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v2/flat/TrafficSensor" {
+			t.Fatalf("unexpected path %q", r.URL.Path)
+		}
+		_, _ = w.Write([]byte(`{"data":[
+			{"scode":"A22:1","sorigin":"A22","sname":"A22 one"},
+			{"scode":"A22:2","sorigin":"A22","sname":"A22 two"}
+		]}`))
+	}))
+	defer server.Close()
+
+	runner := newTestRunner(t, []apis.API{{Name: "mobility", BaseURL: server.URL, Public: true}})
+	var stdout, stderr bytes.Buffer
+	code := runner.Run(context.Background(), []string{"mobility", "origins", "--station-type", "TrafficSensor", "--limit", "2"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("Run exit = %d, stderr = %s", code, stderr.String())
+	}
+	var decoded struct {
+		RecordCount int      `json:"record_count"`
+		Warnings    []string `json:"warnings"`
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &decoded); err != nil {
+		t.Fatalf("invalid JSON: %v\n%s", err, stdout.String())
+	}
+	if decoded.RecordCount != 2 {
+		t.Fatalf("unexpected record_count %d", decoded.RecordCount)
+	}
+	if !containsWarning(decoded.Warnings, "inspected 2 station records, which matched --limit=2 exactly") ||
+		!containsWarning(decoded.Warnings, "rerun with a higher --limit when origin completeness matters") {
+		t.Fatalf("expected truncation warning, got %#v", decoded.Warnings)
+	}
+}
+
+func TestRunMobilityOriginsOmitsWarningsWhenNotCapped(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v2/flat/TrafficSensor" {
+			t.Fatalf("unexpected path %q", r.URL.Path)
+		}
+		_, _ = w.Write([]byte(`{"data":[{"scode":"A22:1","sorigin":"A22","sname":"A22 one"}]}`))
+	}))
+	defer server.Close()
+
+	runner := newTestRunner(t, []apis.API{{Name: "mobility", BaseURL: server.URL, Public: true}})
+	var stdout, stderr bytes.Buffer
+	code := runner.Run(context.Background(), []string{"mobility", "origins", "--station-type", "TrafficSensor", "--limit", "5"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("Run exit = %d, stderr = %s", code, stderr.String())
+	}
+	if strings.Contains(stdout.String(), `"warnings"`) {
+		t.Fatalf("did not expect warnings, got: %s", stdout.String())
+	}
+}
+
+func TestRunMobilityStationsWarnsWhenLimitCapsRecords(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v2/flat/ParkingStation" {
+			t.Fatalf("unexpected path %q", r.URL.Path)
+		}
+		_, _ = w.Write([]byte(`{"data":[
+			{"scode":"1","sorigin":"skidata","sname":"P1"},
+			{"scode":"2","sorigin":"skidata","sname":"P2"}
+		]}`))
+	}))
+	defer server.Close()
+
+	runner := newTestRunner(t, []apis.API{{Name: "mobility", BaseURL: server.URL, Public: true}})
+	var stdout, stderr bytes.Buffer
+	code := runner.Run(context.Background(), []string{"mobility", "stations", "--station-type", "ParkingStation", "--limit", "2"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("Run exit = %d, stderr = %s", code, stderr.String())
+	}
+	var decoded struct {
+		RecordCount int      `json:"record_count"`
+		Warnings    []string `json:"warnings"`
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &decoded); err != nil {
+		t.Fatalf("invalid JSON: %v\n%s", err, stdout.String())
+	}
+	if decoded.RecordCount != 2 {
+		t.Fatalf("unexpected record_count %d", decoded.RecordCount)
+	}
+	if !containsWarning(decoded.Warnings, "returned 2 station rows, which matched --limit=2 exactly") ||
+		!containsWarning(decoded.Warnings, "rerun with a higher --limit when station completeness matters") {
+		t.Fatalf("expected truncation warning, got %#v", decoded.Warnings)
+	}
+}
+
 func TestRunMobilityEventsWrapsEmptyA22Events(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v2/flat,event/A22/latest" {
@@ -1750,6 +1979,66 @@ func TestRunMobilityEventsWrapsEmptyA22Events(t *testing.T) {
 	}
 	if !strings.Contains(stdout.String(), `"origin": "A22"`) || !strings.Contains(stdout.String(), `"count": 0`) {
 		t.Fatalf("unexpected stdout: %s", stdout.String())
+	}
+}
+
+func TestRunMobilityEventsWarnsAboutTimeseriesEventFeed(t *testing.T) {
+	tests := []struct {
+		name                string
+		origin              string
+		wantNewestRowDated  string
+		wantAnnouncementCmd string
+	}{
+		{
+			name:                "a22",
+			origin:              "A22",
+			wantNewestRowDated:  "the newest row in this Mobility Timeseries event response is dated 2026-05-16",
+			wantAnnouncementCmd: "odh call tourism /v1/Announcement --param source=a22 --param rawsort=-LastChange",
+		},
+		{
+			name:                "province",
+			origin:              "PROVINCE_BZ",
+			wantNewestRowDated:  "the newest row in this Mobility Timeseries event response is dated 2026-05-16",
+			wantAnnouncementCmd: "odh call tourism /v1/Announcement --param source=PROVINCE_BZ --param rawsort=-LastChange",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != "/v2/flat,event/"+tt.origin+"/latest" {
+					t.Fatalf("unexpected path %q", r.URL.Path)
+				}
+				_, _ = w.Write([]byte(`{"data":[{"evname":"event-one","evtransactiontime":"2026-05-16 07:45:00.000+0200"}]}`))
+			}))
+			defer server.Close()
+
+			runner := newTestRunner(t, []apis.API{{Name: "mobility", BaseURL: server.URL, Public: true}})
+			var stdout, stderr bytes.Buffer
+			code := runner.Run(context.Background(), []string{"mobility", "events", "--origin", tt.origin}, &stdout, &stderr)
+			if code != 0 {
+				t.Fatalf("Run exit = %d, stderr = %s", code, stderr.String())
+			}
+			var decoded struct {
+				Count    int      `json:"count"`
+				Warnings []string `json:"warnings"`
+			}
+			if err := json.Unmarshal(stdout.Bytes(), &decoded); err != nil {
+				t.Fatalf("invalid JSON: %v\n%s", err, stdout.String())
+			}
+			if decoded.Count != 1 {
+				t.Fatalf("expected the event feed to return rows, got %#v", decoded)
+			}
+			// Rows are present, so the caveat must still be there: the caller
+			// cannot tell a live feed from a stale one without the row date.
+			if !containsWarning(decoded.Warnings, tt.wantNewestRowDated) ||
+				!containsWarning(decoded.Warnings, "not a live bulletin") {
+				t.Fatalf("expected timeseries event feed warning, got %#v", decoded.Warnings)
+			}
+			if !containsWarning(decoded.Warnings, tt.wantAnnouncementCmd) {
+				t.Fatalf("expected Content API replacement command, got %#v", decoded.Warnings)
+			}
+		})
 	}
 }
 
@@ -2324,9 +2613,193 @@ func TestRunA22StatusWarnsOnEmptyEventsAndFutureForecast(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("Run exit = %d, stderr = %s", code, stderr.String())
 	}
-	if !strings.Contains(stdout.String(), "Open Data Hub returned no current A22 events") ||
+	if !strings.Contains(stdout.String(), "Open Data Hub returned no A22 event rows for this request") ||
 		!strings.Contains(stdout.String(), "future valid_time") {
 		t.Fatalf("expected warnings, got: %s", stdout.String())
+	}
+}
+
+func TestRunA22StatusWarnsAboutFrozenEventFeedEvenWithRows(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v2/flat,event/A22/latest":
+			_, _ = w.Write([]byte(`{"data":[{"evname":"a22-event","evtransactiontime":"2026-05-16 07:45:00.000+0200"}]}`))
+		case "/v2/flat/TrafficForecast/forecast/latest":
+			_, _ = w.Write([]byte(`{"data":[]}`))
+		default:
+			t.Fatalf("unexpected path %q", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	runner := newTestRunner(t, []apis.API{{Name: "mobility", BaseURL: server.URL, Public: true}})
+	var stdout, stderr bytes.Buffer
+	code := runner.Run(context.Background(), []string{"a22", "status", "--json"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("Run exit = %d, stderr = %s", code, stderr.String())
+	}
+	var decoded struct {
+		Events struct {
+			Count int `json:"count"`
+		} `json:"events"`
+		Warnings []string `json:"warnings"`
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &decoded); err != nil {
+		t.Fatalf("invalid JSON: %v\n%s", err, stdout.String())
+	}
+	if decoded.Events.Count != 1 {
+		t.Fatalf("expected the event feed to return rows, got %#v", decoded)
+	}
+	// The warning must report the age of what actually arrived, not assert a
+	// feed status the CLI never checks.
+	if !containsWarning(decoded.Warnings, "the newest row in this Mobility Timeseries event response is dated 2026-05-16") ||
+		!containsWarning(decoded.Warnings, "not a live bulletin") {
+		t.Fatalf("expected frozen event feed warning, got %#v", decoded.Warnings)
+	}
+	if !containsWarning(decoded.Warnings, "odh call tourism /v1/Announcement --param source=a22 --param rawsort=-LastChange") {
+		t.Fatalf("expected Content API replacement command, got %#v", decoded.Warnings)
+	}
+}
+
+func TestRunTrafficEventsWarnsAboutFrozenEventFeedEvenWithRows(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v2/flat,event/PROVINCE_BZ/2026-05-16/2026-05-16" {
+			t.Fatalf("unexpected path %q", r.URL.Path)
+		}
+		_, _ = w.Write([]byte(`{"data":[
+			{
+				"evuuid":"badia-closure",
+				"evstart":"2026-05-16 08:00:00.000+0200",
+				"evend":"2026-05-16 18:00:00.000+0200",
+				"evtransactiontime":"2999-05-16 07:45:00.000+0200",
+				"evmetadata":{
+					"messageZoneId":"6",
+					"messageStreetNr":"LS/SP 244",
+					"subTycodeValue":"SPERRE",
+					"placeDe":"Badia"
+				}
+			}
+		]}`))
+	}))
+	defer server.Close()
+
+	runner := newTestRunner(t, []apis.API{{Name: "mobility", BaseURL: server.URL, Public: true}})
+	var stdout, stderr bytes.Buffer
+	code := runner.Run(context.Background(), []string{
+		"traffic", "events",
+		"--from", "2026-05-16",
+		"--to", "2026-05-16",
+		"--json",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("Run exit = %d, stderr = %s", code, stderr.String())
+	}
+	var decoded struct {
+		Count    int      `json:"count"`
+		Warnings []string `json:"warnings"`
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &decoded); err != nil {
+		t.Fatalf("invalid JSON: %v\n%s", err, stdout.String())
+	}
+	if decoded.Count != 1 {
+		t.Fatalf("expected the event feed to return rows, got %#v", decoded)
+	}
+	if !containsWarning(decoded.Warnings, "the newest row in this Mobility Timeseries event response is dated 2999-05-16") ||
+		!containsWarning(decoded.Warnings, "not a live bulletin") {
+		t.Fatalf("expected frozen event feed warning, got %#v", decoded.Warnings)
+	}
+	if !containsWarning(decoded.Warnings, "odh call tourism /v1/Announcement --param source=PROVINCE_BZ --param rawsort=-LastChange") {
+		t.Fatalf("expected Content API replacement command, got %#v", decoded.Warnings)
+	}
+}
+
+func TestRunTrafficEventsWarnsWhenLimitCapsRawRows(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v2/flat,event/PROVINCE_BZ/2026-05-16/2026-05-16" {
+			t.Fatalf("unexpected path %q", r.URL.Path)
+		}
+		if got := r.URL.Query().Get("limit"); got != "2" {
+			t.Fatalf("unexpected limit %q", got)
+		}
+		_, _ = w.Write([]byte(`{"data":[
+			{
+				"evuuid":"badia-closure",
+				"evstart":"2026-05-16 08:00:00.000+0200",
+				"evend":"2026-05-16 18:00:00.000+0200",
+				"evtransactiontime":"2026-05-16 07:45:00.000+0200",
+				"evmetadata":{"messageZoneId":"6","messageStreetNr":"LS/SP 244","subTycodeValue":"SPERRE","placeDe":"Badia"}
+			},
+			{
+				"evuuid":"corvara-roadworks",
+				"evstart":"2026-05-16 09:00:00.000+0200",
+				"evend":"2026-05-16 17:00:00.000+0200",
+				"evtransactiontime":"2026-05-16 07:50:00.000+0200",
+				"evmetadata":{"messageZoneId":"6","messageStreetNr":"LS/SP 244","subTycodeValue":"BAUSTELLE","placeDe":"Corvara"}
+			}
+		]}`))
+	}))
+	defer server.Close()
+
+	runner := newTestRunner(t, []apis.API{{Name: "mobility", BaseURL: server.URL, Public: true}})
+	var stdout, stderr bytes.Buffer
+	code := runner.Run(context.Background(), []string{
+		"traffic", "events",
+		"--from", "2026-05-16",
+		"--to", "2026-05-16",
+		"--limit", "2",
+		"--json",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("Run exit = %d, stderr = %s", code, stderr.String())
+	}
+	var decoded struct {
+		RawCount int      `json:"raw_count"`
+		Count    int      `json:"count"`
+		Warnings []string `json:"warnings"`
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &decoded); err != nil {
+		t.Fatalf("invalid JSON: %v\n%s", err, stdout.String())
+	}
+	if decoded.RawCount != 2 || decoded.Count != 2 {
+		t.Fatalf("unexpected counts %#v", decoded)
+	}
+	if !containsWarning(decoded.Warnings, "returned 2 raw event rows, which matched --limit=2 exactly") ||
+		!containsWarning(decoded.Warnings, "rerun with a higher --limit when traffic completeness matters") {
+		t.Fatalf("expected truncation warning, got %#v", decoded.Warnings)
+	}
+}
+
+func TestRunTrafficEventsOmitsTruncationWarningWhenNotCapped(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v2/flat,event/PROVINCE_BZ/2026-05-16/2026-05-16" {
+			t.Fatalf("unexpected path %q", r.URL.Path)
+		}
+		_, _ = w.Write([]byte(`{"data":[
+			{
+				"evuuid":"badia-closure",
+				"evstart":"2026-05-16 08:00:00.000+0200",
+				"evend":"2026-05-16 18:00:00.000+0200",
+				"evtransactiontime":"2026-05-16 07:45:00.000+0200",
+				"evmetadata":{"messageZoneId":"6","messageStreetNr":"LS/SP 244","subTycodeValue":"SPERRE","placeDe":"Badia"}
+			}
+		]}`))
+	}))
+	defer server.Close()
+
+	runner := newTestRunner(t, []apis.API{{Name: "mobility", BaseURL: server.URL, Public: true}})
+	var stdout, stderr bytes.Buffer
+	code := runner.Run(context.Background(), []string{
+		"traffic", "events",
+		"--from", "2026-05-16",
+		"--to", "2026-05-16",
+		"--limit", "5",
+		"--json",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("Run exit = %d, stderr = %s", code, stderr.String())
+	}
+	if strings.Contains(stdout.String(), "matched --limit=") {
+		t.Fatalf("did not expect a truncation warning, got: %s", stdout.String())
 	}
 }
 

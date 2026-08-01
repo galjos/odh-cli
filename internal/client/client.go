@@ -158,7 +158,10 @@ func (c *Client) GetCached(ctx context.Context, url string, ttl time.Duration) (
 	if err == nil && c.cacheStore != nil {
 		_ = c.cacheStore.Set(url, resp.Body)
 	}
-	return resp, nil
+	// Propagate err. A non-2xx response carries a populated body, so swallowing
+	// the error here let an upstream 400 be parsed as if it were data: callers
+	// reported an empty-but-successful result instead of the request failing.
+	return resp, err
 }
 
 // GetWithLimit performs an HTTP GET and reads at most limitBytes bytes.

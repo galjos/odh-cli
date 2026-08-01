@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"io"
 	"strings"
+
+	"github.com/spf13/cobra"
 )
 
 func normalizeOutputFormat(value string) (string, error) {
@@ -27,6 +29,13 @@ func applyJSONShortcut(format *string, enabled bool) {
 	if enabled {
 		*format = "json"
 	}
+}
+
+// acceptJSONFlag registers --json on commands that only ever emit JSON so that
+// suggested command strings carrying the flag still parse. The value is ignored.
+func acceptJSONFlag(cmd *cobra.Command) {
+	var ignored bool
+	cmd.Flags().BoolVar(&ignored, "json", false, "accepted for consistency; this command always emits JSON")
 }
 
 func writePlainWarnings(stdout io.Writer, warnings []string) {

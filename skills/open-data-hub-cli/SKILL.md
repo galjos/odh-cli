@@ -13,7 +13,7 @@ metadata:
             {
               "id": "go",
               "kind": "go",
-              "module": "github.com/galjos/odh-cli/cmd/odh@v0.4.0",
+              "module": "github.com/galjos/odh-cli/cmd/odh@v0.4.1",
               "bins": ["odh"],
               "label": "Install odh CLI (go)",
             },
@@ -33,12 +33,12 @@ odh version
 odh doctor --timeout 10s
 ```
 
-Need `odh v0.4.0+` for the current command contracts, dataset guidance, source/provenance fields, traffic helpers, GTFS/transit, filtered latest measurements, comma-safe `--param`, `transit journey --with-realtime`, and MCP server mode.
+Need `odh v0.4.1+` for the current command contracts, dataset guidance, source/provenance fields, traffic helpers, GTFS/transit, filtered latest measurements, comma-safe `--param`, `transit journey --with-realtime`, and MCP server mode.
 
 Preferred manual install options:
 
 ```bash
-go install github.com/galjos/odh-cli/cmd/odh@v0.4.0
+go install github.com/galjos/odh-cli/cmd/odh@v0.4.1
 brew install galjos/odh/odh
 ```
 
@@ -89,7 +89,7 @@ odh traffic search badia --today --zone-id 6 --json
 odh traffic today --near 46.42,11.25 --radius 15km --json
 ```
 
-Prefer `traffic` over raw `mobility events --origin PROVINCE_BZ`. Surface stale/source warnings. Do not present stale open-ended rows as confirmed current closures.
+Prefer `traffic` over raw `mobility events --origin PROVINCE_BZ`. Surface stale/source warnings. Do not present stale open-ended rows as confirmed current closures. This is a Mobility Timeseries event feed, not a live bulletin: an empty result is not evidence that roads are clear. Report the newest row date the command returns, and get current notices from `odh call tourism /v1/Announcement --param source=PROVINCE_BZ --param rawsort=-LastChange`.
 
 A22:
 
@@ -98,7 +98,7 @@ odh a22 status --limit 10 --json
 odh mobility events --origin A22 --latest --limit 20
 ```
 
-`a22 status` is current/live-oriented. Do not infer live incidents from `TrafficForecast`. For past local A22 incidents, say ODH/A22 live feeds may not retain history and use dated external sources if needed.
+`a22 status` inspects a Mobility Timeseries event feed alongside `TrafficForecast`; neither is a live bulletin. Do not infer live incidents from `TrafficForecast`. Report an empty or stale event feed as "this feed returned no current data", never as evidence that the motorway is clear, and get current notices from `odh call tourism /v1/Announcement --param source=a22 --param rawsort=-LastChange`. For past local A22 incidents, say these feeds may not retain history and use dated external sources if needed.
 
 ## Mobility Measurements
 

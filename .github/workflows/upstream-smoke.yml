@@ -2,6 +2,13 @@
 #
 # SPDX-License-Identifier: CC0-1.0
 
+# This canary exists because it used to pass every week while the A22 /
+# PROVINCE_BZ Timeseries event feed was frozen (newest row 2025-10-13, A22
+# returning zero rows), until an Open Data Hub employee mailed about it: issue
+# #7. Reachability and output strings are not enough. Every step below asserts
+# something that can actually go red, and every threshold was measured against
+# real upstream data rather than guessed.
+
 name: Upstream smoke
 
 on:
@@ -27,10 +34,262 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - name: Build odh
+        run: go build -o odh ./cmd/odh
+
       - name: Check dataset guidance
         run: |
-          go run ./cmd/odh datasets guide "ev charging availability" --format json > dataset-guide.json
+          ./odh datasets guide "ev charging availability" --format json > dataset-guide.json
           jq -e '.matches[] | select(.dataset.id == "mobility.charging" and (.discovery[] | contains("EChargingStation")) and (.verify[] | contains("diagnostics ev-charging")))' dataset-guide.json
+
+      - name: Check dataset guidance commands parse
+        run: |
+          set -euo pipefail
+          GUARDS='TestDatasetCatalogCommandStringsParse|TestMobilityDatatypeHintCommandStringParses'
+          # `go test -run` exits 0 with "[no tests to run]" when the pattern matches
+          # nothing, so a rename would silently delete this check instead of failing
+          # it. Confirm both guards exist before trusting their result.
+          found=$(go test ./internal/commands -list "$GUARDS" | grep -c '^Test' || true)
+          if [ "$found" -ne 2 ]; then
+            echo "::error::the guard tests for datasets guide are missing (matched $found of 2)."
+            echo "Expected TestDatasetCatalogCommandStringsParse and TestMobilityDatatypeHintCommandStringParses"
+            echo "in internal/commands/runner_test.go. Rename the pattern above to match, or restore the tests."
+            exit 1
+          fi
+          if ! go test ./internal/commands -run "$GUARDS" -count=1; then
+            echo "::error::odh datasets guide is emitting a command the CLI cannot parse."
+            echo "The step above only checks that the guide prints certain strings; this one checks the"
+            echo "strings are runnable. That gap is how bug #5 shipped in v0.4.0 and survived this canary."
+            echo "The failing command is named in the subtest above; fix datasetCatalog() or"
+            echo "datasetGuideFor() in internal/commands/datasets.go, or the flag the target command lost."
+            exit 1
+          fi
+
+      - name: Check Mobility availability data is fresh
+        run: |
+          set -euo pipefail
+          ./odh mobility latest \
+            --station-type ParkingStation \
+            --data-type free \
+            --fresh-within 6h \
+            --sort newest \
+            --request-limit 10000 \
+            --limit 500 \
+            --json > parking-free-latest.json
+          python3 - parking-free-latest.json <<'PY'
+          import datetime, json, sys
+
+          # Window and floor come from measurement, not taste. Sampled at the 13 most
+          # recent Monday 05:43 UTC cron instants via the Mobility history endpoint
+          # (/v2/flat/ParkingStation/free/{from}/{to}): the newest row was always
+          # 0.0-0.5 minutes old and 12-57 distinct stations had reported in the prior 6h.
+          # 6h is ~700x the observed lag; a floor of 5 sits well under the worst week.
+          WINDOW_HOURS = 6.0
+          LEAK_TOLERANCE_HOURS = 0.5
+          MIN_STATIONS = 5
+
+          with open(sys.argv[1], encoding="utf-8") as handle:
+              payload = json.load(handle)
+          rows = payload.get("measurements") or []
+          now = datetime.datetime.now(datetime.timezone.utc)
+
+
+          def parse(value):
+              fmt = "%Y-%m-%d %H:%M:%S.%f%z" if "." in value else "%Y-%m-%d %H:%M:%S%z"
+              return datetime.datetime.strptime(value, fmt)
+
+
+          dated = sorted((now - parse(r["mvalidtime"])).total_seconds() / 3600.0
+                         for r in rows if r.get("mvalidtime"))
+          stations = {r.get("scode") for r in rows if r.get("mvalidtime") and r.get("scode")}
+
+          problems = []
+          if not dated:
+              problems.append("no row carried an mvalidtime inside the last %gh (raw_count=%s, count=%s)"
+                              % (WINDOW_HOURS, payload.get("raw_count"), payload.get("count")))
+          else:
+              if dated[0] > WINDOW_HOURS:
+                  problems.append("newest row is %.1fh old, past the %gh window" % (dated[0], WINDOW_HOURS))
+              elif dated[-1] > WINDOW_HOURS + LEAK_TOLERANCE_HOURS:
+                  # Only meaningful while the feed is live: a stale row surviving the filter
+                  # means --fresh-within stopped filtering, not that upstream froze.
+                  problems.append("a %.1fh-old row survived --fresh-within 6h, so the CLI filter is not filtering"
+                                  % dated[-1])
+              if len(stations) < MIN_STATIONS:
+                  problems.append("only %d station(s) reported inside %gh, below the floor of %d"
+                                  % (len(stations), WINDOW_HOURS, MIN_STATIONS))
+
+          if problems:
+              print("::error::Mobility ParkingStation 'free' availability is no longer fresh.")
+              for problem in problems:
+                  print("  - %s" % problem)
+              print("Endpoint: %s" % payload.get("endpoint"))
+              print("Baseline: 0.0-0.5 min old and 12-57 stations at the last 13 Monday cron instants.")
+              print("Either upstream froze -- check")
+              print("https://mobility.api.opendatahub.com/v2/flat/ParkingStation/free/latest?limit=-1 and mail")
+              print("help@opendatahub.com as with issue #7 -- or --fresh-within/--sort regressed in")
+              print("internal/commands/mobility.go. This is the freeze detector the traffic-event feed never had.")
+              sys.exit(1)
+
+          print("OK: %d ParkingStation 'free' stations reported inside %gh; newest row is %.1f min old."
+                % (len(stations), WINDOW_HOURS, dated[0] * 60.0))
+          PY
+
+      - name: Check GTFS realtime feed is fresh
+        run: |
+          set -euo pipefail
+          ./odh gtfs realtime --feed trip-updates --limit 1 --json > gtfs-trip-updates.json
+          python3 - gtfs-trip-updates.json <<'PY'
+          import datetime, json, sys
+
+          # The GTFS-RT producer stamps a fresh header every 30s (measured: three
+          # consecutive polls 30s apart, all three feeds sharing one header time). 6h is
+          # ~700x that cadence. Only the header is asserted, never entity_count:
+          # service-alerts sits at zero entities for hours with a perfectly fresh header,
+          # so an entity-count assertion would cry wolf.
+          WINDOW_HOURS = 6.0
+
+          with open(sys.argv[1], encoding="utf-8") as handle:
+              payload = json.load(handle)
+          stamp = (payload.get("header") or {}).get("timestamp")
+          now = datetime.datetime.now(datetime.timezone.utc)
+
+          if not stamp:
+              print("::error::GTFS-RT trip-updates carried no header.timestamp, so its freshness cannot be checked.")
+              print("Endpoint: %s" % payload.get("endpoint"))
+              print("Either upstream stopped stamping the GTFS-RT header or the CLI stopped decoding it; check")
+              print("internal/commands/transit_realtime.go and gtfs.api.opendatahub.com.")
+              sys.exit(1)
+
+          generated = datetime.datetime.fromtimestamp(int(stamp), datetime.timezone.utc)
+          age = (now - generated).total_seconds() / 3600.0
+          # A negative age means the producer's clock is ahead or the header froze in
+          # the future; without this the step stays green while printing nonsense.
+          if age > WINDOW_HOURS or age < -0.25:
+              print("::error::GTFS-RT trip-updates is stale: header.timestamp is %.1fh old, past the %gh window."
+                    % (age, WINDOW_HOURS))
+              print("Endpoint: %s" % payload.get("endpoint"))
+              print("Header time: %s. Observed cadence is one header every 30s, so this is a producer stall,"
+                    % generated.isoformat())
+              print("not jitter. Check gtfs.api.opendatahub.com and mail help@opendatahub.com as with issue #7.")
+              sys.exit(1)
+
+          print("OK: GTFS-RT trip-updates header is %.1f min old (%s entities upstream)."
+                % (age * 60.0, payload.get("entity_count")))
+          PY
+
+      - name: Check the dead event feed is still disclosed
+        run: |
+          set -euo pipefail
+          ./odh traffic today --json > traffic-today.json
+          ./odh a22 status --json > a22-status.json
+          python3 - traffic-today.json a22-status.json <<'PY'
+          import json, sys
+
+          # Fragments timeseriesEventFeedWarning() emits on BOTH of its branches, so this
+          # keeps working whether the feed returns dated rows ("traffic today") or nothing
+          # at all ("a22 status"). Do not tighten to one branch's wording.
+          COMMON = [
+              "Mobility Timeseries event",
+              "evidence that roads are clear, so cross-check current notices with:",
+              "--param rawsort=-LastChange",
+          ]
+          # The replacement feed must point at the matching road network.
+          CASES = {
+              "traffic-today.json": ("odh traffic today --json",
+                                     "odh call tourism /v1/Announcement --param source=PROVINCE_BZ"),
+              "a22-status.json": ("odh a22 status --json",
+                                  "odh call tourism /v1/Announcement --param source=a22"),
+          }
+
+          failed = False
+          for path in sys.argv[1:]:
+              label, source_hint = CASES[path]
+              with open(path, encoding="utf-8") as handle:
+                  warnings = json.load(handle).get("warnings") or []
+              wanted = COMMON + [source_hint]
+              match = next((w for w in warnings if all(f in w for f in wanted)), None)
+              if match is None:
+                  failed = True
+                  print("::error::%s no longer warns that the Mobility Timeseries event feed is not a live bulletin."
+                        % label)
+                  print("  expected a warning containing all of: %s" % json.dumps(wanted, indent=2))
+                  print("  warnings emitted: %s" % json.dumps(warnings, indent=2))
+              else:
+                  print("OK: %s -> %s" % (label, match))
+
+          if failed:
+              print("The A22/PROVINCE_BZ Timeseries event feed is still dead (see the recovery step), so this caveat")
+              print("must stay. It comes from timeseriesEventFeedWarning() in internal/commands/traffic.go, wired in")
+              print("at normalizeTrafficEvents (traffic.go) and a22 status (mobility.go). Restore it, or -- if the")
+              print("feed really did recover -- update the recovery step in this workflow in the same change.")
+              sys.exit(1)
+          PY
+
+      - name: Check whether the dead event feed came back
+        run: |
+          set -euo pipefail
+          fetch() {
+            if ! curl -sSf --retry 3 --retry-delay 5 --max-time 120 "$1" > "$2"; then
+              echo "::error::Could not read $1 to decide whether the dead event feed came back."
+              echo "curl failed after 3 retries. This step is inconclusive, not a recovery signal:"
+              echo "re-run the workflow, and if it keeps failing check status.opendatahub.com."
+              exit 1
+            fi
+          }
+          fetch "https://mobility.api.opendatahub.com/v2/flat,event/A22/latest?limit=-1&select=evtransactiontime" a22-events.json
+          fetch "https://mobility.api.opendatahub.com/v2/flat,event/PROVINCE_BZ?limit=-1&select=evtransactiontime" bz-events.json
+          python3 - a22-events.json bz-events.json <<'PY'
+          import datetime, json, sys
+
+          # Raw upstream on purpose: this step must answer "did the feed restart?"
+          # independently of anything the CLI does to the data. 30 days is the same
+          # staleness boundary trafficEventStale() uses, and the feed is ~292 days
+          # stale today, so there is roughly 10x headroom before this can flip.
+          STALE_DAYS = 30
+          now = datetime.datetime.now(datetime.timezone.utc)
+
+
+          def parse(value):
+              fmt = "%Y-%m-%d %H:%M:%S.%f%z" if "." in value else "%Y-%m-%d %H:%M:%S%z"
+              return datetime.datetime.strptime(value, fmt)
+
+
+          def load(path):
+              with open(path, encoding="utf-8") as handle:
+                  rows = json.load(handle).get("data") or []
+              stamps = [parse(r["evtransactiontime"]) for r in rows if r.get("evtransactiontime")]
+              return len(rows), (max(stamps) if stamps else None)
+
+
+          a22_rows, _ = load(sys.argv[1])
+          bz_rows, bz_newest = load(sys.argv[2])
+          bz_age = (now - bz_newest).days if bz_newest else None
+
+          recovered = []
+          if a22_rows:
+              recovered.append("A22 /v2/flat,event/A22/latest returned %d rows; it has returned 0 since this "
+                               "canary was written" % a22_rows)
+          if bz_newest is not None and bz_age < STALE_DAYS:
+              recovered.append("PROVINCE_BZ newest evtransactiontime is %s (%d days old), inside the %d-day "
+                               "staleness boundary the CLI itself uses" % (bz_newest.date(), bz_age, STALE_DAYS))
+
+          if recovered:
+              print("::error::RECOVERY: the Mobility Timeseries event feed is producing current rows again.")
+              for line in recovered:
+                  print("  - %s" % line)
+              print("This failure is good news, not a break. It is a hard failure rather than a warning")
+              print("annotation on purpose: a warning leaves the run green, and a green run is exactly what")
+              print("hid the original freeze for ten months. The repo currently tells users this feed is dead")
+              print("-- timeseriesEventFeedWarning() in internal/commands/traffic.go, the traffic and a22 docs,")
+              print("and issue #7 -- so a restart makes shipped claims false and needs a code change.")
+              print("Confirm it is a real restart and not a one-off backfill, then update those claims and")
+              print("raise STALE_DAYS here so the canary goes green on the new reality.")
+              sys.exit(1)
+
+          print("Timeseries event feed still frozen as expected: A22 rows=%d, PROVINCE_BZ rows=%d newest=%s (%s days old)."
+                % (a22_rows, bz_rows, bz_newest.date() if bz_newest else "none", bz_age))
+          PY
 
       - name: Run live command tests
         env:
