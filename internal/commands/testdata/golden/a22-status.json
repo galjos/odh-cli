@@ -25,7 +25,8 @@
     ]
   },
   "warnings": [
-    "Open Data Hub returned no current A22 events.",
+    "this Mobility Timeseries event feed returned no dated rows; an empty result is not evidence that roads are clear, so cross-check current notices with: odh call tourism /v1/Announcement --param source=a22 --param rawsort=-LastChange",
+    "Open Data Hub returned no A22 event rows for this request.",
     "A22 forecast contains future valid_time values; treat it as forecast data, not current incident data."
   ]
 }

@@ -143,7 +143,7 @@
     },
     {
       "id": "a22-current-status",
-      "question_pattern": "Check whether Open Data Hub has current A22 incidents.",
+      "question_pattern": "Check what the Open Data Hub A22 event and forecast feeds currently contain.",
       "commands": [
         "odh mobility datatypes --station-type TrafficSensor --origin A22 --limit 1000 --json",
         "odh a22 status --limit 10 --json"
@@ -156,7 +156,7 @@
       ],
       "caveats": [
         "TrafficForecast rows are forecast data, not live incident evidence.",
-        "A22 live/current feeds should not be treated as historical incident archives."
+        "The A22 event feed is not a live bulletin and not a historical incident archive; an empty result is not evidence that the motorway is clear."
       ]
     },
     {

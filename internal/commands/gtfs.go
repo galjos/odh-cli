@@ -34,11 +34,13 @@ func (r *Runner) newGTFSCmd() *cobra.Command {
 	}
 
 	var datasetsFormat string
+	var datasetsJSON bool
 	datasetsCmd := &cobra.Command{
 		Use:   "datasets",
 		Short: "List GTFS datasets",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			applyJSONShortcut(&datasetsFormat, datasetsJSON)
 			api, _ := r.Registry.Find("gtfs")
 			requestURL, err := BuildURL(api.BaseURL, "/v1/dataset", nil)
 			if err != nil {
@@ -68,6 +70,7 @@ func (r *Runner) newGTFSCmd() *cobra.Command {
 		},
 	}
 	datasetsCmd.Flags().StringVar(&datasetsFormat, "format", "json", "output format: json or table")
+	datasetsCmd.Flags().BoolVar(&datasetsJSON, "json", false, "shortcut for --format json")
 
 	var realtimeDataset string
 	var realtimeFeed string
@@ -128,6 +131,7 @@ func (r *Runner) newGTFSCmd() *cobra.Command {
 	realtimeCmd.Flags().StringVar(&realtimeTripID, "trip-id", "", "optional GTFS trip_id filter for trip-updates")
 	realtimeCmd.Flags().StringVar(&realtimeRouteID, "route-id", "", "optional route_id filter for trip-updates or vehicle-positions")
 	realtimeCmd.Flags().BoolVar(&realtimeRaw, "raw", false, "write the upstream JSON feed without wrapping or filtering")
+	acceptJSONFlag(realtimeCmd)
 
 	cmd.AddCommand(datasetsCmd)
 	cmd.AddCommand(realtimeCmd)

@@ -124,7 +124,7 @@ odh mobility latest --station-type EChargingStation --data-type number-available
 
 The filtered `mobility latest` JSON output wraps measurements with `raw_count`, `count`, and `warnings`; the table/markdown output shows station, value, valid time, origin, and warnings. Report warnings when filters hide stale or inactive rows, and increase `--request-limit` when a question needs broader coverage than the inspected upstream rows. If a common datatype guess is wrong, for example `ParkingStation/number-free`, the CLI may print a hint such as using `free`.
 
-For datatype discovery, prefer `--limit 1000` when an answer depends on completeness. Smaller limits are acceptable for quick inspection, but the CLI warns when the inspected record limit may have hidden datatype values.
+For datatype discovery, prefer `--limit 1000` when an answer depends on completeness. `mobility origins`, `mobility stations`, and `mobility datatypes` add a `warnings` entry whenever the upstream result filled `--limit`, including the default limit; raise `--limit` until that warning disappears before claiming a complete list.
 
 ## Data Quality Diagnostics
 
@@ -200,15 +200,17 @@ odh traffic search "road closed badia" --today --zone-id 6 --json
 odh traffic today --near 46.42,11.25 --radius 15km
 ```
 
-Traffic commands query Open Data Hub `PROVINCE_BZ` events and default to table output. Use `--json` or `--format json` for downstream parsing and `--format table` or `--format markdown` for direct human answers. Use `odh traffic zones` to discover upstream zone IDs, then pass `--zone-id` when broad regional filtering is more reliable than a local place-name alias. The traffic layer deduplicates rows, maps German/Italian event categories to stable English category names, filters expired/future rows by date, hides stale open-ended records by default, and warns when timestamps look stale.
+Traffic commands query Open Data Hub `PROVINCE_BZ` events and default to table output. Use `--json` or `--format json` for downstream parsing and `--format table` or `--format markdown` for direct human answers. Use `odh traffic zones` to discover upstream zone IDs, then pass `--zone-id` when broad regional filtering is more reliable than a local place-name alias. The traffic layer deduplicates rows, maps German/Italian event categories to stable English category names, filters expired/future rows by date, hides stale open-ended records by default, warns when timestamps look stale, reports the date of the newest row in the response, and warns when the upstream result filled `--limit`.
 
 Use `odh traffic search <text>` for towns, roads, place names, and natural-language traffic wording. The CLI intentionally does not hardcode local village aliases; agents should broaden multilingual or local place names themselves, then call `traffic search` and/or `--zone-id`. The search layer only applies generic traffic-term normalization such as `closed`/`closure`/`roadblock` to `sperre`/`gesperrt`, and `roadworks` to `baustelle`.
 
+These commands read a Mobility Timeseries event feed, not a live bulletin. An empty `traffic` result is not evidence that roads are clear, and neither is a result whose newest row is weeks old; report what the response actually contains, including the newest row date the CLI warns about. Current road notices come from the Content API instead: `odh call tourism /v1/Announcement --param source=PROVINCE_BZ --param rawsort=-LastChange`.
+
 If a user needs an exact public traffic bulletin, compare the Open Data Hub result with the official traffic service outside this CLI and state both the source and timestamp used. Do not imply that `odh traffic` silently switched to another upstream feed.
 
-Agents should not infer live A22 traffic solely from `TrafficForecast` rows. Prefer `odh a22 status` when checking A22 because it reports current-event availability and warns when forecast timestamps indicate non-current data. It defaults to a compact table; add `--json --raw` when raw upstream rows are needed.
+Agents should not infer live A22 traffic from `TrafficForecast` rows. Use `odh a22 status` when checking A22 because it keeps the two feeds apart, reports how many event rows came back and how recent the newest one is, and warns when forecast timestamps indicate non-current data. The A22 event feed is a Mobility Timeseries feed, not a live bulletin, so neither an empty nor a stale event result is evidence that the motorway is clear. It defaults to a compact table; add `--json --raw` when raw upstream rows are needed.
 
-If the user asks for current traffic conditions, report the timestamp and feed type used. If Open Data Hub has no current A22 event rows, say that directly instead of converting forecast rows into live incidents.
+If the user asks for current traffic conditions, report the timestamp and feed type used. If the A22 event feed returns no rows, say that the feed returned no data rather than that there are no incidents, and check `odh call tourism /v1/Announcement --param source=a22 --param rawsort=-LastChange` instead of converting forecast rows into live incidents.
 
 ## Answer Patterns
 
@@ -217,7 +219,7 @@ Use these patterns when the CLI reports known data limitations:
 - Historical train delays: "I can find the static timetable or journey, but `odh transit delay-stats` reports that historical delay probability is unsupported because no archived GTFS-RT history is available. I should not estimate usual delay minutes from one live feed snapshot."
 - Stale traffic rows: "Open Data Hub returned only stale or hidden open-ended traffic rows for this query. I can mention them as caveated context, but not as confirmed current closures. For an official live bulletin, compare with the traffic service and state that separate source."
 - Parking forecasts: "Current parking occupancy is fresh, but the forecast diagnostic is `current_only`, so I can report current free spaces and should not present stale 60-minute forecasts as live predictions."
-- A22 status: "Open Data Hub returned no current A22 event rows. Forecast rows are forecast data, not current incidents, so I should not infer congestion or closures from them alone."
+- A22 status: "The Open Data Hub A22 event feed returned no rows for this request, which does not tell me whether the motorway is clear. Forecast rows are forecast data, not current incidents, so I should not infer congestion or closures from them alone. For current notices I would check `odh call tourism /v1/Announcement --param source=a22 --param rawsort=-LastChange`."
 - Tourism events: "The Tourism event diagnostic is unavailable or caveated because `onlyactive=true` returned date-inconsistent rows or records without GPS. I should avoid precise 'near me today' claims unless returned dates and coordinates support them."
 
 ## MCP Mode

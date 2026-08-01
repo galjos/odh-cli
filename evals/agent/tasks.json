@@ -80,14 +80,14 @@
       "pass_criteria": [
         "Discovers A22 as a Mobility origin before querying origin-specific data.",
         "Lists or summarizes TrafficSensor data types for A22.",
-        "Uses odh a22 status for current-event versus forecast semantics.",
+        "Uses odh a22 status for event-feed versus forecast semantics.",
         "Uses default table output for a brief answer or --json --raw when raw upstream rows are required.",
         "Does not infer live incidents from TrafficForecast rows alone."
       ],
       "common_failures": [
         "Treats TrafficForecast as current live traffic.",
         "Skips origin discovery and assumes the origin name.",
-        "Says there is no A22 data because current events are empty."
+        "Reads an empty A22 event feed as evidence that the motorway is clear."
       ]
     },
     {
@@ -268,7 +268,7 @@
         "odh traffic search neumarkt --today --include-stale --json"
       ],
       "pass_criteria": [
-        "Uses A22 status for current/live-oriented A22 data and recognizes that forecast rows are not incident evidence.",
+        "Uses A22 status to inspect the A22 event and forecast feeds and recognizes that neither is live incident evidence.",
         "Explains that current ODH/A22 feeds may not retain yesterday's local incident history.",
         "Does not add a historical reconstruction feature just to answer one missed incident.",
         "Suggests dated official/external archives only as a separate source, not as ODH CLI truth."

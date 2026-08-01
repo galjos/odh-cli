@@ -37,6 +37,7 @@
     }
   ],
   "warnings": [
+    "the newest row in this Mobility Timeseries event response is dated 2999-05-16; this feed is not a live bulletin, and neither a stale nor an empty result is evidence that roads are clear, so cross-check current notices with: odh call tourism /v1/Announcement --param source=PROVINCE_BZ --param rawsort=-LastChange",
     "source is Open Data Hub PROVINCE_BZ; compare with the official traffic service before presenting this as a complete live road bulletin"
   ]
 }
