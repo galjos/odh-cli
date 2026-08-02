@@ -57,6 +57,71 @@ func TestJSONContractTrafficSearch(t *testing.T) {
 	assertGoldenJSON(t, "traffic-search.json", stdout, server.URL)
 }
 
+func TestJSONContractMobilityOrigins(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v2/flat/TrafficSensor" {
+			t.Fatalf("unexpected path %q", r.URL.Path)
+		}
+		_, _ = w.Write([]byte(`{"data":[
+			{"scode":"A22:1","sorigin":"A22","sname":"A22 one"},
+			{"scode":"A22:2","sorigin":"A22","sname":"A22 two"}
+		]}`))
+	}))
+	defer server.Close()
+
+	stdout := runContractCommand(t, []apis.API{{Name: "mobility", BaseURL: server.URL, Public: true}}, []string{
+		"mobility", "origins",
+		"--station-type", "TrafficSensor",
+		"--limit", "2",
+		"--json",
+	})
+	assertGoldenJSON(t, "mobility-origins.json", stdout, server.URL)
+}
+
+func TestJSONContractMobilityStations(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v2/flat/ParkingStation" {
+			t.Fatalf("unexpected path %q", r.URL.Path)
+		}
+		_, _ = w.Write([]byte(`{"data":[
+			{"scode":"park-1","sorigin":"skidata","sname":"Park One"},
+			{"scode":"park-2","sorigin":"other","sname":"Park Two"}
+		]}`))
+	}))
+	defer server.Close()
+
+	stdout := runContractCommand(t, []apis.API{{Name: "mobility", BaseURL: server.URL, Public: true}}, []string{
+		"mobility", "stations",
+		"--station-type", "ParkingStation",
+		"--origin", "skidata",
+		"--limit", "2",
+		"--json",
+	})
+	assertGoldenJSON(t, "mobility-stations.json", stdout, server.URL)
+}
+
+func TestJSONContractMobilityEvents(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v2/flat,event/PROVINCE_BZ/latest" {
+			t.Fatalf("unexpected path %q", r.URL.Path)
+		}
+		_, _ = w.Write([]byte(`{"data":[{
+			"evuuid":"badia-closure",
+			"evcategory":"SPERRE",
+			"evtransactiontime":"2024-03-28 09:00:00.000+0100"
+		}]}`))
+	}))
+	defer server.Close()
+
+	stdout := runContractCommand(t, []apis.API{{Name: "mobility", BaseURL: server.URL, Public: true}}, []string{
+		"mobility", "events",
+		"--origin", "PROVINCE_BZ",
+		"--latest",
+		"--limit", "1",
+	})
+	assertGoldenJSON(t, "mobility-events.json", stdout, server.URL)
+}
+
 func TestJSONContractMobilityLatest(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v2/flat,node/ParkingStation/free/latest" {

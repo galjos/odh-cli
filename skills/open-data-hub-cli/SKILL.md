@@ -75,6 +75,8 @@ For unfamiliar data questions, run `odh datasets guide <topic> --format json` fi
 
 Always run `odh mobility origins --station-type <type>` before filtering any query with `--origin`, even when the origin seems obvious (A22, ALPERIA, PROVINCE_BZ): origin names are upstream vocabulary, and a catalogued origin or datatype is not proof that open measurement rows exist.
 
+`mobility origins`, `mobility stations`, `mobility datatypes`, and `mobility events` add a *truncation* entry to `warnings` whenever the result filled `--limit`, including the default limit; raise `--limit` until that truncation entry disappears before claiming a complete list. Other `warnings` entries are unrelated to `--limit` and do not go away — `mobility events` always carries the Timeseries feed caveat, so its `warnings` array is never empty.
+
 Use `odh call <api> <path> --param key=value` for known endpoints. `--param` is repeatable and values may contain commas.
 
 ## Traffic

@@ -124,7 +124,7 @@ odh mobility latest --station-type EChargingStation --data-type number-available
 
 The filtered `mobility latest` JSON output wraps measurements with `raw_count`, `count`, and `warnings`; the table/markdown output shows station, value, valid time, origin, and warnings. Report warnings when filters hide stale or inactive rows, and increase `--request-limit` when a question needs broader coverage than the inspected upstream rows. If a common datatype guess is wrong, for example `ParkingStation/number-free`, the CLI may print a hint such as using `free`.
 
-For datatype discovery, prefer `--limit 1000` when an answer depends on completeness. `mobility origins`, `mobility stations`, and `mobility datatypes` add a `warnings` entry whenever the upstream result filled `--limit`, including the default limit; raise `--limit` until that warning disappears before claiming a complete list.
+For datatype discovery, prefer `--limit 1000` when an answer depends on completeness. `mobility origins`, `mobility stations`, `mobility datatypes`, and `mobility events` add a *truncation* entry to `warnings` whenever the result filled `--limit`, including the default limit; raise `--limit` until that truncation entry disappears before claiming a complete list. Other `warnings` entries are unrelated to `--limit` and do not go away — `mobility events` always carries the Timeseries feed caveat, so its `warnings` array is never empty.
 
 ## Data Quality Diagnostics
 

@@ -1,0 +1,19 @@
+{
+  "station_type": "TrafficSensor",
+  "endpoint": "https://example.test/v2/flat/TrafficSensor?limit=2",
+  "record_count": 2,
+  "count": 1,
+  "origins": [
+    {
+      "name": "A22",
+      "station_count": 2,
+      "station_samples": [
+        "A22:1",
+        "A22:2"
+      ]
+    }
+  ],
+  "warnings": [
+    "inspected 2 station records, which matched --limit=2 exactly; further rows may exist upstream and were not requested, so rerun with a higher --limit when origin completeness matters"
+  ]
+}

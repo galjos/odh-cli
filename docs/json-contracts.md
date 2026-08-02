@@ -122,6 +122,78 @@ Stable leg fields:
 When `--with-realtime` is present, `realtime` is an annotation layer over static
 GTFS routing. It is not live rerouting.
 
+## `odh mobility origins --json`
+
+This command always emits JSON; `--json` is accepted for consistency.
+
+Stable top-level fields:
+
+- `station_type`
+- `endpoint`
+- `record_count`
+- `count`
+- `origins`
+- `warnings`
+
+Stable origin fields:
+
+- `name`
+- `station_count`
+- `station_samples`
+
+`record_count` is the number of upstream station records inspected and `count`
+is the number of distinct origins summarized from them. `station_samples` is
+capped at five station codes and is not the full station list.
+
+`warnings` is present only when the upstream result filled `--limit`, including
+the default limit. While that warning is present, treat the origin list as
+possibly incomplete and rerun with a higher `--limit`.
+
+## `odh mobility stations --json`
+
+This command always emits JSON; `--json` is accepted for consistency.
+
+Stable top-level fields:
+
+- `station_type`
+- `origin`
+- `record_count`
+- `count`
+- `stations`
+- `warnings`
+
+`stations` contains Open Data Hub Mobility station rows and mirrors upstream
+data. `record_count` is the number of rows upstream returned and `count` is the
+number left after the local `--origin` filter; they are equal when `--origin` is
+empty.
+
+`warnings` is present only when the upstream result filled `--limit`, including
+the default limit. Note that `--limit` caps the upstream request, so the
+`--origin` filter only sees the rows inside that page.
+
+## `odh mobility events`
+
+This command has no format flag and always emits JSON.
+
+Stable top-level fields:
+
+- `origin`
+- `latest`
+- `count`
+- `events`
+- `warnings`
+
+`events` contains Open Data Hub Mobility event rows and mirrors upstream data.
+
+`warnings` always carries the Mobility Timeseries event feed caveat: this is an
+event feed, not a live bulletin, so neither an empty nor a stale result is
+evidence about current road conditions, and the warning names the Content API
+command to cross-check with. A second entry is added when the result filled
+`--limit`, including the default limit.
+
+For South Tyrol roadworks and closures, prefer `odh traffic` over this command:
+it deduplicates rows and returns the richer contract documented above.
+
 ## `odh mobility latest --json`
 
 When no local filtering or human output is requested, this command can pass
