@@ -158,9 +158,8 @@ func (c *Client) GetCached(ctx context.Context, url string, ttl time.Duration) (
 	if err == nil && c.cacheStore != nil {
 		_ = c.cacheStore.Set(url, resp.Body)
 	}
-	// Propagate err. A non-2xx response carries a populated body, so swallowing
-	// the error here let an upstream 400 be parsed as if it were data: callers
-	// reported an empty-but-successful result instead of the request failing.
+	// err must be propagated: a non-2xx response still carries a populated body,
+	// so dropping it lets callers parse an upstream error as if it were data.
 	return resp, err
 }
 

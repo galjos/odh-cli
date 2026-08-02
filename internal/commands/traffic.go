@@ -860,11 +860,9 @@ func newestTrafficEventTimestamp(events []trafficEvent) *time.Time {
 	return newest
 }
 
-// timeseriesEventFeedWarning describes what this response actually contains, so
-// the caveat stays true whatever upstream does next. It deliberately reports the
-// newest row it received rather than asserting a feed status the CLI never
-// checks: the failure this guards against is a consumer reading an empty or
-// long-stale event feed as positive evidence that roads are clear.
+// timeseriesEventFeedWarning reports the newest row this response carried rather
+// than asserting an upstream feed status the CLI never checks, so the caveat
+// stays true whatever upstream does next.
 func timeseriesEventFeedWarning(newest *time.Time, announcementSource string) string {
 	replacement := fmt.Sprintf("odh call tourism /v1/Announcement --param source=%s --param rawsort=-LastChange", announcementSource)
 	if newest == nil {

@@ -10,44 +10,27 @@ All notable changes to `odh-cli` are documented here.
 
 ## v0.4.1 - 2026-08-02
 
-Truthfulness release. Every change closes a case where `odh` stated something
-it had not checked, or stayed silent about something it knew.
-
-- **The Timeseries event feed is disclosed for what it is.** That feed no longer
-  returns rows for any window — its newest row is from 2024 — yet
-  `odh traffic today` presented historical rows as `active` and `odh a22 status`
-  reported an empty feed with no caveat. Worse, the `a22_status` MCP tool
-  description told the model that an empty event feed meant no events were
-  published rather than clear roads, turning a dead feed into positive evidence.
-  `traffic *` and `a22 status` now always report the newest row date they
-  actually received, state that this feed is not a live bulletin, and point at
-  the Content API (`odh call tourism /v1/Announcement --param source=a22 --param
-  rawsort=-LastChange`), which is live. The warnings describe the response in
-  hand rather than asserting an upstream status the CLI cannot check, so they
-  stay true if the feed comes back. See issue #7.
-- **Upstream HTTP errors are no longer swallowed.** `GetCached` discarded the
-  error from a non-2xx response, so an upstream 400 with an error body was
-  parsed as if it were data: `odh mobility stations --where bogus` exited 0 with
-  `count: 0` while `odh call` correctly exited 1. Failed responses are also kept
-  out of the cache.
-- **`odh datasets guide` no longer emits commands that fail to parse.** The
-  v0.4.0 flagship printed next steps using `--json` on JSON-default commands and
-  a `--day` flag that does not exist, so following its advice exited 2 at step
-  one. The JSON-default commands now accept `--json` as a no-op, `--day` is
-  `--date`, and a test dry-parses every command string the guide can emit.
-- **`--limit` truncation is always reported.** The warning was gated on
-  `limit < 1000` while the default limit is exactly 1000, so the default case
-  never warned: `mobility datatypes --station-type TrafficSensor` reported 4 of
-  92 rows silently. `mobility origins`, `stations`, `events` and the `traffic`
-  commands now warn whenever a result fills `--limit`, and say that further rows
-  *may* exist rather than claiming rows were seen and dropped.
-- **The weekly upstream canary can now fail.** It asserted reachability and
-  output strings, so a feed frozen for ten months passed green every week. It
-  now checks that live feeds (Mobility availability, GTFS realtime) are actually
-  fresh, that the dead-feed disclosure is still emitted, that the guide's
-  commands parse, and it reports if the dead feed ever starts publishing again.
-- Agent-facing docs and the published skill were rewritten where they still
-  described the event feed as current or live.
+- `traffic *`, `a22 status`, and `mobility events` now report the newest row
+  date they received and warn that the Mobility Timeseries event feed is not a
+  live bulletin, so an empty or stale result is not evidence that roads are
+  clear. They point at the live Content API alternative,
+  `odh call tourism /v1/Announcement --param source=a22 --param rawsort=-LastChange`.
+  The same correction was applied to the `mobility_events` and `a22_status` MCP
+  tool descriptions, the agent docs, and the published skill. See issue #7.
+- Fixed `GetCached` swallowing the error from a non-2xx response, which made an
+  upstream 400 parse as data: `odh mobility stations --where bogus` exited 0
+  with `count: 0`. Failed responses are also no longer cached.
+- Fixed `odh datasets guide` printing next-step commands that do not parse.
+  JSON-only commands now accept `--json` as a no-op, `--day` is `--date`, and a
+  test dry-parses every command string the guide can emit.
+- The `--limit` truncation warning was gated on `limit < 1000` while the default
+  limit is 1000, so the default case never warned. `mobility origins`,
+  `stations`, `datatypes`, `events` and the `traffic` commands now warn whenever
+  a result fills `--limit`, including the default.
+- The weekly upstream smoke workflow now checks that the live feeds (Mobility
+  availability, GTFS realtime) are actually fresh, that the event-feed caveat is
+  still emitted, and that the guide's commands parse, instead of only checking
+  reachability and output strings.
 
 ## v0.4.0 - 2026-06-26
 

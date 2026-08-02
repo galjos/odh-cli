@@ -2029,8 +2029,6 @@ func TestRunMobilityEventsWarnsAboutTimeseriesEventFeed(t *testing.T) {
 			if decoded.Count != 1 {
 				t.Fatalf("expected the event feed to return rows, got %#v", decoded)
 			}
-			// Rows are present, so the caveat must still be there: the caller
-			// cannot tell a live feed from a stale one without the row date.
 			if !containsWarning(decoded.Warnings, tt.wantNewestRowDated) ||
 				!containsWarning(decoded.Warnings, "not a live bulletin") {
 				t.Fatalf("expected timeseries event feed warning, got %#v", decoded.Warnings)
@@ -2650,8 +2648,8 @@ func TestRunA22StatusWarnsAboutFrozenEventFeedEvenWithRows(t *testing.T) {
 	if decoded.Events.Count != 1 {
 		t.Fatalf("expected the event feed to return rows, got %#v", decoded)
 	}
-	// The warning must report the age of what actually arrived, not assert a
-	// feed status the CLI never checks.
+	// Asserting the date, not a fixed sentence: the warning must report the age of
+	// what arrived rather than assert a feed status the CLI never checks.
 	if !containsWarning(decoded.Warnings, "the newest row in this Mobility Timeseries event response is dated 2026-05-16") ||
 		!containsWarning(decoded.Warnings, "not a live bulletin") {
 		t.Fatalf("expected frozen event feed warning, got %#v", decoded.Warnings)
