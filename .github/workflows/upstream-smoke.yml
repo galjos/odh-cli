@@ -2,12 +2,10 @@
 #
 # SPDX-License-Identifier: CC0-1.0
 
-# This canary exists because it used to pass every week while the A22 /
-# PROVINCE_BZ Timeseries event feed was frozen (newest row 2025-10-13, A22
-# returning zero rows), until an Open Data Hub employee mailed about it: issue
-# #7. Reachability and output strings are not enough. Every step below asserts
-# something that can actually go red, and every threshold was measured against
-# real upstream data rather than guessed.
+# Every step must assert something that can actually go red. Checking only
+# reachability and output strings let the A22 / PROVINCE_BZ Timeseries event feed
+# (frozen at 2025-10-13) pass this canary weekly for ten months (issue #7). Thresholds below
+# are measured against real upstream data, not guessed.
 
 name: Upstream smoke
 
@@ -47,8 +45,7 @@ jobs:
           set -euo pipefail
           GUARDS='TestDatasetCatalogCommandStringsParse|TestMobilityDatatypeHintCommandStringParses'
           # `go test -run` exits 0 with "[no tests to run]" when the pattern matches
-          # nothing, so a rename would silently delete this check instead of failing
-          # it. Confirm both guards exist before trusting their result.
+          # nothing, so confirm both guards exist before trusting their result.
           found=$(go test ./internal/commands -list "$GUARDS" | grep -c '^Test' || true)
           if [ "$found" -ne 2 ]; then
             echo "::error::the guard tests for datasets guide are missing (matched $found of 2)."
@@ -58,8 +55,7 @@ jobs:
           fi
           if ! go test ./internal/commands -run "$GUARDS" -count=1; then
             echo "::error::odh datasets guide is emitting a command the CLI cannot parse."
-            echo "The step above only checks that the guide prints certain strings; this one checks the"
-            echo "strings are runnable. That gap is how bug #5 shipped in v0.4.0 and survived this canary."
+            echo "The step above only checks that the guide prints certain strings; this one checks they run."
             echo "The failing command is named in the subtest above; fix datasetCatalog() or"
             echo "datasetGuideFor() in internal/commands/datasets.go, or the flag the target command lost."
             exit 1
@@ -79,11 +75,9 @@ jobs:
           python3 - parking-free-latest.json <<'PY'
           import datetime, json, sys
 
-          # Window and floor come from measurement, not taste. Sampled at the 13 most
-          # recent Monday 05:43 UTC cron instants via the Mobility history endpoint
-          # (/v2/flat/ParkingStation/free/{from}/{to}): the newest row was always
-          # 0.0-0.5 minutes old and 12-57 distinct stations had reported in the prior 6h.
-          # 6h is ~700x the observed lag; a floor of 5 sits well under the worst week.
+          # Baseline measured over the last 13 Monday cron instants via
+          # /v2/flat/ParkingStation/free/{from}/{to}; see the Baseline: print below.
+          # 6h is ~700x the observed lag, and a floor of 5 sits under the worst week.
           WINDOW_HOURS = 6.0
           LEAK_TOLERANCE_HOURS = 0.5
           MIN_STATIONS = 5
@@ -95,9 +89,8 @@ jobs:
 
 
           def parse(value):
-              # Both formats are hardcoded, so a Mobility timestamp change lands here as a
-              # bare strptime traceback with no ::error:: line and nothing naming this file.
-              # The run still fails either way; this only makes the failure actionable.
+              # Both formats are hardcoded, so name the field and this file rather than
+              # letting a Mobility timestamp change surface as a bare strptime traceback.
               fmt = "%Y-%m-%d %H:%M:%S.%f%z" if "." in value else "%Y-%m-%d %H:%M:%S%z"
               try:
                   return datetime.datetime.strptime(value, fmt)
@@ -137,7 +130,7 @@ jobs:
               print("Either upstream froze -- check")
               print("https://mobility.api.opendatahub.com/v2/flat/ParkingStation/free/latest?limit=-1 and mail")
               print("help@opendatahub.com as with issue #7 -- or --fresh-within/--sort regressed in")
-              print("internal/commands/mobility.go. This is the freeze detector the traffic-event feed never had.")
+              print("internal/commands/mobility.go.")
               sys.exit(1)
 
           print("OK: %d ParkingStation 'free' stations reported inside %gh; newest row is %.1f min old."
@@ -151,11 +144,9 @@ jobs:
           python3 - gtfs-trip-updates.json <<'PY'
           import datetime, json, sys
 
-          # The GTFS-RT producer stamps a fresh header every 30s (measured: three
-          # consecutive polls 30s apart, all three feeds sharing one header time). 6h is
-          # ~700x that cadence. Only the header is asserted, never entity_count:
-          # service-alerts sits at zero entities for hours with a perfectly fresh header,
-          # so an entity-count assertion would cry wolf.
+          # Measured cadence: a fresh header every 30s, so 6h is ~700x that. Only the
+          # header is asserted, never entity_count: service-alerts sits at zero entities
+          # for hours with a perfectly fresh header, so that assertion would cry wolf.
           WINDOW_HOURS = 6.0
 
           with open(sys.argv[1], encoding="utf-8") as handle:
@@ -195,9 +186,8 @@ jobs:
           python3 - traffic-today.json a22-status.json <<'PY'
           import json, sys
 
-          # Fragments timeseriesEventFeedWarning() emits on BOTH of its branches, so this
-          # keeps working whether the feed returns dated rows ("traffic today") or nothing
-          # at all ("a22 status"). Do not tighten to one branch's wording.
+          # Fragments timeseriesEventFeedWarning() emits on BOTH branches, dated rows and
+          # no rows. Do not tighten these to one branch's wording.
           COMMON = [
               "Mobility Timeseries event",
               "evidence that roads are clear, so cross-check current notices with:",
@@ -228,8 +218,7 @@ jobs:
                   print("OK: %s -> %s" % (label, match))
 
           if failed:
-              print("The A22/PROVINCE_BZ Timeseries event feed is still dead (see the recovery step), so this caveat")
-              print("must stay. It comes from timeseriesEventFeedWarning() in internal/commands/traffic.go, wired in")
+              print("The caveat comes from timeseriesEventFeedWarning() in internal/commands/traffic.go, wired in")
               print("at normalizeTrafficEvents (traffic.go) and a22 status (mobility.go). Restore it, or -- if the")
               print("feed really did recover -- update the recovery step in this workflow in the same change.")
               sys.exit(1)
@@ -252,16 +241,14 @@ jobs:
           import datetime, json, sys
 
           # Raw upstream on purpose: this step must answer "did the feed restart?"
-          # independently of anything the CLI does to the data. 30 days is the same
-          # staleness boundary trafficEventStale() uses, and the feed is ~292 days
-          # stale today, so there is roughly 10x headroom before this can flip.
+          # independently of anything the CLI does. It hard-fails rather than warns so
+          # a restart cannot pass green. 30 days is trafficEventStale()'s own boundary;
+          # the feed is ~292 days stale as of 2026-08, so ~10x headroom before it flips.
           STALE_DAYS = 30
           now = datetime.datetime.now(datetime.timezone.utc)
 
 
           def parse(value):
-              # Same hardcoded formats as the freshness step, so the same failure mode: name
-              # the field and this file instead of leaving a bare strptime traceback.
               fmt = "%Y-%m-%d %H:%M:%S.%f%z" if "." in value else "%Y-%m-%d %H:%M:%S%z"
               try:
                   return datetime.datetime.strptime(value, fmt)
@@ -295,13 +282,10 @@ jobs:
               print("::error::RECOVERY: the Mobility Timeseries event feed is producing current rows again.")
               for line in recovered:
                   print("  - %s" % line)
-              print("This failure is good news, not a break. It is a hard failure rather than a warning")
-              print("annotation on purpose: a warning leaves the run green, and a green run is exactly what")
-              print("hid the original freeze for ten months. The repo currently tells users this feed is dead")
-              print("-- timeseriesEventFeedWarning() in internal/commands/traffic.go, the traffic and a22 docs,")
-              print("and issue #7 -- so a restart makes shipped claims false and needs a code change.")
-              print("Confirm it is a real restart and not a one-off backfill, then update those claims and")
-              print("raise STALE_DAYS here so the canary goes green on the new reality.")
+              print("This failure is good news, not a break: the repo tells users this feed is dead, so a")
+              print("restart makes shipped claims false. Confirm it is a real restart and not a one-off")
+              print("backfill, then update timeseriesEventFeedWarning() in internal/commands/traffic.go and")
+              print("the traffic and a22 docs, and raise STALE_DAYS here.")
               sys.exit(1)
 
           print("Timeseries event feed still frozen as expected: A22 rows=%d, PROVINCE_BZ rows=%d newest=%s (%s days old)."

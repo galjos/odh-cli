@@ -208,7 +208,7 @@ These commands read a Mobility Timeseries event feed, not a live bulletin. An em
 
 If a user needs an exact public traffic bulletin, compare the Open Data Hub result with the official traffic service outside this CLI and state both the source and timestamp used. Do not imply that `odh traffic` silently switched to another upstream feed.
 
-Agents should not infer live A22 traffic from `TrafficForecast` rows. Use `odh a22 status` when checking A22 because it keeps the two feeds apart, reports how many event rows came back and how recent the newest one is, and warns when forecast timestamps indicate non-current data. The A22 event feed is a Mobility Timeseries feed, not a live bulletin, so neither an empty nor a stale event result is evidence that the motorway is clear. It defaults to a compact table; add `--json --raw` when raw upstream rows are needed.
+Agents should not infer live A22 traffic from `TrafficForecast` rows. Use `odh a22 status` when checking A22 because it keeps the two feeds apart, reports how many event rows came back and how recent the newest one is, and warns when forecast timestamps indicate non-current data. The A22 event feed is a Mobility Timeseries feed, not a live bulletin. It defaults to a compact table; add `--json --raw` when raw upstream rows are needed.
 
 If the user asks for current traffic conditions, report the timestamp and feed type used. If the A22 event feed returns no rows, say that the feed returned no data rather than that there are no incidents, and check `odh call tourism /v1/Announcement --param source=a22 --param rawsort=-LastChange` instead of converting forecast rows into live incidents.
 

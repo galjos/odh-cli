@@ -870,11 +870,10 @@ func mobilityDatatypeDiscoveryWarnings(stationType string, summaries []datatypeS
 	return warnings
 }
 
-// mobilityTruncationWarning reports that the result filled --limit exactly, so
-// further rows may exist upstream and were never requested. It fires for the
-// default limit too. It says "may exist" rather than "were not seen" because a
-// full page is also what an upstream with exactly --limit rows looks like: from
-// here the two are indistinguishable.
+// mobilityTruncationWarning reports that the result filled --limit exactly,
+// including the default limit. It says rows "may exist" rather than "were
+// dropped" because a full page is also what an upstream holding exactly --limit
+// rows looks like; from here the two are indistinguishable.
 func mobilityTruncationWarning(verb, noun string, limit, recordCount int, subject string) string {
 	if limit < 1 || recordCount < limit {
 		return ""

@@ -146,8 +146,7 @@ is the number of distinct origins summarized from them. `station_samples` is
 capped at five station codes and is not the full station list.
 
 `warnings` is present only when the upstream result filled `--limit`, including
-the default limit. While that warning is present, treat the origin list as
-possibly incomplete and rerun with a higher `--limit`.
+the default limit; while it is present the origin list may be incomplete.
 
 ## `odh mobility stations --json`
 
@@ -185,11 +184,10 @@ Stable top-level fields:
 
 `events` contains Open Data Hub Mobility event rows and mirrors upstream data.
 
-`warnings` always carries the Mobility Timeseries event feed caveat: this is an
-event feed, not a live bulletin, so neither an empty nor a stale result is
-evidence about current road conditions, and the warning names the Content API
-command to cross-check with. A second entry is added when the result filled
-`--limit`, including the default limit.
+`warnings` is never empty: it always carries the Mobility Timeseries event feed
+caveat, which reports the newest row date received and names the Content API
+command to cross-check current notices with. A second entry is added when the
+result filled `--limit`, including the default limit.
 
 For South Tyrol roadworks and closures, prefer `odh traffic` over this command:
 it deduplicates rows and returns the richer contract documented above.
