@@ -1,0 +1,16 @@
+{
+  "station_type": "ParkingStation",
+  "origin": "skidata",
+  "record_count": 2,
+  "count": 1,
+  "stations": [
+    {
+      "scode": "park-1",
+      "sname": "Park One",
+      "sorigin": "skidata"
+    }
+  ],
+  "warnings": [
+    "returned 2 station rows, which matched --limit=2 exactly; further rows may exist upstream and were not requested, so rerun with a higher --limit when station completeness matters"
+  ]
+}

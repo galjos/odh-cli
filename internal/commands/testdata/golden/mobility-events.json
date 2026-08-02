@@ -1,0 +1,16 @@
+{
+  "origin": "PROVINCE_BZ",
+  "latest": true,
+  "count": 1,
+  "events": [
+    {
+      "evcategory": "SPERRE",
+      "evtransactiontime": "2024-03-28 09:00:00.000+0100",
+      "evuuid": "badia-closure"
+    }
+  ],
+  "warnings": [
+    "the newest row in this Mobility Timeseries event response is dated 2024-03-28; this feed is not a live bulletin, and neither a stale nor an empty result is evidence that roads are clear, so cross-check current notices with: odh call tourism /v1/Announcement --param source=PROVINCE_BZ --param rawsort=-LastChange",
+    "returned 1 event rows, which matched --limit=1 exactly; further rows may exist upstream and were not requested, so rerun with a higher --limit when event completeness matters"
+  ]
+}

@@ -95,8 +95,17 @@ jobs:
 
 
           def parse(value):
+              # Both formats are hardcoded, so a Mobility timestamp change lands here as a
+              # bare strptime traceback with no ::error:: line and nothing naming this file.
+              # The run still fails either way; this only makes the failure actionable.
               fmt = "%Y-%m-%d %H:%M:%S.%f%z" if "." in value else "%Y-%m-%d %H:%M:%S%z"
-              return datetime.datetime.strptime(value, fmt)
+              try:
+                  return datetime.datetime.strptime(value, fmt)
+              except ValueError as exc:
+                  print("::error::could not parse an mvalidtime (%s); it matches neither format "
+                        "this workflow parses - check whether the Mobility timestamp format "
+                        "changed, and update the parser here." % exc)
+                  sys.exit(1)
 
 
           dated = sorted((now - parse(r["mvalidtime"])).total_seconds() / 3600.0
@@ -251,8 +260,16 @@ jobs:
 
 
           def parse(value):
+              # Same hardcoded formats as the freshness step, so the same failure mode: name
+              # the field and this file instead of leaving a bare strptime traceback.
               fmt = "%Y-%m-%d %H:%M:%S.%f%z" if "." in value else "%Y-%m-%d %H:%M:%S%z"
-              return datetime.datetime.strptime(value, fmt)
+              try:
+                  return datetime.datetime.strptime(value, fmt)
+              except ValueError as exc:
+                  print("::error::could not parse an evtransactiontime (%s); it matches neither format "
+                        "this workflow parses - check whether the Mobility timestamp format "
+                        "changed, and update the parser here." % exc)
+                  sys.exit(1)
 
 
           def load(path):
