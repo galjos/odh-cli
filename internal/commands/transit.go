@@ -1066,16 +1066,24 @@ func (r *Runner) fetchGTFSArchive(ctx context.Context, dataset, cacheDir string,
 		fmt.Fprintf(progress, "warning: %s\n", warning)
 		return staleGTFSArchiveInfo(dataset, endpoint, cachePath, warning), nil
 	}
-	fmt.Fprintf(progress, "loading GTFS archive %q from Open Data Hub; this may take up to %s on a cold cache\n", dataset, gtfsDownloadTimeout)
-	downloadCtx, cancel := context.WithTimeout(ctx, gtfsDownloadTimeout)
+	budget := gtfsArchiveBudget(ctx)
+	fmt.Fprintf(progress, "loading GTFS archive %q from Open Data Hub; this may take up to %s on a cold cache\n", dataset, budget)
+	downloadCtx, cancel := context.WithTimeout(ctx, budget)
 	defer cancel()
 	resp, err := r.Client.
-		WithTimeout(gtfsDownloadTimeout+5*time.Second).
+		WithTimeout(budget+5*time.Second).
 		WithRetryPolicy(0, 0).
 		GetWithLimit(downloadCtx, endpoint, maxGTFSArchiveBytes)
 	if err != nil {
 		if ctx.Err() != nil {
-			return gtfsArchiveInfo{}, ctx.Err()
+			if !refresh && cacheUsable(cachePath) {
+				warning := fmt.Sprintf("using stale cached GTFS archive because the command deadline expired: %s", summarizeGTFSDownloadError(ctx.Err()))
+				fmt.Fprintf(progress, "warning: %s\n", warning)
+				return staleGTFSArchiveInfo(dataset, endpoint, cachePath, warning), nil
+			}
+			return gtfsArchiveInfo{}, fmt.Errorf(
+				"download GTFS archive %q ran out of time after %s: %w. The archive is tens of megabytes and nothing is cached at %s yet; raise the budget with --timeout (for example --timeout 10m) and rerun",
+				dataset, budget, ctx.Err(), cachePath)
 		}
 		if !refresh && cacheUsable(cachePath) {
 			warning := fmt.Sprintf("using stale cached GTFS archive because refresh failed: %s", summarizeGTFSDownloadError(err))
@@ -1083,7 +1091,9 @@ func (r *Runner) fetchGTFSArchive(ctx context.Context, dataset, cacheDir string,
 			_ = os.WriteFile(failurePath, []byte(warning+"\n"), 0o644)
 			return staleGTFSArchiveInfo(dataset, endpoint, cachePath, warning), nil
 		}
-		return gtfsArchiveInfo{}, fmt.Errorf("download GTFS archive %q failed: %w", dataset, err)
+		return gtfsArchiveInfo{}, fmt.Errorf(
+			"download GTFS archive %q failed after %s: %s. The archive is tens of megabytes and there is no usable cache at %s yet; raise the budget with --timeout (for example --timeout 10m) and rerun, or pass --cache-dir to reuse an archive you already have",
+			dataset, budget, summarizeGTFSDownloadError(err), cachePath)
 	}
 	tempFile, err := os.CreateTemp(cacheDir, sanitizeCacheName(dataset)+"-*.zip.tmp")
 	if err != nil {
@@ -1103,6 +1113,18 @@ func (r *Runner) fetchGTFSArchive(ctx context.Context, dataset, cacheDir string,
 	}
 	_ = os.Remove(failurePath)
 	return gtfsArchiveInfo{Dataset: dataset, Endpoint: endpoint, Path: cachePath, Cached: false}, nil
+}
+
+// gtfsArchiveBudget is the download budget for the GTFS archive: whatever the
+// caller's deadline allows, or the default when there is none. It used to be a
+// flat 2m, so --timeout 10m was silently cut back — the opposite of what asking
+// for more time should do — and --timeout 3s still announced "up to 2m0s".
+func gtfsArchiveBudget(ctx context.Context) time.Duration {
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		return gtfsDownloadTimeout
+	}
+	return time.Until(deadline)
 }
 
 func defaultTransitCacheDir() (string, error) {
@@ -1166,7 +1188,7 @@ func staleGTFSArchiveInfo(dataset, endpoint, cachePath, warning string) gtfsArch
 func summarizeGTFSDownloadError(err error) string {
 	switch {
 	case errors.Is(err, context.DeadlineExceeded):
-		return fmt.Sprintf("timed out after %s", gtfsDownloadTimeout)
+		return "timed out"
 	case errors.Is(err, context.Canceled):
 		return "request was canceled"
 	default:

@@ -33,13 +33,13 @@ Not included: authenticated write flows, live transit rerouting, historical GTFS
 curl -fsSL https://raw.githubusercontent.com/galjos/odh-cli/main/scripts/install.sh | sh
 ```
 
-The installer detects macOS/Linux and `amd64`/`arm64`, verifies the published SHA-256 checksum, and installs to `~/.local/bin`. Pass `--version v0.4.2 --dir "$HOME/bin"` to pin a version or directory.
+The installer detects macOS/Linux and `amd64`/`arm64`, verifies the published SHA-256 checksum, and installs to `~/.local/bin`. Pass `--version v0.4.3 --dir "$HOME/bin"` to pin a version or directory.
 
 Alternatives:
 
 ```bash
 brew install galjos/odh/odh
-sudo apt install ./odh_v0.4.2_linux_amd64.deb   # from GitHub Releases
+sudo apt install ./odh_v0.4.3_linux_amd64.deb   # from GitHub Releases
 go build -o odh ./cmd/odh                       # from source
 ```
 

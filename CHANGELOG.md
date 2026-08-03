@@ -8,6 +8,30 @@ SPDX-License-Identifier: CC0-1.0
 
 All notable changes to `odh-cli` are documented here.
 
+## v0.4.3 - 2026-08-03
+
+Driven by the 2026-08-03 agent eval round (11 pass, 2 partial, 0 fail),
+recorded in `evals/agent/results/2026-08-03.md`.
+
+- The GTFS archive download now honours `--timeout`. It was pinned to a flat
+  two minutes, so `--timeout 10m` was silently cut back and a cold-cache
+  transit query on a slow link had no way to succeed; this blocked four of
+  thirteen eval attempts. The progress line also announced "up to 2m0s"
+  regardless of the real budget, and running out of time produced a bare
+  `context deadline exceeded`. The failure now names the budget, the cache
+  path and the flag to raise, and falls back to a usable stale cache when
+  one exists.
+- `--json` is accepted on the commands that only ever emit JSON
+  (`diagnostics *`, `mobility events`), and is a real `--format` shortcut on
+  `apis` and `datasets search`, which have a meaningful `--format table`.
+  Round 1 logged this with a recurrence trigger; round 2 hit it five times.
+- The EV availability recipe and skill no longer hardcode `--origin ALPERIA`.
+  That origin's newest measurement is from 2024 and all of its stations are
+  inactive, so following the recipe reported zero chargers from stale data.
+  The recipe discovers the origin instead, at a limit high enough that the
+  truncation warning clears — the old `--limit 1000` returned a single origin
+  and made the domain look like one provider.
+
 ## v0.4.2 - 2026-08-03
 
 - `--limit` no longer silently caps counts on `mobility latest`,
