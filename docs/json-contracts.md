@@ -216,6 +216,10 @@ Stable wrapper fields:
 
 `measurements` contains Open Data Hub Mobility measurement rows.
 
+`count` describes the returned rows, which `--limit` may have capped below the
+number that matched the filters. When it does, `warnings` says how many matched.
+Read that warning before treating `count` as a total.
+
 ## `odh diagnostics *`
 
 Stable common fields:
@@ -255,6 +259,11 @@ Stable common fields:
 - `count`
 - `active_count`
 - `events`
+
+`current_count` and the `current`/`forecast` counts describe the rows returned
+after `--limit`, which can be fewer than matched. `warnings` reports the match
+total whenever the cap binds; unlike `raw_count`, the counts alone cannot reveal
+it.
 
 Treat `verdict: unavailable` as "the checked request does not contain reliable
 current data", not as proof that the real-world domain has zero records.

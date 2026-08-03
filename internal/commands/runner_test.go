@@ -1578,6 +1578,80 @@ func TestRunDiagnosticsEVChargingWarnsWhenNoFreshRows(t *testing.T) {
 	}
 }
 
+func TestRunDiagnosticsEVChargingWarnsWhenLimitCapsCount(t *testing.T) {
+	// The upstream response is not truncated here, so raw_count cannot reveal the
+	// cap: without the warning current_count silently understates the match total.
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v2/flat,node/EChargingStation/number-available/latest" {
+			t.Fatalf("unexpected path %q", r.URL.Path)
+		}
+		_, _ = w.Write([]byte(`{"data":[
+			{"scode":"a","sorigin":"ALPERIA","sactive":true,"mvalidtime":"2999-05-18 09:00:00.000+0000"},
+			{"scode":"b","sorigin":"ALPERIA","sactive":true,"mvalidtime":"2999-05-18 09:01:00.000+0000"},
+			{"scode":"c","sorigin":"ALPERIA","sactive":true,"mvalidtime":"2999-05-18 09:02:00.000+0000"}
+		]}`))
+	}))
+	defer server.Close()
+
+	runner := newTestRunner(t, []apis.API{{Name: "mobility", BaseURL: server.URL, Public: true}})
+	var stdout, stderr bytes.Buffer
+	code := runner.Run(context.Background(), []string{
+		"diagnostics", "ev-charging",
+		"--origin", "ALPERIA",
+		"--fresh-within", "24h",
+		"--request-limit", "100",
+		"--limit", "1",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("Run exit = %d, stderr = %s", code, stderr.String())
+	}
+	var decoded struct {
+		CurrentCount int      `json:"current_count"`
+		RawCount     int      `json:"raw_count"`
+		Warnings     []string `json:"warnings"`
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &decoded); err != nil {
+		t.Fatalf("invalid JSON: %v\n%s", err, stdout.String())
+	}
+	if decoded.CurrentCount != 1 || decoded.RawCount != 3 {
+		t.Fatalf("current_count = %d, raw_count = %d; want 1 and 3", decoded.CurrentCount, decoded.RawCount)
+	}
+	if !containsWarning(decoded.Warnings, "3 rows matched the filters but --limit=1 capped the result at 1") {
+		t.Fatalf("expected the --limit cap warning, got %#v", decoded.Warnings)
+	}
+}
+
+func TestRunDiagnosticsEVChargingOmitsCapWarningWhenLimitDoesNotBind(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"data":[
+			{"scode":"a","sorigin":"ALPERIA","sactive":true,"mvalidtime":"2999-05-18 09:00:00.000+0000"}
+		]}`))
+	}))
+	defer server.Close()
+
+	runner := newTestRunner(t, []apis.API{{Name: "mobility", BaseURL: server.URL, Public: true}})
+	var stdout, stderr bytes.Buffer
+	code := runner.Run(context.Background(), []string{
+		"diagnostics", "ev-charging",
+		"--origin", "ALPERIA",
+		"--fresh-within", "24h",
+		"--request-limit", "100",
+		"--limit", "50",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("Run exit = %d, stderr = %s", code, stderr.String())
+	}
+	var decoded struct {
+		Warnings []string `json:"warnings"`
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &decoded); err != nil {
+		t.Fatalf("invalid JSON: %v\n%s", err, stdout.String())
+	}
+	if containsWarning(decoded.Warnings, "capped the result") {
+		t.Fatalf("cap warning fired when --limit did not bind: %#v", decoded.Warnings)
+	}
+}
+
 func TestRunDiagnosticsParkingForecastsKeepsStaleForecastUnavailable(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {

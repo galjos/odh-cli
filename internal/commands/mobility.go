@@ -989,10 +989,16 @@ func filterMobilityLatest(records []map[string]any, filter mobilityLatestFilter)
 		matched = append(matched, record)
 	}
 	sortMobilityLatest(matched, filter.Sort)
+	matchedBeforeLimit := len(matched)
 	if filter.Limit > 0 && len(matched) > filter.Limit {
 		matched = matched[:filter.Limit]
 	}
 	warnings := make([]string, 0)
+	// Filtering happened locally, so unlike the upstream --limit case this knows
+	// the true total and states it rather than hedging that more "may exist".
+	if matchedBeforeLimit > len(matched) {
+		warnings = append(warnings, fmt.Sprintf("%d rows matched the filters but --limit=%d capped the result at %d; reported counts describe the capped set, not the match total", matchedBeforeLimit, filter.Limit, len(matched)))
+	}
 	if filteredOrigin > 0 {
 		warnings = append(warnings, fmt.Sprintf("%d rows were hidden by --origin", filteredOrigin))
 	}

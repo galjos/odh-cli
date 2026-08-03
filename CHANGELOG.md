@@ -8,6 +8,15 @@ SPDX-License-Identifier: CC0-1.0
 
 All notable changes to `odh-cli` are documented here.
 
+## v0.4.2 - 2026-08-03
+
+- `--limit` no longer silently caps counts on `mobility latest`,
+  `diagnostics ev-charging` and `diagnostics parking-forecasts`. Filtering
+  happens locally there, so the result knows the real match total and now
+  reports it: `diagnostics ev-charging --limit 3` reported `current_count: 3`
+  where 888 rows matched. Same defect v0.4.1 fixed for the discovery commands,
+  missed because the cap lives in a shared helper. Refs #9.
+
 ## v0.4.1 - 2026-08-02
 
 - `traffic *`, `a22 status`, and `mobility events` now report the newest row
