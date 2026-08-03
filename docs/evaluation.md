@@ -60,6 +60,22 @@ including setup, per-task scores, failure analysis, and fix-category
 decisions. The first round is
 [../evals/agent/results/2026-06-10.md](../evals/agent/results/2026-06-10.md).
 
+When a `partial` or `fail` turns on how much the answer should have been
+trusted, name the dimension it failed on:
+
+- `recency` - age of the newest dated row against the feed's own cadence.
+- `coverage` - whether the response saw everything: `--limit` fill, `--request-limit`
+  inspection cap, rows hidden by filters.
+- `feed_semantics` - whether the feed is the kind of thing the question needs:
+  Timeseries event vs live bulletin, forecast vs current, static GTFS vs live.
+- `scope_match` - whether returned rows belong to the geography the question implied.
+- `upstream_health` - HTTP status, retries, cache fallback, `doctor` verdict.
+
+These are reviewer vocabulary for scoring a round. They are deliberately **not**
+CLI output fields and must not become any: see issue #6, which rejected shipping
+them as a `reliability` score. A scalar cannot carry the next command that the
+warnings already name, and it would re-compress exactly what v0.4.1 decompressed.
+
 Record the failed command path and the reason. Then decide the fix category:
 
 - Docs or skill guidance.
