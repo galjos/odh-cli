@@ -107,10 +107,12 @@ odh mobility events --origin A22 --latest --limit 20
 For current availability, discover origin/datatype first, then filter freshness:
 
 ```bash
-odh diagnostics ev-charging --origin ALPERIA --fresh-within 24h
+odh diagnostics ev-charging --origin <ORIGIN> --fresh-within 24h   # <ORIGIN> from mobility origins
 odh diagnostics parking-forecasts --origin "Municipality Merano" --fresh-within 2h --forecast-minutes 60
 odh mobility latest --station-type ParkingStation --data-type free --origin "Municipality Merano" --active --fresh-within 2h --sort newest --request-limit 10000 --limit 10 --format table
 ```
+
+`EChargingStation` carries rows from well outside South Tyrol, and most fresh rows are not local. Check `scoordinate` before turning a count into a local claim.
 
 Raw latest rows can contain stale inactive stations. Surface `warnings`. If diagnostics says `current_only`, report current occupancy but not stale forecasts.
 

@@ -30,7 +30,7 @@ func (r *Runner) newDiagnosticsCmd() *cobra.Command {
 Use diagnostics before making strong claims about EV availability, parking
 forecasts, or Tourism event discovery. These commands return JSON so agents can
 surface warnings instead of hiding upstream data gaps.`,
-		Example: `  odh diagnostics ev-charging --origin ALPERIA --fresh-within 24h
+		Example: `  odh diagnostics ev-charging --origin <ORIGIN> --fresh-within 24h
   odh diagnostics parking-forecasts --origin "Municipality Merano" --fresh-within 2h
   odh diagnostics tourism-events --date 2026-05-18 --limit 20`,
 		RunE: requireSubcommand,
@@ -48,7 +48,7 @@ surface warnings instead of hiding upstream data gaps.`,
 
 This command is intentionally conservative: if no fresh active rows are found,
 do not report stale inactive rows as current charger availability.`,
-		Example: `  odh diagnostics ev-charging --origin ALPERIA --fresh-within 24h
+		Example: `  odh diagnostics ev-charging --origin <ORIGIN> --fresh-within 24h
   odh diagnostics ev-charging --fresh-within 2h --limit 20
   odh diagnostics ev-charging --origin ALPERIA --request-limit 10000`,
 		Args: cobra.NoArgs,
@@ -262,6 +262,10 @@ a precise location.`,
 	tourCmd.Flags().IntVar(&tourLimit, "limit", 20, "number of upstream events to inspect")
 	tourCmd.Flags().IntVar(&tourPage, "page", 1, "page number")
 	tourCmd.Flags().StringArrayVar(&tourParams, "param", nil, "additional query parameter as key=value; repeatable; values may contain commas")
+
+	acceptJSONFlag(evCmd)
+	acceptJSONFlag(parkCmd)
+	acceptJSONFlag(tourCmd)
 
 	cmd.AddCommand(evCmd)
 	cmd.AddCommand(parkCmd)

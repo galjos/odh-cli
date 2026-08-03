@@ -2996,3 +2996,36 @@ func newTestRunner(t *testing.T, entries []apis.API) *Runner {
 		Client:   client.NewWithHTTPClient(http.DefaultClient, "odh-cli-test"),
 	}
 }
+
+// TestJSONOnlyCommandsAcceptJSONFlag pins the round-1 and round-2 eval finding:
+// agents type --json on commands that only ever emit JSON, and an exit-2 there
+// costs them a step for nothing. Round 1 logged it with a recurrence trigger;
+// round 2 hit it five times.
+func TestJSONOnlyCommandsAcceptJSONFlag(t *testing.T) {
+	for _, command := range []string{
+		"odh apis --json",
+		"odh datasets search parking --json",
+		"odh diagnostics ev-charging --json",
+		"odh diagnostics parking-forecasts --json",
+		"odh diagnostics tourism-events --json",
+		"odh mobility events --origin A22 --json",
+		"odh mobility origins --station-type ParkingStation --json",
+		"odh mobility stations --station-type ParkingStation --json",
+		"odh gtfs datasets --json",
+		"odh gtfs realtime --dataset sta-time-tables --feed trip-updates --json",
+	} {
+		assertCommandStringParses(t, command)
+	}
+}
+
+// The two commands above that do have a meaningful --format table must treat
+// --json as a shortcut, not as an ignored flag, so that --format table keeps
+// producing a table.
+func TestFormatTableStillWorksWhereJSONIsAShortcut(t *testing.T) {
+	for _, command := range []string{
+		"odh apis --format table",
+		"odh datasets search parking --format table",
+	} {
+		assertCommandStringParses(t, command)
+	}
+}

@@ -126,10 +126,10 @@
       "question_pattern": "Find current EV charging availability without stale inactive stations.",
       "commands": [
         "odh datasets guide \"ev charging availability\" --format json",
-        "odh mobility origins --station-type EChargingStation --limit 1000",
-        "odh mobility datatypes --station-type EChargingStation --origin ALPERIA --limit 1000 --json",
-        "odh diagnostics ev-charging --origin ALPERIA --fresh-within 24h --request-limit 10000 --limit 10",
-        "odh mobility latest --station-type EChargingStation --data-type number-available --origin ALPERIA --active --fresh-within 24h --sort newest --request-limit 10000 --limit 10 --json"
+        "odh mobility origins --station-type EChargingStation --limit 30000",
+        "odh mobility datatypes --station-type EChargingStation --origin <ORIGIN> --limit 30000 --json",
+        "odh diagnostics ev-charging --origin <ORIGIN> --fresh-within 24h --request-limit 40000 --limit 10",
+        "odh mobility latest --station-type EChargingStation --data-type number-available --origin <ORIGIN> --active --fresh-within 24h --sort newest --request-limit 40000 --limit 10 --json"
       ],
       "parse": [
         "verdict",
@@ -137,6 +137,9 @@
         "warnings[]"
       ],
       "caveats": [
+        "Take <ORIGIN> from step 2. Do not assume one: raise --limit until the truncation warning clears, because a low limit can report a single-origin world for this station type.",
+        "A catalogued origin is not proof of fresh rows. Check the diagnostics verdict before using one; some origins publish only inactive or long-stale measurements.",
+        "This station type carries rows from outside South Tyrol. Check scoordinate before making a local claim.",
         "Fresh active filtered-zero output is not proof that the entire upstream domain has no chargers.",
         "Surface request-limit and stale-row warnings."
       ]

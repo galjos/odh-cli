@@ -190,11 +190,13 @@ func isUsageError(err error) bool {
 
 func (r *Runner) newAPIsCmd() *cobra.Command {
 	var format string
+	var jsonFlag bool
 	cmd := &cobra.Command{
 		Use:   "apis",
 		Short: "List known Open Data Hub APIs",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			applyJSONShortcut(&format, jsonFlag)
 			switch format {
 			case "json":
 				return output.WriteJSON(cmd.OutOrStdout(), map[string]any{"apis": r.Registry.List()})
@@ -210,6 +212,7 @@ func (r *Runner) newAPIsCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&format, "format", "json", "output format: json or table")
+	cmd.Flags().BoolVar(&jsonFlag, "json", false, "shortcut for --format json")
 	return cmd
 }
 

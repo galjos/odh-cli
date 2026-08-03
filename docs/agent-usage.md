@@ -69,8 +69,8 @@ odh transit delay-stats --from auer --to brenner --time 14:05 --weekday saturday
 odh traffic today --area ueberetsch-unterland --type roadworks --format table
 odh traffic events --area bozen-unterland --from 2026-05-16 --to 2026-05-16 --json
 odh traffic today --near 46.42,11.25 --radius 15km --json
-odh mobility latest --station-type EChargingStation --data-type number-available --origin ALPERIA --active --fresh-within 24h --sort newest --request-limit 1000 --limit 5 --format table
-odh diagnostics ev-charging --origin ALPERIA --fresh-within 24h
+odh mobility latest --station-type EChargingStation --data-type number-available --origin <ORIGIN> --active --fresh-within 24h --sort newest --request-limit 40000 --limit 5 --format table
+odh diagnostics ev-charging --origin <ORIGIN> --fresh-within 24h
 odh diagnostics parking-forecasts --origin "Municipality Merano" --fresh-within 2h
 odh diagnostics tourism-events --date 2026-05-18
 odh a22 status --limit 10
@@ -117,9 +117,9 @@ For current EV charging, parking, or similar availability questions, avoid parsi
 Use discovery first, then filtered latest measurements:
 
 ```bash
-odh mobility origins --station-type EChargingStation --limit 1000
-odh mobility datatypes --station-type EChargingStation --origin ALPERIA --limit 1000
-odh mobility latest --station-type EChargingStation --data-type number-available --origin ALPERIA --active --fresh-within 24h --sort newest --request-limit 1000 --limit 10 --format table
+odh mobility origins --station-type EChargingStation --limit 30000
+odh mobility datatypes --station-type EChargingStation --origin <ORIGIN> --limit 30000
+odh mobility latest --station-type EChargingStation --data-type number-available --origin <ORIGIN> --active --fresh-within 24h --sort newest --request-limit 40000 --limit 10 --format table
 ```
 
 The filtered `mobility latest` JSON output wraps measurements with `raw_count`, `count`, and `warnings`; the table/markdown output shows station, value, valid time, origin, and warnings. Report warnings when filters hide stale or inactive rows, and increase `--request-limit` when a question needs broader coverage than the inspected upstream rows. If a common datatype guess is wrong, for example `ParkingStation/number-free`, the CLI may print a hint such as using `free`.
@@ -131,7 +131,7 @@ For datatype discovery, prefer `--limit 1000` when an answer depends on complete
 Before answering EV availability, parking forecast, or Tourism event-discovery questions, run the matching diagnostic command:
 
 ```bash
-odh diagnostics ev-charging --origin ALPERIA --fresh-within 24h
+odh diagnostics ev-charging --origin <ORIGIN> --fresh-within 24h
 odh diagnostics parking-forecasts --origin "Municipality Merano" --fresh-within 2h --forecast-minutes 60
 odh diagnostics tourism-events --date 2026-05-18 --limit 20
 ```

@@ -54,11 +54,13 @@ func (r *Runner) newDatasetsCmd() *cobra.Command {
 
 	var searchDomain string
 	var searchFormat string
+	var searchJSON bool
 	searchCmd := &cobra.Command{
 		Use:   "search <query>",
 		Short: "Search the curated dataset catalog",
 		Args:  cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			applyJSONShortcut(&searchFormat, searchJSON)
 			query := strings.Join(args, " ")
 			entries := filterDatasetsByDomain(datasetCatalog(), searchDomain)
 			entries = filterDatasetsByQuery(entries, query)
@@ -67,6 +69,7 @@ func (r *Runner) newDatasetsCmd() *cobra.Command {
 	}
 	searchCmd.Flags().StringVar(&searchDomain, "domain", "", "optional domain filter, for example tourism or mobility")
 	searchCmd.Flags().StringVar(&searchFormat, "format", "json", "output format: json or table")
+	searchCmd.Flags().BoolVar(&searchJSON, "json", false, "shortcut for --format json")
 
 	var guideDomain string
 	var guideFormat string

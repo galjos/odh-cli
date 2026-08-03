@@ -351,6 +351,7 @@ because it deduplicates records and surfaces stale-data warnings.`,
 			})
 		},
 	}
+	acceptJSONFlag(eventsCmd)
 	eventsCmd.Flags().StringVar(&eventsOrigin, "origin", "", "event origin, for example A22")
 	eventsCmd.Flags().BoolVar(&eventsLatest, "latest", true, "request latest events")
 	eventsCmd.Flags().StringVar(&eventsRepresentation, "representation", "flat", "API representation")
