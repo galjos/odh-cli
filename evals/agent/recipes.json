@@ -66,6 +66,32 @@
       ]
     },
     {
+      "id": "traffic-current-content-bulletin",
+      "question_pattern": "Current South Tyrol road notices, when the Mobility Timeseries event feed is stale or empty.",
+      "commands": [
+        "odh traffic today --source content --json",
+        "odh traffic today --source content --type closure --json",
+        "odh traffic today --source content --near <lat>,<lon> --radius 15km --json",
+        "odh traffic search <text> --today --source content --json"
+      ],
+      "parse": [
+        "events[].type",
+        "events[].subtype",
+        "events[].place",
+        "events[].start",
+        "events[].end",
+        "events[].active",
+        "warnings[]"
+      ],
+      "caveats": [
+        "Source is the Content API /v1/Announcement PROVINCE_BZ bulletin, not the Mobility Timeseries event feed.",
+        "zone_id, road and severity are never populated here; an empty value means the field is unavailable, not absent.",
+        "--zone-id, --area, --road and --type bike are rejected with exit code 2; narrow with --near or --search instead, and say which was used.",
+        "An empty end means the announcement is still open; already-ended ones are hidden unless --include-expired is passed.",
+        "A stale flag here only means unchanged for 30 days, which is normal for long-running restrictions."
+      ]
+    },
+    {
       "id": "transit-current-journey",
       "question_pattern": "Plan a current public-transport journey with possible transfers.",
       "commands": [

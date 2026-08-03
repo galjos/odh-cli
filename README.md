@@ -19,7 +19,7 @@ This is a community project, not affiliated with or endorsed by NOI Techpark or 
 - Discovery: known APIs, curated dataset catalog, guided dataset/source paths, OpenAPI specs, Tourism taxonomies, Mobility station/event/edge types, origins, and data types.
 - Raw access: call any registered API path with query parameters.
 - Mobility: stations, latest time-series measurements with active/freshness/sorting filters for availability questions.
-- Traffic: deduplicated South Tyrol roadworks, closures, and road events from `PROVINCE_BZ` with zone discovery, date filtering, text search, and stale-record warnings; A22 event/forecast inspection with explicit caveats.
+- Traffic: deduplicated South Tyrol roadworks, closures, and road events from `PROVINCE_BZ` with zone discovery, date filtering, text search, and stale-record warnings; `--source content` reads the Content API road bulletin instead, and rejects the filters that feed cannot answer; A22 event/forecast inspection with explicit caveats.
 - Transit: GTFS datasets, live GTFS-RT feeds, stop search, departures, direct trips, and static transfer-journey planning with optional realtime annotations.
 - Data quality: diagnostics verdicts for EV charging availability, parking forecasts, and Tourism events before answering from those areas.
 - Robustness: bounded retries, 24h caching of static-ish discovery responses, global `--timeout`, provenance and warning fields on curated JSON output.

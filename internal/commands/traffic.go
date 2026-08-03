@@ -104,10 +104,16 @@ func (r *Runner) newTrafficCmd() *cobra.Command {
 
 Use these commands for roadworks, closures, road events, bike notices, and
 traffic notices before falling back to raw mobility event calls. Results are
-deduplicated and stale open-ended rows are hidden by default.`,
+deduplicated and stale open-ended rows are hidden by default.
+
+--source odh reads the Mobility Timeseries event feed and supports --zone-id,
+--area and --road. --source content reads the Content API Announcement road
+bulletin, which is the feed the province still updates, but which carries no
+zone, road, or severity fields.`,
 		Example: `  odh traffic zones
   odh traffic categories
   odh traffic today --area ueberetsch-unterland --type roadworks
+  odh traffic today --source content --json
   odh traffic search badia --today --json`,
 		RunE: requireSubcommand,
 	}
@@ -174,9 +180,13 @@ deduplicated and stale open-ended rows are hidden by default.`,
 		Long: `Query traffic events active today from Open Data Hub PROVINCE_BZ.
 
 Use --area, --zone-id, --road, --type, or --near to narrow the answer. The
-default table is meant for humans; use --json for agents and scripts.`,
+default table is meant for humans; use --json for agents and scripts.
+
+--source content queries the Content API Announcement bulletin instead, where
+--zone-id, --area and --road are rejected because the feed cannot answer them.`,
 		Example: `  odh traffic today --area ueberetsch-unterland --type roadworks
   odh traffic today --near 46.42,11.25 --radius 15km --json
+  odh traffic today --source content --type closure --json
   odh --timeout 20s traffic today --area bozen-unterland --format markdown`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -206,6 +216,7 @@ default table is meant for humans; use --json for agents and scripts.`,
 If neither --from nor --to is set, the command defaults to today.`,
 		Example: `  odh traffic events --from 2026-05-16 --to 2026-05-16 --area bozen-unterland --json
   odh traffic events --road SP13 --type closure --format table
+  odh traffic events --source content --from 2026-08-01 --to 2026-08-03 --json
   odh traffic events --zone-id 4 --include-stale --json`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -244,6 +255,7 @@ By default, search checks today's events. Add --from/--to for a different date
 range or --include-stale when you explicitly want hidden open-ended rows.`,
 		Example: `  odh traffic search badia --today --json
   odh traffic search "St. Pauls" --from 2026-05-16 --to 2026-05-16 --include-stale
+  odh traffic search radroute --today --source content --json
   odh traffic search neustift --zone-id 6 --type closure --format table`,
 		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -282,7 +294,7 @@ range or --include-stale when you explicitly want hidden open-ended rows.`,
 }
 
 func addTrafficCobraFlags(cmd *cobra.Command, query *trafficQuery) {
-	cmd.Flags().StringVar(&query.Source, "source", "odh", "traffic source: odh")
+	cmd.Flags().StringVar(&query.Source, "source", "odh", "traffic source: odh (Mobility Timeseries events) or content (Content API Announcement bulletin)")
 	cmd.Flags().StringVar(&query.ZoneID, "zone-id", "", "ODH PROVINCE_BZ messageZoneId filter, for example 6")
 	cmd.Flags().StringVar(&query.Area, "area", "", "area alias, for example ueberetsch-unterland")
 	cmd.Flags().StringVar(&query.Type, "type", "all", "type filter: all, roadworks, closure, event, traffic, mountain-pass, bike, or radar")
@@ -311,8 +323,14 @@ func finalizeTrafficFlags(query trafficQuery) (trafficQuery, error) {
 }
 
 func (r *Runner) runTrafficQueryCobra(ctx context.Context, query trafficQuery, stdout, stderr io.Writer) error {
-	if source := strings.ToLower(strings.TrimSpace(query.Source)); source != "" && source != "odh" {
-		return fmt.Errorf("unsupported traffic source %q; supported source: odh", query.Source)
+	source, err := normalizeTrafficSource(query.Source)
+	if err != nil {
+		return err
+	}
+	if source == trafficSourceContent {
+		if err := rejectUnsupportedContentTrafficFlags(query); err != nil {
+			return err
+		}
 	}
 	if strings.TrimSpace(query.Near) != "" {
 		if _, _, _, err := parseNearRadius(query.Near, query.Radius); err != nil {
@@ -334,6 +352,9 @@ func (r *Runner) runTrafficQueryCobra(ctx context.Context, query trafficQuery, s
 	}
 	if _, err := normalizeTrafficTypeFilter(query.Type); err != nil {
 		return err
+	}
+	if source == trafficSourceContent {
+		return r.runContentTrafficQueryCobra(ctx, query, fromDay, toDay, stdout)
 	}
 	return r.runODHTrafficQueryCobra(ctx, query, area, fromDay, toDay, stdout, stderr)
 }
@@ -772,7 +793,21 @@ func trafficSearchAlternatives(term string) []string {
 }
 
 func trafficNoMatchesWarning(query trafficQuery, area trafficArea, hiddenStaleOpenEndedCount int) string {
-	parts := make([]string, 0, 5)
+	parts := trafficFilterParts(query, area)
+	if len(parts) == 0 {
+		return ""
+	}
+	warning := "no current ODH PROVINCE_BZ traffic events matched " + strings.Join(parts, ", ") + " in the selected date range"
+	if hiddenStaleOpenEndedCount > 0 {
+		warning += "; stale open-ended matches may exist, rerun with --include-stale to inspect them"
+	}
+	return warning
+}
+
+// trafficFilterParts describes the narrowing filters a query applied, so an
+// empty result can name what it was narrowed by.
+func trafficFilterParts(query trafficQuery, area trafficArea) []string {
+	parts := make([]string, 0, 6)
 	if search := strings.TrimSpace(query.Search); search != "" {
 		parts = append(parts, fmt.Sprintf("search %q", search))
 	}
@@ -791,14 +826,7 @@ func trafficNoMatchesWarning(query trafficQuery, area trafficArea, hiddenStaleOp
 	if near := strings.TrimSpace(query.Near); near != "" {
 		parts = append(parts, "near "+near)
 	}
-	if len(parts) == 0 {
-		return ""
-	}
-	warning := "no current ODH PROVINCE_BZ traffic events matched " + strings.Join(parts, ", ") + " in the selected date range"
-	if hiddenStaleOpenEndedCount > 0 {
-		warning += "; stale open-ended matches may exist, rerun with --include-stale to inspect them"
-	}
-	return warning
+	return parts
 }
 
 func eventActiveInRange(event trafficEvent, fromDay, toDay time.Time) bool {
@@ -877,7 +905,7 @@ func announcementSourceForOrigin(origin string) string {
 	if strings.EqualFold(strings.TrimSpace(origin), "a22") {
 		return "a22"
 	}
-	return "PROVINCE_BZ"
+	return announcementTrafficSource
 }
 
 func trafficEventStale(event trafficEvent, now time.Time) bool {

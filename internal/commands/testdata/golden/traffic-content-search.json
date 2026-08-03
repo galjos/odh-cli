@@ -1,0 +1,36 @@
+{
+  "source": "content",
+  "source_detail": "Open Data Hub Tourism Content API /v1/Announcement PROVINCE_BZ road bulletin",
+  "endpoint": "https://example.test/v1/Announcement?begin=RANGE&end=RANGE&pagenumber=1&pagesize=1000&rawsort=-LastChange&source=PROVINCE_BZ",
+  "from": "2026-05-16",
+  "to": "2026-05-16",
+  "type": "all",
+  "search": "radroute",
+  "raw_count": 4,
+  "count": 1,
+  "events": [
+    {
+      "id": "urn:announcements:provincebz:running-closure",
+      "message_id": "2911003",
+      "source": "content",
+      "type": "closure",
+      "subtype": "closure,hindrance",
+      "place": "Die Radroute Nr. 1 Bozen-Salurn ist zwischen Laag und Kurtinig GESPERRT.",
+      "place_it": "La ciclabile n. 1 Bolzano-Salorno è CHIUSA tra Laghetti e Cortina.",
+      "start": "2026-05-14T22:00:00Z",
+      "end": "2999-08-30T00:00:00Z",
+      "published_at": "2999-05-15T09:40:00.5968609+00:00",
+      "transaction_time": "2999-05-15T09:40:00.5968609+00:00",
+      "coordinates": [
+        11.903,
+        46.61
+      ],
+      "active": true,
+      "stale": false
+    }
+  ],
+  "warnings": [
+    "this source cannot populate zone_id, zone, zone_it, road, road_name, severity, or series_id; an empty value there means the Content API does not carry the field, not that the event has no zone, road, or severity",
+    "source is the Open Data Hub Content API /v1/Announcement feed for PROVINCE_BZ; compare with the official traffic service before presenting this as a complete live road bulletin"
+  ]
+}

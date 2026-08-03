@@ -8,6 +8,28 @@ SPDX-License-Identifier: CC0-1.0
 
 All notable changes to `odh-cli` are documented here.
 
+## Unreleased
+
+- `odh traffic today|events|search` accept `--source content`, which answers
+  from the Content API `/v1/Announcement` road bulletin instead of the Mobility
+  Timeseries event feed. v0.4.1 made the CLI disclose that the Timeseries feed
+  is not a live bulletin; this gives users a way to get the current data. The
+  provincial bulletin is only published there now. Refs #10.
+  - Supported filters: `--from`/`--to`/`--today`, `--near`/`--radius`,
+    `--search`, `--type`, `--limit`, `--include-expired`.
+  - `--zone-id`, `--area`, `--road` and `--type bike` are
+    rejected with exit code 2 naming the flag and the reason. Announcements
+    carry no zone id or severity, name the road only inside free text, and have
+    no cycle-route or speed-control tag, so applying those filters would return
+    fewer matches than asked for and read as "no such events".
+  - Results leave `zone_id`, `road` and `severity` empty and warn that the
+    field is unavailable rather than absent.
+  - Validity comes from `EndTime`: empty means the announcement is still open,
+    and `active` additionally requires that it has not ended yet. Upstream
+    `Active` is not read — it is `true` on every PROVINCE_BZ record, including
+    ones closed a year ago. `--include-expired` brings ended ones back, and
+    `stale` never hides a row in this source.
+
 ## v0.4.3 - 2026-08-03
 
 Driven by the 2026-08-03 agent eval round (11 pass, 2 partial, 0 fail),

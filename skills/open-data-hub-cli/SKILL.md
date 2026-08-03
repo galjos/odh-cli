@@ -89,9 +89,13 @@ odh traffic categories --json
 odh traffic today --area ueberetsch-unterland --type roadworks --json
 odh traffic search badia --today --zone-id 6 --json
 odh traffic today --near 46.42,11.25 --radius 15km --json
+odh traffic today --source content --json
+odh traffic search radroute --today --source content --json
 ```
 
-Prefer `traffic` over raw `mobility events --origin PROVINCE_BZ`. Surface stale/source warnings. Do not present stale open-ended rows as confirmed current closures. This is a Mobility Timeseries event feed, not a live bulletin: an empty result is not evidence that roads are clear. Report the newest row date the command returns, and get current notices from `odh call tourism /v1/Announcement --param source=PROVINCE_BZ --param rawsort=-LastChange`.
+Prefer `traffic` over raw `mobility events --origin PROVINCE_BZ`. Surface stale/source warnings. Do not present stale open-ended rows as confirmed current closures. The default `--source odh` is a Mobility Timeseries event feed, not a live bulletin: an empty result is not evidence that roads are clear. Report the newest row date the command returns.
+
+`--source content` runs the same commands against the Content API `/v1/Announcement` bulletin, which is where the province still publishes. It supports `--from`/`--to`/`--today`, `--near`/`--radius`, `--search`, `--type`, `--limit` and `--include-expired`, and rejects `--zone-id`, `--area`, `--road` and `--type bike` with exit code 2 rather than returning a partial list. Its results leave `zone_id`, `zone`, `zone_it`, `road`, `road_name`, `severity` and `series_id` empty; that means the field is unavailable, not absent. An empty `end` means the announcement is still open; already-ended ones are hidden unless `--include-expired` is passed, and `stale` there only means "unchanged for 30 days", which is normal for long-running restrictions.
 
 A22:
 

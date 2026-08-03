@@ -68,6 +68,44 @@ Stable event fields:
 
 `raw` is present only with `--raw` and mirrors upstream data.
 
+### `--source odh` and `--source content`
+
+Both sources emit the same envelope and the same event fields. They differ in
+which of those fields can be populated and which filters are accepted.
+
+| | `--source odh` (default) | `--source content` |
+| --- | --- | --- |
+| upstream | Mobility Timeseries `/v2/flat,event/PROVINCE_BZ` | Content API `/v1/Announcement?source=PROVINCE_BZ` |
+| `source` | `odh` | `content` |
+| filters | all | `--from`/`--to`/`--today`, `--near`/`--radius`, `--search`, `--type`, `--limit`, `--include-expired` |
+| rejected filters | none | `--zone-id`, `--area`, `--road`, `--type bike` |
+| never populated | none | `zone_id`, `zone`, `zone_it`, `road`, `road_name`, `severity`, `series_id` |
+
+With `--source content`:
+
+- `subtype` holds the upstream `traffic-event:*` tags, comma-joined and sorted,
+  for example `hindrance,road-work`. `type` is derived from them.
+- `end` is empty while the announcement is open. The provider sets an end time
+  only when the event ends, so an empty `end` means ongoing, not unknown.
+- `active` is true only when the announcement overlaps the requested date range
+  **and** has not ended yet. Upstream `Active` is not read: it is `true` on
+  every PROVINCE_BZ record, including ones closed a year ago.
+- `published_at` and `transaction_time` both carry the record's `LastChange`.
+  This feed has no provider publication timestamp, so `published_at` here means
+  "last changed upstream", not "published by the province". `stale` derives from it.
+- `--include-expired` is scoped to now, not to the requested range: an
+  announcement that has already ended is hidden even when it was live during the
+  range you asked for. Under `--source odh` the same flag means "ended before the
+  range started". Pass `--include-expired` for historical range queries.
+- Timestamps are passed through in the upstream encoding, and the two sources
+  differ: `--source odh` emits `2006-01-02 15:04:05.000-0700`, `--source content`
+  emits RFC 3339. Parse permissively.
+- `stale` reports that `LastChange` is more than 30 days old. It never hides a
+  row here, because an open announcement stays valid until the provider closes
+  it. `--include-stale` is accepted and warns that it has no effect.
+- A rejected filter is a usage error (exit code 2) naming the flag and the
+  reason. The filter is never silently dropped.
+
 ## `odh transit journey --json`
 
 Stable top-level fields:

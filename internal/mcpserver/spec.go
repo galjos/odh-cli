@@ -371,10 +371,11 @@ var toolSpecs = []toolSpec{
 	},
 	{
 		name:      "traffic_search",
-		desc:      "Search South Tyrol PROVINCE_BZ road events by free text with date, zone, and type filters. Stale open-ended rows are hidden by default and must not be presented as confirmed current closures; the source is a public bulletin feed, not a complete live road bulletin.",
+		desc:      "Search South Tyrol PROVINCE_BZ road events by free text with date, zone, and type filters. Stale open-ended rows are hidden by default and must not be presented as confirmed current closures; the source is a public bulletin feed, not a complete live road bulletin. Pass source=content to search the Content API Announcement bulletin instead, which is the feed the province still updates.",
 		base:      []string{"traffic", "search"},
 		forceJSON: true,
 		params: []param{
+			{name: "source", flag: "source", typ: paramString, desc: "traffic source: odh (Mobility Timeseries events, supports zone_id/area/road) or content (Content API Announcement bulletin, the feed the province still updates; zone_id, area, road and type bike are rejected there, and zone_id, road and severity are absent from the results)"},
 			{name: "query", typ: paramString, desc: "free-text search, for example: road closed badia", required: true},
 			{name: "today", flag: "today", typ: paramBoolean, desc: "restrict to today's events"},
 			{name: "from", flag: "from", typ: paramString, desc: "start date YYYY-MM-DD"},
@@ -392,10 +393,11 @@ var toolSpecs = []toolSpec{
 	},
 	{
 		name:      "traffic_today",
-		desc:      "Summarize today's South Tyrol road events (roadworks, closures, notices) for an area or zone, deduplicated, with stale rows hidden by default.",
+		desc:      "Summarize today's South Tyrol road events (roadworks, closures, notices) for an area or zone, deduplicated, with stale rows hidden by default. Pass source=content for the Content API Announcement bulletin, which is the feed the province still updates; it has no zone, road, or severity fields.",
 		base:      []string{"traffic", "today"},
 		forceJSON: true,
 		params: []param{
+			{name: "source", flag: "source", typ: paramString, desc: "traffic source: odh (Mobility Timeseries events, supports zone_id/area/road) or content (Content API Announcement bulletin, the feed the province still updates; zone_id, area, road and type bike are rejected there, and zone_id, road and severity are absent from the results)"},
 			{name: "area", flag: "area", typ: paramString, desc: "area alias, for example ueberetsch-unterland"},
 			{name: "zone_id", flag: "zone-id", typ: paramString, desc: "PROVINCE_BZ messageZoneId filter; discover with traffic_zones"},
 			{name: "type", flag: "type", typ: paramString, desc: "type filter: all, roadworks, closure, event, traffic, mountain-pass, bike, or radar"},
@@ -403,15 +405,17 @@ var toolSpecs = []toolSpec{
 			{name: "near", flag: "near", typ: paramString, desc: "coordinate filter as lat,lon"},
 			{name: "radius", flag: "radius", typ: paramString, desc: "radius for near, for example 15km"},
 			{name: "include_stale", flag: "include-stale", typ: paramBoolean, desc: "include stale open-ended events for inspection as historical context only"},
+			{name: "include_expired", flag: "include-expired", typ: paramBoolean, desc: "include already-ended announcements or expired events after local date filtering"},
 			{name: "limit", flag: "limit", typ: paramInteger, desc: "maximum raw events to request (default 1000)"},
 		},
 	},
 	{
 		name:      "traffic_events",
-		desc:      "List South Tyrol road events for an explicit date range, area, or zone, deduplicated, with stale rows hidden by default.",
+		desc:      "List South Tyrol road events for an explicit date range, area, or zone, deduplicated, with stale rows hidden by default. Pass source=content for the Content API Announcement bulletin, which is the feed the province still updates; it has no zone, road, or severity fields.",
 		base:      []string{"traffic", "events"},
 		forceJSON: true,
 		params: []param{
+			{name: "source", flag: "source", typ: paramString, desc: "traffic source: odh (Mobility Timeseries events, supports zone_id/area/road) or content (Content API Announcement bulletin, the feed the province still updates; zone_id, area, road and type bike are rejected there, and zone_id, road and severity are absent from the results)"},
 			{name: "from", flag: "from", typ: paramString, desc: "start date YYYY-MM-DD"},
 			{name: "to", flag: "to", typ: paramString, desc: "end date YYYY-MM-DD"},
 			{name: "area", flag: "area", typ: paramString, desc: "area alias, for example ueberetsch-unterland"},

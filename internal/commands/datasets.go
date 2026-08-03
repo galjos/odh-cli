@@ -260,10 +260,12 @@ func datasetGuideFor(entry datasetEntry) datasetGuideEntry {
 		guidance.Verify = []string{
 			"odh traffic today --area <area> --type <category> --json",
 			"odh traffic search <text> --today --json",
+			"odh traffic today --source content --json",
 		}
 		guidance.Caveats = []string{
 			"Open Data Hub PROVINCE_BZ is a public bulletin feed, not a complete live road bulletin.",
 			"Stale open-ended rows are hidden by default; carry warnings into answers.",
+			"--source content reads the Content API bulletin the province still updates, but cannot answer --zone-id, --area or --road and rejects them.",
 		}
 	case "tourism.events":
 		guidance.Discovery = []string{
@@ -445,7 +447,7 @@ func datasetCatalog() []datasetEntry {
 			Domain:      "mobility",
 			API:         "mobility",
 			Title:       "Traffic events and roadworks",
-			Description: "Opinionated Open Data Hub PROVINCE_BZ traffic-event view with zone filters, text search, type filters, date filtering, deduplication, and stale-record warnings.",
+			Description: "Opinionated Open Data Hub PROVINCE_BZ traffic-event view with zone filters, text search, type filters, date filtering, deduplication, and stale-record warnings. --source content answers the same commands from the Content API Announcement bulletin.",
 			Commands: []string{
 				"odh traffic zones",
 				"odh traffic categories",
@@ -454,9 +456,10 @@ func datasetCatalog() []datasetEntry {
 				"odh traffic events --area bozen-unterland --from 2026-05-16 --to 2026-05-16 --format json",
 				"odh traffic search \"road closed badia\" --today --zone-id 6 --json",
 				"odh traffic today --near 46.42,11.25 --radius 15km --json",
+				"odh traffic today --source content --json",
 			},
-			Endpoints: []string{"/v2/flat,event/PROVINCE_BZ/{from}/{to}"},
-			Keywords:  []string{"traffic", "roadworks", "closure", "roadblock", "category", "zone", "zone-id", "unterland", "ueberetsch", "pustertal", "province_bz"},
+			Endpoints: []string{"/v2/flat,event/PROVINCE_BZ/{from}/{to}", "/v1/Announcement?source=PROVINCE_BZ"},
+			Keywords:  []string{"traffic", "roadworks", "closure", "roadblock", "category", "zone", "zone-id", "unterland", "ueberetsch", "pustertal", "province_bz", "announcement", "bulletin"},
 		},
 	}
 	sort.Slice(entries, func(i, j int) bool {

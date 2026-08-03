@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -55,6 +56,28 @@ func TestJSONContractTrafficSearch(t *testing.T) {
 		"--json",
 	})
 	assertGoldenJSON(t, "traffic-search.json", stdout, server.URL)
+}
+
+func TestJSONContractTrafficContentSearch(t *testing.T) {
+	server := newAnnouncementTestServer(t, announcementFixture)
+	defer server.Close()
+
+	stdout := runContractCommand(t, []apis.API{{Name: "tourism", BaseURL: server.URL, Public: true}}, []string{
+		"traffic", "search", "radroute",
+		"--source", "content",
+		"--from", "2026-05-16",
+		"--to", "2026-05-16",
+		"--json",
+	})
+	assertGoldenJSON(t, "traffic-content-search.json", normalizeAnnouncementRange(stdout), server.URL)
+}
+
+// normalizeAnnouncementRange pins the begin/end query parameters, which the
+// local timezone shifts, so the golden endpoint stays comparable.
+var announcementRangeParams = regexp.MustCompile(`(begin|end)=[^&"]*`)
+
+func normalizeAnnouncementRange(actual []byte) []byte {
+	return announcementRangeParams.ReplaceAll(actual, []byte("$1=RANGE"))
 }
 
 func TestJSONContractMobilityOrigins(t *testing.T) {

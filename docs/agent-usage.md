@@ -204,7 +204,25 @@ Traffic commands query Open Data Hub `PROVINCE_BZ` events and default to table o
 
 Use `odh traffic search <text>` for towns, roads, place names, and natural-language traffic wording. The CLI intentionally does not hardcode local village aliases; agents should broaden multilingual or local place names themselves, then call `traffic search` and/or `--zone-id`. The search layer only applies generic traffic-term normalization such as `closed`/`closure`/`roadblock` to `sperre`/`gesperrt`, and `roadworks` to `baustelle`.
 
-These commands read a Mobility Timeseries event feed, not a live bulletin. An empty `traffic` result is not evidence that roads are clear, and neither is a result whose newest row is weeks old; report what the response actually contains, including the newest row date the CLI warns about. Current road notices come from the Content API instead: `odh call tourism /v1/Announcement --param source=PROVINCE_BZ --param rawsort=-LastChange`.
+By default these commands read a Mobility Timeseries event feed, not a live bulletin. An empty `traffic` result is not evidence that roads are clear, and neither is a result whose newest row is weeks old; report what the response actually contains, including the newest row date the CLI warns about.
+
+### `--source content`
+
+`--source content` answers the same three commands from the Content API `/v1/Announcement` road bulletin, which is where the province still publishes:
+
+```bash
+odh traffic today --source content --json
+odh traffic today --source content --type closure --format table
+odh traffic today --source content --near 46.42,11.25 --radius 10km --json
+odh traffic search radroute --today --source content --json
+odh traffic events --source content --from 2026-08-01 --to 2026-08-03 --include-expired --json
+```
+
+This source supports `--from`/`--to`/`--today`, `--near`/`--radius`, `--search`, `--type`, `--limit`, and `--include-expired`. It **rejects** `--zone-id`, `--area`, `--road`, and `--type bike` with exit code 2, because announcements carry no zone id, name the road only inside free text, and carry no cycle tag — cycle notices are filed under the same tags as any other closure or roadwork, so a tag filter would drop real matches. Do not work around a rejection by dropping the constraint from the answer: either switch to `--source odh`, or narrow with `--near` or `--search` and say which you used.
+
+Results leave `zone_id`, `road`, and `severity` empty, and the response warns about it. An empty value there means this source cannot supply the field, not that the event has no zone, road, or severity.
+
+An announcement stays open until the provider sets an end time, so an empty `end` means ongoing. `active` is true only for announcements that overlap the requested range and have not ended yet; already-ended ones are hidden and counted in a warning unless `--include-expired` is passed. A `stale` flag here only means the record has not changed upstream for 30 days, which is normal for long-running restrictions and is not evidence that they are over.
 
 If a user needs an exact public traffic bulletin, compare the Open Data Hub result with the official traffic service outside this CLI and state both the source and timestamp used. Do not imply that `odh traffic` silently switched to another upstream feed.
 
@@ -217,7 +235,8 @@ If the user asks for current traffic conditions, report the timestamp and feed t
 Use these patterns when the CLI reports known data limitations:
 
 - Historical train delays: "I can find the static timetable or journey, but `odh transit delay-stats` reports that historical delay probability is unsupported because no archived GTFS-RT history is available. I should not estimate usual delay minutes from one live feed snapshot."
-- Stale traffic rows: "Open Data Hub returned only stale or hidden open-ended traffic rows for this query. I can mention them as caveated context, but not as confirmed current closures. For an official live bulletin, compare with the traffic service and state that separate source."
+- Stale traffic rows: "Open Data Hub returned only stale or hidden open-ended traffic rows for this query. I can mention them as caveated context, but not as confirmed current closures. Let me re-check the Content API bulletin with `odh traffic today --source content --json`, and compare with the official traffic service for an authoritative answer."
+- Traffic filter rejected by the Content API: "The Content API bulletin has no zone, road, or severity fields, so `odh traffic --source content` refused the `--road` filter rather than returning a partial list. I ran the free-text search instead and I am reporting which filter I actually applied."
 - Parking forecasts: "Current parking occupancy is fresh, but the forecast diagnostic is `current_only`, so I can report current free spaces and should not present stale 60-minute forecasts as live predictions."
 - A22 status: "The Open Data Hub A22 event feed returned no rows for this request, which does not tell me whether the motorway is clear. Forecast rows are forecast data, not current incidents, so I should not infer congestion or closures from them alone. For current notices I would check `odh call tourism /v1/Announcement --param source=a22 --param rawsort=-LastChange`."
 - Tourism events: "The Tourism event diagnostic is unavailable or caveated because `onlyactive=true` returned date-inconsistent rows or records without GPS. I should avoid precise 'near me today' claims unless returned dates and coordinates support them."
