@@ -8,7 +8,7 @@ SPDX-License-Identifier: CC0-1.0
 
 All notable changes to `odh-cli` are documented here.
 
-## Unreleased
+## v0.6.0 - 2026-08-04
 
 - `--area` and `--zone-id` now work with `--source content`. They were rejected,
   so every agent asking for one district's road notices had to redo the

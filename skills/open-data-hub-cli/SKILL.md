@@ -13,7 +13,7 @@ metadata:
             {
               "id": "go",
               "kind": "go",
-              "module": "github.com/galjos/odh-cli/cmd/odh@v0.5.1",
+              "module": "github.com/galjos/odh-cli/cmd/odh@v0.6.0",
               "bins": ["odh"],
               "label": "Install odh CLI (go)",
             },
@@ -33,12 +33,12 @@ odh version
 odh doctor --timeout 10s
 ```
 
-Need `odh v0.5.1+` for the current command contracts, dataset guidance, source/provenance fields, traffic helpers, GTFS/transit, filtered latest measurements, comma-safe `--param`, `transit journey --with-realtime`, and MCP server mode.
+Need `odh v0.6.0+` for the current command contracts, dataset guidance, source/provenance fields, traffic helpers, GTFS/transit, filtered latest measurements, comma-safe `--param`, `transit journey --with-realtime`, and MCP server mode.
 
 Preferred manual install options:
 
 ```bash
-go install github.com/galjos/odh-cli/cmd/odh@v0.5.1
+go install github.com/galjos/odh-cli/cmd/odh@v0.6.0
 brew install galjos/odh/odh
 ```
 
