@@ -8,6 +8,25 @@ SPDX-License-Identifier: CC0-1.0
 
 All notable changes to `odh-cli` are documented here.
 
+## v0.5.1 - 2026-08-04
+
+Found by driving v0.5.0 as an agent would, with only the released binary and
+the published skill.
+
+- `traffic search` no longer matches identifier substrings. `id`, `series_id`
+  and `message_id` were in the searched text, so a bare `12` matched every
+  record whose message id contained 12: `--search "SS 12"` returned 32 of 64
+  roadworks, mostly unrelated. Identifiers now match only as a whole term, so
+  looking one up by its exact id still works.
+- Road numbers match either spelling. Upstream writes both `SS 12` and `SS12`;
+  `--search SS12` used to return nothing. This matters because the `--road`
+  rejection under `--source content` tells the user to search instead — it was
+  recommending a query that could not match.
+- The `--type bike` aliases now reach cycle notices. `radweg` is a documented
+  alias for that category but returned nothing, while `radroute` returned
+  eight, so the natural German word gave a confident empty answer. `radroute`,
+  `radweg`, `fahrrad`, `ciclabile`, `bici` and `cycle` now find the same set.
+
 ## v0.5.0 - 2026-08-04
 
 - `odh traffic today|events|search` accept `--source content`, which answers

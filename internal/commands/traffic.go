@@ -10,6 +10,7 @@ import (
 	"io"
 	"math"
 	"net/url"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -720,10 +721,14 @@ func trafficSearchMatches(event trafficEvent, search string) bool {
 	if strings.TrimSpace(search) == "" {
 		return true
 	}
+	// Identifiers are matched whole, never by substring: they are opaque, and a
+	// bare "12" used to match every record whose message id contained 12.
+	identifiers := []string{
+		normalizeTrafficSearchText(event.ID),
+		normalizeTrafficSearchText(event.SeriesID),
+		normalizeTrafficSearchText(event.MessageID),
+	}
 	haystack := normalizeTrafficSearchText(strings.Join([]string{
-		event.ID,
-		event.SeriesID,
-		event.MessageID,
 		event.Source,
 		event.Type,
 		event.Subtype,
@@ -736,6 +741,9 @@ func trafficSearchMatches(event trafficEvent, search string) bool {
 		event.Place,
 		event.PlaceIT,
 	}, " "))
+	// Road numbers are written both ways upstream ("SS12" and "SS 12"), so a
+	// space-stripped copy lets either spelling find either.
+	squashed := strings.ReplaceAll(haystack, " ", "")
 	groups := trafficSearchTermGroups(search)
 	if len(groups) == 0 {
 		return true
@@ -744,7 +752,14 @@ func trafficSearchMatches(event trafficEvent, search string) bool {
 		matched := false
 		for _, term := range group {
 			term = normalizeTrafficSearchText(term)
-			if term != "" && strings.Contains(haystack, term) {
+			if term == "" {
+				continue
+			}
+			if strings.Contains(haystack, term) || slices.Contains(identifiers, term) {
+				matched = true
+				break
+			}
+			if isRoadToken(term) && strings.Contains(squashed, term) {
 				matched = true
 				break
 			}
@@ -757,7 +772,7 @@ func trafficSearchMatches(event trafficEvent, search string) bool {
 }
 
 func trafficSearchTermGroups(search string) [][]string {
-	terms := strings.Fields(normalizeTrafficSearchText(search))
+	terms := joinRoadTokens(strings.Fields(normalizeTrafficSearchText(search)))
 	groups := make([][]string, 0, len(terms))
 	for _, term := range terms {
 		if trafficSearchStopword(term) {
@@ -766,6 +781,40 @@ func trafficSearchTermGroups(search string) [][]string {
 		groups = append(groups, trafficSearchAlternatives(term))
 	}
 	return groups
+}
+
+// isRoadToken reports a road number written as one word, for example ss12 or sp13.
+// Only these are matched against the space-stripped haystack, so ordinary words
+// cannot join across a space and match something nobody asked for.
+func isRoadToken(term string) bool {
+	letters := 0
+	for letters < len(term) && term[letters] >= 'a' && term[letters] <= 'z' {
+		letters++
+	}
+	if letters == 0 || letters > 3 || letters == len(term) {
+		return false
+	}
+	for i := letters; i < len(term); i++ {
+		if term[i] < '0' || term[i] > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+// joinRoadTokens collapses "ss 12" into "ss12" so both spellings of a road
+// number search the same way. Upstream text uses both.
+func joinRoadTokens(terms []string) []string {
+	joined := make([]string, 0, len(terms))
+	for i := 0; i < len(terms); i++ {
+		if i+1 < len(terms) && isRoadToken(terms[i]+terms[i+1]) {
+			joined = append(joined, terms[i]+terms[i+1])
+			i++
+			continue
+		}
+		joined = append(joined, terms[i])
+	}
+	return joined
 }
 
 func trafficSearchStopword(term string) bool {
@@ -787,6 +836,11 @@ func trafficSearchAlternatives(term string) []string {
 		return []string{"event", "events", "veranstaltung", "veranstaltungen"}
 	case "sperre", "sperren", "gesperrt":
 		return []string{"sperre", "sperren", "gesperrt", "closure", "closed", "blocked"}
+	// The bike category's own aliases must find cycle notices: upstream writes
+	// Radroute and ciclabile, so a user typing the documented "radweg" would
+	// otherwise get a confident empty answer.
+	case "bike", "bici", "bicicletta", "ciclabil", "ciclabile", "cycle", "cycling", "fahrrad", "rad", "radroute", "radrouten", "radweg", "radwege":
+		return []string{"radroute", "radweg", "fahrrad", "ciclabil", "bicicl", "cycle"}
 	default:
 		return []string{term}
 	}

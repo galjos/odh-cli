@@ -50,7 +50,7 @@ func rejectUnsupportedContentTrafficFlags(query trafficQuery) error {
 	}
 	switch normalizeTrafficTypeName(query.Type) {
 	case "bike":
-		return usageErrorf("--type bike is not supported with --source content; Announcement records carry no cycle tag, and cycle notices are filed under the same tags as any other closure or roadwork, so a tag filter would drop real matches. Use --source odh, or --search radroute")
+		return usageErrorf("--type bike is not supported with --source content; Announcement records carry no cycle tag, and cycle notices are filed under the same tags as any other closure or roadwork, so a tag filter would drop real matches. Use --source odh, or search the text: --search radroute (radweg, ciclabile and fahrrad find the same notices)")
 	}
 	return nil
 }
