@@ -8,7 +8,7 @@ SPDX-License-Identifier: CC0-1.0
 
 All notable changes to `odh-cli` are documented here.
 
-## Unreleased
+## v0.5.0 - 2026-08-04
 
 - `odh traffic today|events|search` accept `--source content`, which answers
   from the Content API `/v1/Announcement` road bulletin instead of the Mobility
