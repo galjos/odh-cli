@@ -375,7 +375,7 @@ var toolSpecs = []toolSpec{
 		base:      []string{"traffic", "search"},
 		forceJSON: true,
 		params: []param{
-			{name: "source", flag: "source", typ: paramString, desc: "traffic source: odh (Mobility Timeseries events, supports zone_id/area/road) or content (Content API Announcement bulletin, the feed the province still updates; zone_id, area, road and type bike are rejected there, and zone_id, road and severity are absent from the results)"},
+			{name: "source", flag: "source", typ: paramString, desc: "traffic source: odh (Mobility Timeseries events, supports zone_id/area/road) or content (Content API Announcement bulletin, the feed the province still updates; road and type bike are rejected there, zone_id and area match by geographic inference from historical zone coordinates rather than a zone field, and zone_id, road and severity are absent from the results)"},
 			{name: "query", typ: paramString, desc: "free-text search, for example: road closed badia", required: true},
 			{name: "today", flag: "today", typ: paramBoolean, desc: "restrict to today's events"},
 			{name: "from", flag: "from", typ: paramString, desc: "start date YYYY-MM-DD"},
@@ -397,7 +397,7 @@ var toolSpecs = []toolSpec{
 		base:      []string{"traffic", "today"},
 		forceJSON: true,
 		params: []param{
-			{name: "source", flag: "source", typ: paramString, desc: "traffic source: odh (Mobility Timeseries events, supports zone_id/area/road) or content (Content API Announcement bulletin, the feed the province still updates; zone_id, area, road and type bike are rejected there, and zone_id, road and severity are absent from the results)"},
+			{name: "source", flag: "source", typ: paramString, desc: "traffic source: odh (Mobility Timeseries events, supports zone_id/area/road) or content (Content API Announcement bulletin, the feed the province still updates; road and type bike are rejected there, zone_id and area match by geographic inference from historical zone coordinates rather than a zone field, and zone_id, road and severity are absent from the results)"},
 			{name: "area", flag: "area", typ: paramString, desc: "area alias, for example ueberetsch-unterland"},
 			{name: "zone_id", flag: "zone-id", typ: paramString, desc: "PROVINCE_BZ messageZoneId filter; discover with traffic_zones"},
 			{name: "type", flag: "type", typ: paramString, desc: "type filter: all, roadworks, closure, event, traffic, mountain-pass, bike, or radar"},
@@ -415,7 +415,7 @@ var toolSpecs = []toolSpec{
 		base:      []string{"traffic", "events"},
 		forceJSON: true,
 		params: []param{
-			{name: "source", flag: "source", typ: paramString, desc: "traffic source: odh (Mobility Timeseries events, supports zone_id/area/road) or content (Content API Announcement bulletin, the feed the province still updates; zone_id, area, road and type bike are rejected there, and zone_id, road and severity are absent from the results)"},
+			{name: "source", flag: "source", typ: paramString, desc: "traffic source: odh (Mobility Timeseries events, supports zone_id/area/road) or content (Content API Announcement bulletin, the feed the province still updates; road and type bike are rejected there, zone_id and area match by geographic inference from historical zone coordinates rather than a zone field, and zone_id, road and severity are absent from the results)"},
 			{name: "from", flag: "from", typ: paramString, desc: "start date YYYY-MM-DD"},
 			{name: "to", flag: "to", typ: paramString, desc: "end date YYYY-MM-DD"},
 			{name: "area", flag: "area", typ: paramString, desc: "area alias, for example ueberetsch-unterland"},

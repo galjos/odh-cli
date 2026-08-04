@@ -39,12 +39,6 @@ func normalizeTrafficSource(value string) (string, error) {
 // cannot answer. Applying them partially would return fewer matches than the
 // user asked for, which reads as "no such events".
 func rejectUnsupportedContentTrafficFlags(query trafficQuery) error {
-	if strings.TrimSpace(query.ZoneID) != "" {
-		return usageErrorf("--zone-id is not supported with --source content; Announcement records carry no zone id, only free-text place descriptions. Use --source odh, or narrow with --near or --search")
-	}
-	if area := normalizeAreaAlias(query.Area); area != "" && area != "all" {
-		return usageErrorf("--area is not supported with --source content; the area aliases resolve to zone ids, which Announcement records do not carry. Use --source odh, or narrow with --near or --search")
-	}
 	if road := strings.TrimSpace(query.Road); road != "" {
 		return usageErrorf("--road is not supported with --source content; Announcement records name the road only inside free-text descriptions. Use --source odh, or --search %q", road)
 	}
@@ -55,7 +49,7 @@ func rejectUnsupportedContentTrafficFlags(query trafficQuery) error {
 	return nil
 }
 
-func (r *Runner) runContentTrafficQueryCobra(ctx context.Context, query trafficQuery, fromDay, toDay time.Time, stdout io.Writer) error {
+func (r *Runner) runContentTrafficQueryCobra(ctx context.Context, query trafficQuery, area trafficArea, fromDay, toDay time.Time, stdout io.Writer) error {
 	api, _ := r.Registry.Find("tourism")
 	values := url.Values{}
 	values.Set("source", announcementTrafficSource)
@@ -73,13 +67,15 @@ func (r *Runner) runContentTrafficQueryCobra(ctx context.Context, query trafficQ
 		return err
 	}
 	records := mapsFromList(extractItemsList(value))
-	events, warnings := normalizeContentTrafficEvents(records, announcementTotalResults(value), query, fromDay, toDay)
+	events, warnings := normalizeContentTrafficEvents(records, announcementTotalResults(value), query, area, fromDay, toDay)
 	return writeTrafficOutput(stdout, trafficResult{
 		Source:       trafficSourceContent,
 		SourceDetail: "Open Data Hub Tourism Content API /v1/Announcement " + announcementTrafficSource + " road bulletin",
 		Endpoint:     requestURL,
 		From:         fromDay.Format("2006-01-02"),
 		To:           toDay.Format("2006-01-02"),
+		ZoneID:       strings.TrimSpace(query.ZoneID),
+		Area:         area.Name,
 		Type:         normalizeTrafficTypeName(query.Type),
 		Search:       strings.TrimSpace(query.Search),
 		RawCount:     len(records),
@@ -91,11 +87,16 @@ func (r *Runner) runContentTrafficQueryCobra(ctx context.Context, query trafficQ
 	})
 }
 
-func normalizeContentTrafficEvents(raw []map[string]any, totalResults int, query trafficQuery, fromDay, toDay time.Time) ([]trafficEvent, []string) {
+func normalizeContentTrafficEvents(raw []map[string]any, totalResults int, query trafficQuery, area trafficArea, fromDay, toDay time.Time) ([]trafficEvent, []string) {
 	events := make([]trafficEvent, 0, len(raw))
 	now := time.Now()
 	endedCount := 0
 	futureCount := 0
+	// Collected rather than counted, so the reported number is deduplicated the
+	// same way the returned events are; this feed republishes rows.
+	unassignable := make([]trafficEvent, 0)
+	zoneIDFilter := trafficZoneIDValues(query.ZoneID)
+	areaZoneIDs := area.ZoneIDs
 	for _, record := range raw {
 		event := normalizeContentTrafficEvent(record, query.Raw, now)
 		if !contentTrafficTypeMatches(event, query.Type) {
@@ -118,6 +119,23 @@ func normalizeContentTrafficEvents(raw []map[string]any, totalResults int, query
 			}
 			continue
 		}
+		// The inferred zone gates the result but is never stored on the event:
+		// proximity to a historical row is not the record's own zone field.
+		// --zone-id and --area are independent gates, as they are for --source odh.
+		// Unioning them would let --zone-id 1 --area pustertal return zone 6 rows.
+		if len(zoneIDFilter) > 0 || len(areaZoneIDs) > 0 {
+			inferred := nearestTrafficZone(event.Coordinates)
+			if inferred == "" {
+				unassignable = append(unassignable, event)
+				continue
+			}
+			if len(zoneIDFilter) > 0 && !containsString(zoneIDFilter, inferred) {
+				continue
+			}
+			if len(areaZoneIDs) > 0 && !containsString(areaZoneIDs, inferred) {
+				continue
+			}
+		}
 		events = append(events, event)
 	}
 	deduped := dedupeTrafficEvents(events)
@@ -136,6 +154,18 @@ func normalizeContentTrafficEvents(raw []map[string]any, totalResults int, query
 	}
 
 	warnings := make([]string, 0)
+	// The warning names the zones that survive both gates, which is what the
+	// filter actually accepted.
+	effectiveZoneIDs := intersectZoneIDs(zoneIDFilter, areaZoneIDs)
+	if len(effectiveZoneIDs) > 0 {
+		warnings = append(warnings, contentTrafficZoneInferenceWarning(query, area, effectiveZoneIDs))
+		if warning := contentTrafficAreaKeywordWarning(area); warning != "" {
+			warnings = append(warnings, warning)
+		}
+		if warning := contentTrafficUnassignableWarning(len(dedupeTrafficEvents(unassignable))); warning != "" {
+			warnings = append(warnings, warning)
+		}
+	}
 	if len(events) != len(deduped) {
 		warnings = append(warnings, fmt.Sprintf("deduplicated %d raw matching rows to %d events", len(events), len(deduped)))
 	}
@@ -156,14 +186,14 @@ func normalizeContentTrafficEvents(raw []map[string]any, totalResults int, query
 		warnings = append(warnings, "--include-stale has no effect with --source content; no announcements are hidden by staleness in this source")
 	}
 	if len(deduped) == 0 {
-		if warning := contentTrafficNoMatchesWarning(query, endedCount, totalResults, len(raw)); warning != "" {
+		if warning := contentTrafficNoMatchesWarning(query, area, endedCount, totalResults, len(raw)); warning != "" {
 			warnings = append(warnings, warning)
 		}
 	}
 	if warning := contentTrafficTruncationWarning(totalResults, len(raw), query.Limit); warning != "" {
 		warnings = append(warnings, warning)
 	}
-	warnings = append(warnings, "this source cannot populate zone_id, zone, zone_it, road, road_name, severity, or series_id; an empty value there means the Content API does not carry the field, not that the event has no zone, road, or severity")
+	warnings = append(warnings, "this source cannot populate the event fields zone_id, zone, zone_it, road, road_name, severity, or series_id; an empty value there means the Content API does not carry the field, not that the event has no zone, road, or severity. The top-level zone_id and area echo the filter you passed; they are not read from the records")
 	warnings = append(warnings, "source is the Open Data Hub Content API /v1/Announcement feed for "+announcementTrafficSource+"; compare with the official traffic service before presenting this as a complete live road bulletin")
 	return deduped, warnings
 }
@@ -298,8 +328,8 @@ func contentTrafficTruncationWarning(totalResults, fetched, limit int) string {
 	return fmt.Sprintf("the Content API reports %d announcements in this date range but --limit=%d fetched only %d; rerun with a higher --limit when traffic completeness matters", totalResults, limit, fetched)
 }
 
-func contentTrafficNoMatchesWarning(query trafficQuery, endedCount, totalResults, fetched int) string {
-	parts := trafficFilterParts(query, trafficArea{})
+func contentTrafficNoMatchesWarning(query trafficQuery, area trafficArea, endedCount, totalResults, fetched int) string {
+	parts := trafficFilterParts(query, area)
 	if len(parts) == 0 {
 		return ""
 	}

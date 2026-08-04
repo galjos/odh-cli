@@ -110,7 +110,8 @@ deduplicated and stale open-ended rows are hidden by default.
 --source odh reads the Mobility Timeseries event feed and supports --zone-id,
 --area and --road. --source content reads the Content API Announcement road
 bulletin, which is the feed the province still updates, but which carries no
-zone, road, or severity fields.`,
+zone, road, or severity fields; there --zone-id and --area match by geographic
+inference from historical zone coordinates, and --road is rejected.`,
 		Example: `  odh traffic zones
   odh traffic categories
   odh traffic today --area ueberetsch-unterland --type roadworks
@@ -184,7 +185,8 @@ Use --area, --zone-id, --road, --type, or --near to narrow the answer. The
 default table is meant for humans; use --json for agents and scripts.
 
 --source content queries the Content API Announcement bulletin instead, where
---zone-id, --area and --road are rejected because the feed cannot answer them.`,
+--road is rejected because the feed cannot answer it, and --zone-id and --area
+match by inferring a zone from the announcement's coordinates.`,
 		Example: `  odh traffic today --area ueberetsch-unterland --type roadworks
   odh traffic today --near 46.42,11.25 --radius 15km --json
   odh traffic today --source content --type closure --json
@@ -355,7 +357,7 @@ func (r *Runner) runTrafficQueryCobra(ctx context.Context, query trafficQuery, s
 		return err
 	}
 	if source == trafficSourceContent {
-		return r.runContentTrafficQueryCobra(ctx, query, fromDay, toDay, stdout)
+		return r.runContentTrafficQueryCobra(ctx, query, area, fromDay, toDay, stdout)
 	}
 	return r.runODHTrafficQueryCobra(ctx, query, area, fromDay, toDay, stdout, stderr)
 }

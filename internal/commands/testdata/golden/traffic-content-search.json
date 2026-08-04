@@ -30,7 +30,7 @@
     }
   ],
   "warnings": [
-    "this source cannot populate zone_id, zone, zone_it, road, road_name, severity, or series_id; an empty value there means the Content API does not carry the field, not that the event has no zone, road, or severity",
+    "this source cannot populate the event fields zone_id, zone, zone_it, road, road_name, severity, or series_id; an empty value there means the Content API does not carry the field, not that the event has no zone, road, or severity. The top-level zone_id and area echo the filter you passed; they are not read from the records",
     "source is the Open Data Hub Content API /v1/Announcement feed for PROVINCE_BZ; compare with the official traffic service before presenting this as a complete live road bulletin"
   ]
 }

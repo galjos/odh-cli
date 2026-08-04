@@ -265,7 +265,7 @@ func datasetGuideFor(entry datasetEntry) datasetGuideEntry {
 		guidance.Caveats = []string{
 			"Open Data Hub PROVINCE_BZ is a public bulletin feed, not a complete live road bulletin.",
 			"Stale open-ended rows are hidden by default; carry warnings into answers.",
-			"--source content reads the Content API bulletin the province still updates, but cannot answer --zone-id, --area or --road and rejects them.",
+			"--source content reads the Content API bulletin the province still updates; it rejects --road, and answers --zone-id and --area by inferring the zone from the announcement's coordinates rather than reading a zone field.",
 		}
 	case "tourism.events":
 		guidance.Discovery = []string{

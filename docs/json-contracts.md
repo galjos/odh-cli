@@ -77,9 +77,9 @@ which of those fields can be populated and which filters are accepted.
 | --- | --- | --- |
 | upstream | Mobility Timeseries `/v2/flat,event/PROVINCE_BZ` | Content API `/v1/Announcement?source=PROVINCE_BZ` |
 | `source` | `odh` | `content` |
-| filters | all | `--from`/`--to`/`--today`, `--near`/`--radius`, `--search`, `--type`, `--limit`, `--include-expired` |
-| rejected filters | none | `--zone-id`, `--area`, `--road`, `--type bike` |
-| never populated | none | `zone_id`, `zone`, `zone_it`, `road`, `road_name`, `severity`, `series_id` |
+| filters | all | `--from`/`--to`/`--today`, `--near`/`--radius`, `--search`, `--type`, `--limit`, `--include-expired`, `--zone-id`/`--area` (inferred, see below) |
+| rejected filters | none | `--road`, `--type bike` |
+| never populated (event fields) | none | `zone_id`, `zone`, `zone_it`, `road`, `road_name`, `severity`, `series_id` |
 
 With `--source content`:
 
@@ -105,6 +105,47 @@ With `--source content`:
   it. `--include-stale` is accepted and warns that it has no effect.
 - A rejected filter is a usage error (exit code 2) naming the flag and the
   reason. The filter is never silently dropped.
+
+#### `--zone-id` and `--area` under `--source content`
+
+Announcement records carry coordinates but no zone. These two filters therefore
+match by **geographic inference**, not by reading a field:
+
+- The CLI ships a reference table of ~1100 rounded coordinates, each tagged with
+  the zone the Mobility Timeseries event feed recorded there. It is derived from
+  the historical feed by `scripts/generate-traffic-zone-points.go` and committed,
+  not fetched at runtime. Grid cells that more than one zone claimed are dropped
+  rather than assigned.
+- An announcement matches when the nearest reference point's zone is among the
+  requested zones and lies within 2.0 km. Leave-one-out over the table, the
+  nearest other point carries the same zone 98.2% of the time within that bound
+  and 82.9% between 2 and 3 km.
+- Beyond the bound, or with no coordinates, the announcement is **unassignable**:
+  it is excluded and counted in a warning, so a thin result is distinguishable
+  from an empty road network.
+- The inferred zone is used only to filter. It is never written to `zone_id`,
+  `zone` or `zone_it`, which stay empty exactly as they do without the filter.
+- A warning naming the inference is always emitted when either filter is used.
+  Surface it: the answer is "near coordinates historically tagged with this
+  zone", not "the province filed this under this zone".
+- Top-level `zone_id` and `area` echo the filter you passed. They are not read
+  from any record and say nothing about the events below them.
+- `--zone-id` and `--area` narrow independently, as they do under `--source odh`:
+  an announcement must satisfy both, so disjoint values return nothing.
+
+Three limits are worth knowing:
+
+- Area aliases that also filter on place names under `--source odh` (`kaltern`,
+  `eppan`, `unterland`, and the other municipality aliases) narrow **only by
+  zone** here, so the result covers the whole zone. A warning says so.
+- A long linear notice is published as a single point, and the two feeds may
+  anchor the same notice at different ends of it. Where the stretch crosses a
+  zone boundary the inferred zone can differ from the structured one even at a
+  few metres' distance. Measured against announcements that also appear in the
+  structured feed with an unambiguous zone, the inference agreed on 21 of 22 when measured against the 2026-08-04 bulletin.
+- Zone 7 (`Ausserhalb Südtirol`) is defined by not being a place: its points run
+  the Brenner axis from Modena to Austria and interleave with zones 1-6 at the
+  border, so inference is weakest there.
 
 ## `odh transit journey --json`
 

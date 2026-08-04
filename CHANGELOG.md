@@ -8,6 +8,42 @@ SPDX-License-Identifier: CC0-1.0
 
 All notable changes to `odh-cli` are documented here.
 
+## Unreleased
+
+- `--area` and `--zone-id` now work with `--source content`. They were rejected,
+  so every agent asking for one district's road notices had to redo the
+  geography by hand; three of four did in a field test of v0.5.0.
+
+  Announcement records carry coordinates but no zone, while the Mobility
+  Timeseries event feed carries both. The zone footprints are therefore derived
+  from that feed rather than invented: `scripts/generate-traffic-zone-points.go`
+  reduces 3484 historical rows to 1112 reference coordinates rounded to three
+  decimal places, dropping the 17 grid cells that more than one zone claimed. An
+  announcement matches when the nearest reference coordinate is within 2.0 km and
+  carries a requested zone.
+
+  The bound comes from the data: leave-one-out over the table, the nearest other
+  point carries the same zone for 98.2% of points within 2 km and only 82.9%
+  between 2 and 3 km. Against today's bulletin the nearest reference point is a
+  median 0.13 km away, and on the 22 announcements that also appear in the
+  structured feed with an unambiguous zone the inference agreed on 21.
+
+- The inferred zone filters and is then discarded. `zone_id`, `zone` and
+  `zone_it` stay empty, because proximity to a historical row is not the
+  record's own zone field, and emitting it would turn an inference into data.
+  Every such query warns that the match is geographic inference, and reports how
+  many announcements were excluded as *unassignable* — too far from any
+  reference coordinate, or carrying none — so a thin result is never read as an
+  empty road network.
+
+- Municipality area aliases such as `--area kaltern` narrow only to the zone on
+  this source, since their place keywords cannot be matched against announcement
+  free text without false positives. The response says so rather than letting a
+  district-wide result pass as a village-level one.
+
+- `--road` stays rejected under `--source content`: that feed carries no
+  equivalent structured signal.
+
 ## v0.5.1 - 2026-08-04
 
 Found by driving v0.5.0 as an agent would, with only the released binary and
