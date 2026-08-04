@@ -8,6 +8,13 @@ SPDX-License-Identifier: CC0-1.0
 
 All notable changes to `odh-cli` are documented here.
 
+## v0.6.1 - 2026-08-04
+
+- Removed a helper left behind by the v0.6.0 zone-filter refactor. It was dead
+  code with no behaviour attached, but it failed the Lint job and left CI red on
+  main. `go vet` does not report unused functions; the release checklist now
+  runs `golangci-lint` alongside it.
+
 ## v0.6.0 - 2026-08-04
 
 - `--area` and `--zone-id` now work with `--source content`. They were rejected,

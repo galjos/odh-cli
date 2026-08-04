@@ -6,7 +6,6 @@ package commands
 
 import (
 	"fmt"
-	"sort"
 	"strings"
 )
 
@@ -68,25 +67,6 @@ func intersectZoneIDs(zoneIDs, areaZoneIDs []string) []string {
 		}
 	}
 	return both
-}
-
-// trafficZoneFilterValues returns the zone ids a query narrows to, or nil when
-// it does not narrow by zone at all.
-func trafficZoneFilterValues(zoneID string, area trafficArea) []string {
-	seen := map[string]struct{}{}
-	values := make([]string, 0, 8)
-	for _, value := range append(trafficZoneIDValues(zoneID), area.ZoneIDs...) {
-		if _, exists := seen[value]; exists {
-			continue
-		}
-		seen[value] = struct{}{}
-		values = append(values, value)
-	}
-	if len(values) == 0 {
-		return nil
-	}
-	sort.Strings(values)
-	return values
 }
 
 // contentTrafficZoneInferenceWarning states that the zone behind an --area or
