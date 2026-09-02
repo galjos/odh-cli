@@ -757,7 +757,10 @@ func trafficSearchMatches(event trafficEvent, search string) bool {
 			if term == "" {
 				continue
 			}
-			if strings.Contains(haystack, term) || slices.Contains(identifiers, term) {
+			// Alphabetic terms match at a word boundary only (prefix of a word is
+			// fine: cycle aliases like "radweg" must still find "Radrouten"). An
+			// infix match would turn "auer" into every "Stützmauern".
+			if trafficTextHasTerm(haystack, term) || slices.Contains(identifiers, term) {
 				matched = true
 				break
 			}
@@ -771,6 +774,17 @@ func trafficSearchMatches(event trafficEvent, search string) bool {
 		}
 	}
 	return true
+}
+
+// trafficTextHasTerm reports whether term sits at the start of any word in
+// haystack. Prefixes are allowed; infix matches inside a longer word are not.
+func trafficTextHasTerm(haystack, term string) bool {
+	for _, word := range strings.Fields(haystack) {
+		if strings.HasPrefix(word, term) {
+			return true
+		}
+	}
+	return false
 }
 
 func trafficSearchTermGroups(search string) [][]string {
