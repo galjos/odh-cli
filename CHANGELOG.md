@@ -15,6 +15,11 @@ All notable changes to `odh-cli` are documented here.
   longer return nothing while the bare topic still matched; filler words reuse
   the traffic search stopword list. `datasets search` keeps the stricter
   all-terms filter. Refs #14.
+- `traffic search` no longer matches alphabetic terms inside other words.
+  Searching `auer` used to hit every `Stützmauern` notice; terms now match at a
+  word boundary (prefix still allowed, so cycle aliases like `radweg` keep
+  finding `Radrouten`). Road-number spelling (`SS12` / `SS 12`) is unchanged.
+  Refs #12.
 
 ## v0.6.1 - 2026-08-04
 

@@ -60,3 +60,29 @@ func TestTrafficSearchCycleAliasesAgree(t *testing.T) {
 		}
 	}
 }
+
+// Place-name searches must not match inside unrelated words. "auer" is a real
+// Unterland municipality; matching "Stützmauern" made the content search lie.
+func TestTrafficSearchRequiresWordBoundary(t *testing.T) {
+	wall := trafficEvent{Place: "Bei Moos im Bereich Stuller Wasserfall: Stützmauern erneuern"}
+	if trafficSearchMatches(wall, "auer") {
+		t.Error("auer must not match inside Stützmauern")
+	}
+	town := trafficEvent{Place: "Auer: Baustelle auf der Hauptstrasse"}
+	if !trafficSearchMatches(town, "auer") {
+		t.Error("auer must still match the municipality name as a word")
+	}
+	// Cycle aliases stay prefix matches at a word boundary: "radweg" finds
+	// "Radrouten", and road numbers keep their own spelling path.
+	routes := trafficEvent{Place: "Die Radrouten und die ciclabile bei Auer sind gesperrt"}
+	if !trafficSearchMatches(routes, "radweg") {
+		t.Error("radweg must still prefix-match Radrouten")
+	}
+	if !trafficSearchMatches(routes, "ciclabil") {
+		t.Error("ciclabil must still prefix-match ciclabile")
+	}
+	road := trafficEvent{Place: "Kreuzung mit der SS 12 Brennerstaatsstrasse"}
+	if !trafficSearchMatches(road, "ss12") {
+		t.Error("ss12 must still match spaced road numbers")
+	}
+}
