@@ -90,7 +90,7 @@ into agent answers.`,
 			}
 			query := strings.Join(args, " ")
 			entries := filterDatasetsByDomain(datasetCatalog(), guideDomain)
-			entries = filterDatasetsByQuery(entries, query)
+			entries = rankDatasetsByQuery(entries, query)
 			if guideLimit > 0 && len(entries) > guideLimit {
 				entries = entries[:guideLimit]
 			}
@@ -174,13 +174,7 @@ func filterDatasetsByQuery(entries []datasetEntry, query string) []datasetEntry 
 	terms := strings.Fields(strings.ToLower(query))
 	filtered := make([]datasetEntry, 0, len(entries))
 	for _, entry := range entries {
-		haystack := strings.ToLower(strings.Join(append([]string{
-			entry.ID,
-			entry.Domain,
-			entry.API,
-			entry.Title,
-			entry.Description,
-		}, entry.Keywords...), " "))
+		haystack := datasetEntryHaystack(entry)
 		matched := true
 		for _, term := range terms {
 			if !strings.Contains(haystack, term) {
@@ -193,6 +187,70 @@ func filterDatasetsByQuery(entries []datasetEntry, query string) []datasetEntry 
 		}
 	}
 	return filtered
+}
+
+// rankDatasetsByQuery scores catalogue entries by how many query terms hit and
+// returns them best-first. Terms that hit nothing are dropped rather than
+// requiring every word — guide is the natural-language entry point, so extra
+// sentence words must not erase a real match. datasets search keeps the stricter
+// all-terms filter.
+func rankDatasetsByQuery(entries []datasetEntry, query string) []datasetEntry {
+	terms := datasetGuideQueryTerms(query)
+	if len(terms) == 0 {
+		out := make([]datasetEntry, len(entries))
+		copy(out, entries)
+		return out
+	}
+	type scored struct {
+		entry datasetEntry
+		score int
+	}
+	ranked := make([]scored, 0, len(entries))
+	for _, entry := range entries {
+		haystack := datasetEntryHaystack(entry)
+		score := 0
+		for _, term := range terms {
+			if strings.Contains(haystack, term) {
+				score++
+			}
+		}
+		if score > 0 {
+			ranked = append(ranked, scored{entry: entry, score: score})
+		}
+	}
+	sort.SliceStable(ranked, func(i, j int) bool {
+		if ranked[i].score != ranked[j].score {
+			return ranked[i].score > ranked[j].score
+		}
+		return ranked[i].entry.ID < ranked[j].entry.ID
+	})
+	out := make([]datasetEntry, len(ranked))
+	for i, item := range ranked {
+		out[i] = item.entry
+	}
+	return out
+}
+
+func datasetGuideQueryTerms(query string) []string {
+	terms := strings.Fields(strings.ToLower(query))
+	out := make([]string, 0, len(terms))
+	for _, term := range terms {
+		if trafficSearchStopword(term) {
+			continue
+		}
+		out = append(out, term)
+	}
+	return out
+}
+
+func datasetEntryHaystack(entry datasetEntry) string {
+	return strings.ToLower(strings.Join(append([]string{
+		entry.ID,
+		entry.Domain,
+		entry.API,
+		entry.Title,
+		entry.Description,
+	}, entry.Keywords...), " "))
 }
 
 func datasetGuideFor(entry datasetEntry) datasetGuideEntry {

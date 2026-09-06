@@ -279,6 +279,70 @@ func TestRunDatasetsGuideTable(t *testing.T) {
 	}
 }
 
+// Guide is the natural-language entry point: extra sentence words must rank
+// matches, not erase them. "roadworks on a state road" used to return nothing
+// while "roadworks" returned the traffic catalogue entry.
+func TestRunDatasetsGuideRanksNaturalPhrasing(t *testing.T) {
+	runner := newTestRunner(t, nil)
+	phrases := []struct {
+		query string
+		want  string
+	}{
+		{"roadworks", "mobility.traffic-events"},
+		{"roadworks on a state road", "mobility.traffic-events"},
+		{"where can I park and see forecasts", "mobility.parking"},
+		{"ev charging availability nearby", "mobility.charging"},
+	}
+	for _, phrase := range phrases {
+		var stdout, stderr bytes.Buffer
+		code := runner.Run(context.Background(), []string{"datasets", "guide", phrase.query, "--limit", "3"}, &stdout, &stderr)
+		if code != 0 {
+			t.Fatalf("guide %q exit = %d, stderr = %s", phrase.query, code, stderr.String())
+		}
+		var decoded struct {
+			Count   int `json:"count"`
+			Matches []struct {
+				Dataset struct {
+					ID string `json:"id"`
+				} `json:"dataset"`
+			} `json:"matches"`
+		}
+		if err := json.Unmarshal(stdout.Bytes(), &decoded); err != nil {
+			t.Fatalf("guide %q invalid JSON: %v\n%s", phrase.query, err, stdout.String())
+		}
+		if decoded.Count == 0 {
+			t.Fatalf("guide %q returned no matches", phrase.query)
+		}
+		found := false
+		for _, match := range decoded.Matches {
+			if match.Dataset.ID == phrase.want {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("guide %q missing %s in %s", phrase.query, phrase.want, stdout.String())
+		}
+	}
+}
+
+func TestRankDatasetsByQueryPrefersMoreTermHits(t *testing.T) {
+	entries := []datasetEntry{
+		{ID: "a", Title: "roadworks only", Keywords: []string{"roadworks"}},
+		{ID: "b", Title: "parking forecast", Keywords: []string{"parking", "forecast"}},
+		{ID: "c", Title: "unrelated", Keywords: []string{"tourism"}},
+	}
+	ranked := rankDatasetsByQuery(entries, "parking forecast near me")
+	if len(ranked) != 1 || ranked[0].ID != "b" {
+		t.Fatalf("expected only parking forecast ranked first, got %#v", ranked)
+	}
+	// Stopwords and unmatched filler must not wipe a single catalogue hit.
+	ranked = rankDatasetsByQuery(entries, "roadworks on a state road")
+	if len(ranked) != 1 || ranked[0].ID != "a" {
+		t.Fatalf("expected roadworks to survive filler words, got %#v", ranked)
+	}
+}
+
 func TestDatasetCatalogCommandStringsParse(t *testing.T) {
 	seen := map[string]struct{}{}
 	commands := make([]string, 0)
