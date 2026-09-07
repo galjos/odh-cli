@@ -341,6 +341,10 @@ func TestRankDatasetsByQueryPrefersMoreTermHits(t *testing.T) {
 	if len(ranked) != 1 || ranked[0].ID != "a" {
 		t.Fatalf("expected roadworks to survive filler words, got %#v", ranked)
 	}
+	// An all-stopword phrase must not dump the whole catalogue on the agent.
+	if got := rankDatasetsByQuery(entries, "on the road"); len(got) != 0 {
+		t.Fatalf("all-stopword query must return no matches, got %#v", got)
+	}
 }
 
 func TestDatasetCatalogCommandStringsParse(t *testing.T) {
