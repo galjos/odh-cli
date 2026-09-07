@@ -8,7 +8,7 @@ SPDX-License-Identifier: CC0-1.0
 
 All notable changes to `odh-cli` are documented here.
 
-## Unreleased
+## v0.6.2 - 2026-09-07
 
 - `datasets guide` ranks catalogue matches by how many query terms hit instead
   of requiring every word. Natural phrases like `roadworks on a state road` no
