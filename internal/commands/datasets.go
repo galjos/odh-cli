@@ -197,9 +197,9 @@ func filterDatasetsByQuery(entries []datasetEntry, query string) []datasetEntry 
 func rankDatasetsByQuery(entries []datasetEntry, query string) []datasetEntry {
 	terms := datasetGuideQueryTerms(query)
 	if len(terms) == 0 {
-		out := make([]datasetEntry, len(entries))
-		copy(out, entries)
-		return out
+		// All tokens were stopwords or the query was empty. Returning the full
+		// catalogue would send agents down arbitrary paths for "on the road".
+		return nil
 	}
 	type scored struct {
 		entry datasetEntry

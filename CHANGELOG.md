@@ -8,13 +8,14 @@ SPDX-License-Identifier: CC0-1.0
 
 All notable changes to `odh-cli` are documented here.
 
-## Unreleased
+## v0.6.2 - 2026-09-07
 
 - `datasets guide` ranks catalogue matches by how many query terms hit instead
   of requiring every word. Natural phrases like `roadworks on a state road` no
   longer return nothing while the bare topic still matched; filler words reuse
-  the traffic search stopword list. `datasets search` keeps the stricter
-  all-terms filter. Refs #14.
+  the traffic search stopword list. Queries that are only stopwords return no
+  matches rather than dumping the catalogue. `datasets search` keeps the
+  stricter all-terms filter. Refs #14.
 - `traffic search` no longer matches alphabetic terms inside other words.
   Searching `auer` used to hit every `Stützmauern` notice; terms now match at a
   word boundary (prefix still allowed, so cycle aliases like `radweg` keep
