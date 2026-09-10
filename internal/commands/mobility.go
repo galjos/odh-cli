@@ -643,6 +643,7 @@ type mobilityLatestResult struct {
 	RawCount     int              `json:"raw_count"`
 	Count        int              `json:"count"`
 	Measurements []map[string]any `json:"measurements"`
+	Coverage     resultCoverage   `json:"coverage"`
 	Warnings     []string         `json:"warnings,omitempty"`
 }
 
@@ -1031,6 +1032,7 @@ func filterMobilityLatest(records []map[string]any, filter mobilityLatestFilter)
 		RawCount:     len(records),
 		Count:        len(matched),
 		Measurements: matched,
+		Coverage:     pageCoverage(len(records), matchedBeforeLimit, len(matched), filter.RequestLimit),
 		Warnings:     warnings,
 	}
 }

@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: Existing tag to release, for example v0.4.0
+        description: Existing tag to release, for example v0.7.0
         required: true
         type: string
 
@@ -20,6 +20,9 @@ permissions:
   id-token: write
   attestations: write
   artifact-metadata: write
+
+env:
+  RELEASE_TAG: ${{ inputs.version || github.ref_name }}
 
 jobs:
   build:
@@ -40,6 +43,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/tags/{0}', inputs.version) || github.ref }}
 
       - name: Setup Go
         uses: actions/setup-go@v6
@@ -49,12 +54,9 @@ jobs:
 
       - name: Resolve version metadata
         run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            echo "VERSION=${{ inputs.version }}" >> "$GITHUB_ENV"
-          else
-            echo "VERSION=${GITHUB_REF_NAME}" >> "$GITHUB_ENV"
-          fi
-          echo "COMMIT=${GITHUB_SHA::12}" >> "$GITHUB_ENV"
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]] || exit 2
+          echo "VERSION=$RELEASE_TAG" >> "$GITHUB_ENV"
+          echo "COMMIT=$(git rev-parse --short=12 HEAD)" >> "$GITHUB_ENV"
           echo "DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
 
       - name: Build archive
@@ -83,6 +85,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/tags/{0}', inputs.version) || github.ref }}
 
       - name: Download archives
         uses: actions/download-artifact@v7
@@ -92,11 +96,7 @@ jobs:
 
       - name: Resolve release tag
         run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            echo "VERSION=${{ inputs.version }}" >> "$GITHUB_ENV"
-          else
-            echo "VERSION=${GITHUB_REF_NAME}" >> "$GITHUB_ENV"
-          fi
+          echo "VERSION=$RELEASE_TAG" >> "$GITHUB_ENV"
 
       - name: Generate checksum manifest
         run: scripts/build-checksums.sh

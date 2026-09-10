@@ -12,7 +12,7 @@ import (
 
 // These variables can be overridden at build time with -ldflags.
 var (
-	Version = "0.6.2-dev"
+	Version = "0.7.0-dev"
 	Commit  = "unknown"
 	Date    = "unknown"
 )

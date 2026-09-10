@@ -72,6 +72,29 @@ func TestJSONContractTrafficContentSearch(t *testing.T) {
 	assertGoldenJSON(t, "traffic-content-search.json", normalizeAnnouncementRange(stdout), server.URL)
 }
 
+func TestJSONContractContentOpenEndOmitted(t *testing.T) {
+	server := newAnnouncementTestServer(t, announcementFixture)
+	defer server.Close()
+	stdout := runContractCommand(t, []apis.API{{Name: "tourism", BaseURL: server.URL, Public: true}}, []string{
+		"traffic", "events", "--source", "content", "--from", "2026-05-16", "--to", "2026-05-16", "--json",
+	})
+	var result struct {
+		Events []map[string]any `json:"events"`
+	}
+	if err := json.Unmarshal(stdout, &result); err != nil {
+		t.Fatal(err)
+	}
+	for _, event := range result.Events {
+		if event["id"] == "urn:announcements:provincebz:open-roadwork" {
+			if _, present := event["end"]; present {
+				t.Fatalf("open announcement must omit end: %v", event)
+			}
+			return
+		}
+	}
+	t.Fatal("open announcement missing from the response")
+}
+
 // normalizeAnnouncementRange pins the begin/end query parameters, which the
 // local timezone shifts, so the golden endpoint stays comparable.
 var announcementRangeParams = regexp.MustCompile(`(begin|end)=[^&"]*`)

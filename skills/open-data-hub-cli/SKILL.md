@@ -13,7 +13,7 @@ metadata:
             {
               "id": "go",
               "kind": "go",
-              "module": "github.com/galjos/odh-cli/cmd/odh@v0.6.2",
+              "module": "github.com/galjos/odh-cli/cmd/odh@v0.7.0",
               "bins": ["odh"],
               "label": "Install odh CLI (go)",
             },
@@ -33,18 +33,18 @@ odh version
 odh doctor --timeout 10s
 ```
 
-Need `odh v0.6.2+` for the current command contracts, dataset guidance, source/provenance fields, traffic helpers, GTFS/transit, filtered latest measurements, comma-safe `--param`, `transit journey --with-realtime`, and MCP server mode.
+Need `odh v0.7.0+` for the current command contracts, dataset guidance, source/provenance fields, traffic helpers, GTFS/transit, filtered latest measurements, comma-safe `--param`, `transit journey --with-realtime`, and MCP server mode.
 
 Preferred manual install options:
 
 ```bash
-go install github.com/galjos/odh-cli/cmd/odh@v0.6.2
+go install github.com/galjos/odh-cli/cmd/odh@v0.7.0
 brew install galjos/odh/odh
 ```
 
 Agent hosts can also use the declared OpenClaw Go installer metadata in this skill. If running from the source repo, use `./odh`.
 
-Agent hosts that prefer MCP over shell commands can run the same curated surface as Model Context Protocol tools with `odh mcp serve`; tool outputs follow the same JSON contracts and warnings as the CLI.
+Agent hosts that prefer MCP over shell commands can run the same curated surface as Model Context Protocol tools with `odh mcp serve`; tools advertise read-only behavior and return structured JSON alongside text, with the same contracts and warnings as the CLI.
 
 ## Output Rules
 
@@ -57,6 +57,7 @@ Agent hosts that prefer MCP over shell commands can run the same curated surface
 - Prefer discovery commands before guessing provider names, data types, stop IDs, or zone IDs.
 - Prefer returned `source`, `source_detail`, `endpoint`, `archive`, `realtime`, and `warnings` fields over inferred provenance.
 - Stable curated JSON fields are documented in `docs/json-contracts.md` in the repo.
+- Traffic and normalized `mobility latest` results include `coverage` with fetched, matched, and returned counts. Check `result_truncated` and `upstream_may_have_more` before claiming a complete list; matched counts cover only the fetched rows. Content traffic also reports `upstream_total` when supplied by the source.
 
 ## Discovery
 
@@ -96,7 +97,7 @@ odh traffic search radroute --today --source content --json
 
 Prefer `traffic` over raw `mobility events --origin PROVINCE_BZ`. Surface stale/source warnings. Do not present stale open-ended rows as confirmed current closures. The default `--source odh` is a Mobility Timeseries event feed, not a live bulletin: an empty result is not evidence that roads are clear. Report the newest row date the command returns.
 
-`--source content` runs the same commands against the Content API `/v1/Announcement` bulletin, which is where the province still publishes. It supports `--from`/`--to`/`--today`, `--near`/`--radius`, `--search`, `--type`, `--limit`, `--include-expired` and `--zone-id`/`--area`, and rejects `--road` and `--type bike` with exit code 2 rather than returning a partial list. Its results leave `zone_id`, `zone`, `zone_it`, `road`, `road_name`, `severity` and `series_id` empty; that means the field is unavailable, not absent. An empty `end` means the announcement is still open; already-ended ones are hidden unless `--include-expired` is passed, and `stale` there only means "unchanged for 30 days", which is normal for long-running restrictions.
+`--source content` runs the same commands against the Content API `/v1/Announcement` bulletin, which is where the province still publishes. It supports `--from`/`--to`/`--today`, `--near`/`--radius`, `--search`, `--type`, `--limit`, `--include-expired` and `--zone-id`/`--area`, and rejects `--road` and `--type bike` with exit code 2 rather than returning a partial list. Its results omit `zone_id`, `zone`, `zone_it`, `road`, `road_name`, `severity` and `series_id` because this source cannot populate them. An absent `end` means the announcement is still open; use `event.get("end")` to read it. Already-ended ones are hidden unless `--include-expired` is passed, and `stale` there only means "unchanged for 30 days", which is normal for long-running restrictions.
 
 `--zone-id` and `--area` are geographic inference on this source, not a field read: the announcement's coordinates are matched against a committed table of ~1100 coordinates whose zone the Mobility feed recorded, matching when the nearest is within 2.0 km. Announcements beyond that, or without coordinates, are excluded as unassignable and counted in a warning. No inferred zone is written into the output. Surface that warning and phrase the answer as "in that area", not "filed under that zone". Municipality aliases such as `--area kaltern` narrow only to the zone here — the response warns — so use `--search` when the answer must be about the village.
 

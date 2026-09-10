@@ -33,13 +33,13 @@ Not included: authenticated write flows, live transit rerouting, historical GTFS
 curl -fsSL https://raw.githubusercontent.com/galjos/odh-cli/main/scripts/install.sh | sh
 ```
 
-The installer detects macOS/Linux and `amd64`/`arm64`, verifies the published SHA-256 checksum, and installs to `~/.local/bin`. Pass `--version v0.6.2 --dir "$HOME/bin"` to pin a version or directory.
+The installer detects macOS/Linux and `amd64`/`arm64`, verifies the published SHA-256 checksum, and installs to `~/.local/bin`. Pass `--version v0.7.0 --dir "$HOME/bin"` to pin a version or directory.
 
 Alternatives:
 
 ```bash
 brew install galjos/odh/odh
-sudo apt install ./odh_v0.6.2_linux_amd64.deb   # from GitHub Releases
+sudo apt install ./odh_v0.7.0_linux_amd64.deb   # from GitHub Releases
 go build -o odh ./cmd/odh                       # from source
 ```
 
@@ -56,14 +56,18 @@ odh call tourism /v1/ODHActivityPoi --param pagesize=1 --param fields=Detail.en.
 odh mobility origins --station-type ParkingStation
 odh mobility latest --station-type EChargingStation --data-type number-available --active --fresh-within 24h --sort newest --limit 5
 odh diagnostics parking-forecasts --origin "Municipality Merano" --fresh-within 2h
-odh traffic today --area ueberetsch-unterland --type roadworks --format table
-odh traffic search "road closed badia" --today --json
+odh traffic today --source content --area ueberetsch-unterland --type roadworks --format table
+odh traffic search "road closed badia" --source content --today --json
 odh a22 status --limit 10
 odh transit stops search merano --limit 10
 odh transit journey --from merano --to ora --time 16:40 --max-transfers 3 --with-realtime --json
 ```
 
 Every command documents flags and examples in `odh <command> --help`.
+
+For current provincial road notices, start with `--source content`. Its area
+filters infer geography from coordinates; read the returned warnings. The default
+`--source odh` accesses Mobility Timeseries events whose stored dates may be old.
 
 ## Automation And MCP
 

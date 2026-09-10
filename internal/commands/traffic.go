@@ -389,6 +389,7 @@ func (r *Runner) runODHTrafficQueryCobra(ctx context.Context, query trafficQuery
 		Search:       strings.TrimSpace(query.Search),
 		RawCount:     len(rawEvents),
 		Count:        len(events),
+		Coverage:     pageCoverage(len(rawEvents), len(events), len(events), query.Limit),
 		Events:       events,
 		Warnings:     warnings,
 		OutputFormat: query.Format,
@@ -408,6 +409,7 @@ type trafficResult struct {
 	Search       string         `json:"search,omitempty"`
 	RawCount     int            `json:"raw_count"`
 	Count        int            `json:"count"`
+	Coverage     resultCoverage `json:"coverage"`
 	Events       []trafficEvent `json:"events"`
 	Warnings     []string       `json:"warnings,omitempty"`
 	OutputFormat string         `json:"-"`
@@ -471,7 +473,11 @@ func normalizeTrafficEvents(raw []map[string]any, query trafficQuery, area traff
 		return deduped[i].Place < deduped[j].Place
 	})
 
-	warnings := make([]string, 0)
+	feedWarning := timeseriesEventFeedWarning(newestTrafficEventTimestamp(deduped), "PROVINCE_BZ")
+	if normalizeTrafficTypeName(query.Type) == "bike" {
+		feedWarning += "; active reflects the stored date range, not verified current status. For current cycle-route notices, run: odh traffic search radroute --today --source content --json"
+	}
+	warnings := []string{feedWarning}
 	if len(events) != len(deduped) {
 		warnings = append(warnings, fmt.Sprintf("deduplicated %d raw matching rows to %d events", len(events), len(deduped)))
 	}
@@ -495,7 +501,6 @@ func normalizeTrafficEvents(raw []map[string]any, query trafficQuery, area traff
 	if warning := mobilityTruncationWarning("returned", "raw event rows", query.Limit, len(raw), "traffic completeness"); warning != "" {
 		warnings = append(warnings, warning)
 	}
-	warnings = append(warnings, timeseriesEventFeedWarning(newestTrafficEventTimestamp(deduped), "PROVINCE_BZ"))
 	warnings = append(warnings, "source is Open Data Hub PROVINCE_BZ; compare with the official traffic service before presenting this as a complete live road bulletin")
 	return deduped, warnings
 }
@@ -607,6 +612,11 @@ func normalizeTrafficFormat(value string) (string, error) {
 }
 
 func writeTrafficTable(stdout io.Writer, result trafficResult) error {
+	warnings := result.Warnings
+	if result.Source == trafficSourceODH && len(warnings) > 0 {
+		fmt.Fprintf(stdout, "warning: %s\n\n", warnings[0])
+		warnings = warnings[1:]
+	}
 	tw := tabwriter.NewWriter(stdout, 0, 0, 2, ' ', 0)
 	fmt.Fprintln(tw, "TYPE\tROAD\tPLACE\tTIME\tACTIVE\tSTALE")
 	for _, event := range result.Events {
@@ -622,13 +632,18 @@ func writeTrafficTable(stdout io.Writer, result trafficResult) error {
 	if err := tw.Flush(); err != nil {
 		return err
 	}
-	for _, warning := range result.Warnings {
+	for _, warning := range warnings {
 		fmt.Fprintf(stdout, "warning: %s\n", warning)
 	}
 	return nil
 }
 
 func writeTrafficMarkdown(stdout io.Writer, result trafficResult) error {
+	warnings := result.Warnings
+	if result.Source == trafficSourceODH && len(warnings) > 0 {
+		fmt.Fprintf(stdout, "> warning: %s\n\n", warnings[0])
+		warnings = warnings[1:]
+	}
 	fmt.Fprintln(stdout, "| type | road | place | time | active | stale |")
 	fmt.Fprintln(stdout, "| --- | --- | --- | --- | --- | --- |")
 	for _, event := range result.Events {
@@ -641,7 +656,7 @@ func writeTrafficMarkdown(stdout io.Writer, result trafficResult) error {
 			event.Stale,
 		)
 	}
-	for _, warning := range result.Warnings {
+	for _, warning := range warnings {
 		fmt.Fprintf(stdout, "\n> warning: %s\n", warning)
 	}
 	return nil
