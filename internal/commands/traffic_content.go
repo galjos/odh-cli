@@ -68,6 +68,14 @@ func (r *Runner) runContentTrafficQueryCobra(ctx context.Context, query trafficQ
 	}
 	records := mapsFromList(extractItemsList(value))
 	events, warnings := normalizeContentTrafficEvents(records, announcementTotalResults(value), query, area, fromDay, toDay)
+	coverage := pageCoverage(len(records), len(events), len(events), query.Limit)
+	if object, ok := value.(map[string]any); ok {
+		if total, valid := numberValue(object["TotalResults"]); valid && total >= 0 {
+			count := int(total)
+			coverage.UpstreamTotal = &count
+			coverage.UpstreamMayHaveMore = count > len(records)
+		}
+	}
 	return writeTrafficOutput(stdout, trafficResult{
 		Source:       trafficSourceContent,
 		SourceDetail: "Open Data Hub Tourism Content API /v1/Announcement " + announcementTrafficSource + " road bulletin",
@@ -80,6 +88,7 @@ func (r *Runner) runContentTrafficQueryCobra(ctx context.Context, query trafficQ
 		Search:       strings.TrimSpace(query.Search),
 		RawCount:     len(records),
 		Count:        len(events),
+		Coverage:     coverage,
 		Events:       events,
 		Warnings:     warnings,
 		OutputFormat: query.Format,

@@ -18,12 +18,15 @@ output is therefore byte-identical to the documented CLI behavior:
   stable fields in [json-contracts.md](json-contracts.md),
 - a second content block carries stderr diagnostics (for example
   stale-GTFS-cache warnings) when the command emitted any,
+- JSON objects are also returned as `structuredContent`, preserving their
+  fields and warnings for clients that consume structured results,
 - a nonzero exit code becomes an MCP tool error (`isError: true`) with
   the CLI's stderr message, so usage errors and runtime failures stay
   visible to the agent.
 
 Commands that default to compact table output are forced to `--json`
-over MCP.
+over MCP. All tools advertise read-only, non-destructive behavior and interaction
+with public external data sources.
 
 ## Setup
 

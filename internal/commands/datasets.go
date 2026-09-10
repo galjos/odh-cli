@@ -40,17 +40,20 @@ func (r *Runner) newDatasetsCmd() *cobra.Command {
 
 	var listDomain string
 	var listFormat string
+	var listJSON bool
 	listCmd := &cobra.Command{
 		Use:   "list",
 		Short: "List known datasets",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			applyJSONShortcut(&listFormat, listJSON)
 			entries := filterDatasetsByDomain(datasetCatalog(), listDomain)
 			return writeDatasetEntries(cmd, entries, listFormat)
 		},
 	}
 	listCmd.Flags().StringVar(&listDomain, "domain", "", "optional domain filter, for example tourism or mobility")
 	listCmd.Flags().StringVar(&listFormat, "format", "json", "output format: json or table")
+	listCmd.Flags().BoolVar(&listJSON, "json", false, "shortcut for --format json")
 
 	var searchDomain string
 	var searchFormat string
@@ -73,6 +76,7 @@ func (r *Runner) newDatasetsCmd() *cobra.Command {
 
 	var guideDomain string
 	var guideFormat string
+	var guideJSON bool
 	var guideLimit int
 	guideCmd := &cobra.Command{
 		Use:   "guide <query>",
@@ -88,6 +92,7 @@ into agent answers.`,
 			if guideLimit < 0 {
 				return usageErrorf("--limit must not be negative")
 			}
+			applyJSONShortcut(&guideFormat, guideJSON)
 			query := strings.Join(args, " ")
 			entries := filterDatasetsByDomain(datasetCatalog(), guideDomain)
 			entries = rankDatasetsByQuery(entries, query)
@@ -103,6 +108,7 @@ into agent answers.`,
 	}
 	guideCmd.Flags().StringVar(&guideDomain, "domain", "", "optional domain filter, for example tourism or mobility")
 	guideCmd.Flags().StringVar(&guideFormat, "format", "json", "output format: json or table")
+	guideCmd.Flags().BoolVar(&guideJSON, "json", false, "shortcut for --format json")
 	guideCmd.Flags().IntVar(&guideLimit, "limit", 3, "maximum number of matching datasets to guide; 0 means no limit")
 
 	cmd.AddCommand(listCmd)
@@ -316,12 +322,12 @@ func datasetGuideFor(entry datasetEntry) datasetGuideEntry {
 			"odh traffic categories --json",
 		}
 		guidance.Verify = []string{
-			"odh traffic today --area <area> --type <category> --json",
-			"odh traffic search <text> --today --json",
 			"odh traffic today --source content --json",
+			"odh traffic search <text> --source content --today --json",
+			"odh traffic today --source odh --area <area> --type <category> --json",
 		}
 		guidance.Caveats = []string{
-			"Open Data Hub PROVINCE_BZ is a public bulletin feed, not a complete live road bulletin.",
+			"Start current provincial road-notice queries with --source content; the default --source odh reads Mobility Timeseries events whose stored dates may be old.",
 			"Stale open-ended rows are hidden by default; carry warnings into answers.",
 			"--source content reads the Content API bulletin the province still updates; it rejects --road, and answers --zone-id and --area by inferring the zone from the announcement's coordinates rather than reading a zone field.",
 		}

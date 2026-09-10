@@ -118,11 +118,12 @@ func newAnnouncementTestServer(t *testing.T, body string) *httptest.Server {
 }
 
 type contentTrafficResponse struct {
-	Source       string `json:"source"`
-	SourceDetail string `json:"source_detail"`
-	Endpoint     string `json:"endpoint"`
-	RawCount     int    `json:"raw_count"`
-	Count        int    `json:"count"`
+	Coverage     resultCoverage `json:"coverage"`
+	Source       string         `json:"source"`
+	SourceDetail string         `json:"source_detail"`
+	Endpoint     string         `json:"endpoint"`
+	RawCount     int            `json:"raw_count"`
+	Count        int            `json:"count"`
 	Events       []struct {
 		ID          string    `json:"id"`
 		MessageID   string    `json:"message_id"`
@@ -313,6 +314,11 @@ func TestRunTrafficTodayContentWarnsWhenLimitTruncates(t *testing.T) {
 	})
 	if !containsWarning(decoded.Warnings, "the Content API reports 40 announcements in this date range but --limit=4 fetched only 4") {
 		t.Fatalf("expected truncation warning, got %#v", decoded.Warnings)
+	}
+	if decoded.Coverage.UpstreamTotal == nil || *decoded.Coverage.UpstreamTotal != 40 ||
+		!decoded.Coverage.UpstreamMayHaveMore || decoded.Coverage.FetchedCount != 4 ||
+		decoded.Coverage.MatchedCount != len(decoded.Events) || decoded.Coverage.ResultTruncated {
+		t.Fatalf("unexpected coverage: %+v", decoded.Coverage)
 	}
 }
 

@@ -26,6 +26,23 @@ semantics:
 
 ## `odh traffic today|events|search --json`
 
+Traffic results and normalized `mobility latest` results include `coverage`:
+
+| Field | Meaning |
+| --- | --- |
+| `fetched_count` | Upstream rows inspected |
+| `matched_count` | Matching results within those rows, after filtering and traffic deduplication, before a local result limit |
+| `returned_count` | Results returned, equal to `count` |
+| `result_truncated` | A local result limit omitted known matches |
+| `upstream_may_have_more` | The requested page filled its limit, or the source reports more rows |
+| `upstream_total` | Total rows reported by the Content source, before local filtering; absent when unknown |
+
+`matched_count` never estimates matches on unseen pages. A zero-result search
+with `upstream_may_have_more: true` does not establish that no matching notice
+exists. Existing `raw_count`, `count`, and warnings remain available. The raw
+Mobility passthrough response, used without local processing, retains its upstream
+shape.
+
 Stable top-level fields:
 
 - `source`
@@ -68,6 +85,9 @@ Stable event fields:
 
 `raw` is present only with `--raw` and mirrors upstream data.
 
+Empty optional event fields are omitted from JSON. Read them with an optional
+lookup such as `event.get("end")` rather than assuming every listed key exists.
+
 ### `--source odh` and `--source content`
 
 Both sources emit the same envelope and the same event fields. They differ in
@@ -85,8 +105,8 @@ With `--source content`:
 
 - `subtype` holds the upstream `traffic-event:*` tags, comma-joined and sorted,
   for example `hindrance,road-work`. `type` is derived from them.
-- `end` is empty while the announcement is open. The provider sets an end time
-  only when the event ends, so an empty `end` means ongoing, not unknown.
+- `end` is omitted while the announcement is open. The provider sets an end time
+  only when the event ends, so an absent `end` means ongoing, not unknown.
 - `active` is true only when the announcement overlaps the requested date range
   **and** has not ended yet. Upstream `Active` is not read: it is `true` on
   every PROVINCE_BZ record, including ones closed a year ago.

@@ -19,5 +19,12 @@
       "sname": "Park One",
       "sorigin": "Municipality Merano"
     }
-  ]
+  ],
+  "coverage": {
+    "fetched_count": 1,
+    "matched_count": 1,
+    "returned_count": 1,
+    "result_truncated": false,
+    "upstream_may_have_more": false
+  }
 }

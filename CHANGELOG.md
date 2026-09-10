@@ -8,6 +8,23 @@ SPDX-License-Identifier: CC0-1.0
 
 All notable changes to `odh-cli` are documented here.
 
+## v0.7.0 - 2026-09-10
+
+- Add fetched, matched, returned, and truncation coverage to traffic and normalized
+  latest-measurement results, including Content's upstream total when available.
+- Return MCP structured JSON alongside text and advertise read-only tools.
+- Manual releases check out the requested tag and derive commit metadata from
+  that checkout. Local archive builds use `dev` unless a version is supplied.
+- `datasets list` and `datasets guide` accept `--json`, including when
+  overriding `--format table`.
+- The traffic dataset guide and quickstart lead with the Content bulletin for
+  current provincial road notices.
+- Traffic results from the Mobility Timeseries feed lead with the feed's date
+  warning, before table and Markdown rows. Bike results also link to the current
+  Content bulletin search and explain the stored `active` flag. Refs #11.
+- Document omitted optional traffic fields, including `end` on open Content
+  announcements, and cover that JSON shape with a regression test. Refs #13.
+
 ## v0.6.2 - 2026-09-07
 
 - `datasets guide` ranks catalogue matches by how many query terms hit instead

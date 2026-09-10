@@ -177,6 +177,10 @@ func TestServerListsAllTools(t *testing.T) {
 			t.Fatalf("list tools: %v", err)
 		}
 		listed[tool.Name] = true
+		if tool.Annotations == nil || !tool.Annotations.ReadOnlyHint ||
+			tool.Annotations.DestructiveHint == nil || *tool.Annotations.DestructiveHint {
+			t.Fatalf("tool %q must advertise read-only behavior", tool.Name)
+		}
 	}
 	if len(listed) != len(toolSpecs) {
 		t.Fatalf("listed %d tools, want %d", len(listed), len(toolSpecs))
@@ -212,6 +216,10 @@ func TestServerCallToolSuccessWithDiagnostics(t *testing.T) {
 	}
 	if len(result.Content) != 2 {
 		t.Fatalf("want 2 content blocks, got %d", len(result.Content))
+	}
+	structured, ok := result.StructuredContent.(map[string]any)
+	if !ok || !reflect.DeepEqual(structured["zones"], []any{}) {
+		t.Fatalf("unexpected structured result: %#v", result.StructuredContent)
 	}
 	first, ok := result.Content[0].(*mcp.TextContent)
 	if !ok || first.Text != `{"zones": []}` {

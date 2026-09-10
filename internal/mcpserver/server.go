@@ -7,6 +7,7 @@ package mcpserver
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"strings"
@@ -53,6 +54,7 @@ func New(version string, exec ExecFunc) *mcp.Server {
 			Name:        spec.name,
 			Description: spec.desc,
 			InputSchema: spec.inputSchema(),
+			Annotations: readOnlyAnnotations(),
 		}
 		server.AddTool(tool, newToolHandler(spec, exec))
 	}
@@ -89,7 +91,20 @@ func newToolHandler(spec toolSpec, exec ExecFunc) mcp.ToolHandler {
 		if diagnostics != "" {
 			content = append(content, &mcp.TextContent{Text: "stderr diagnostics:\n" + diagnostics})
 		}
-		return &mcp.CallToolResult{Content: content}, nil
+		result := &mcp.CallToolResult{Content: content}
+		var structured map[string]any
+		if json.Unmarshal(stdout.Bytes(), &structured) == nil && structured != nil {
+			result.StructuredContent = structured
+		}
+		return result, nil
+	}
+}
+
+func readOnlyAnnotations() *mcp.ToolAnnotations {
+	destructive, openWorld := false, true
+	return &mcp.ToolAnnotations{
+		ReadOnlyHint: true, DestructiveHint: &destructive,
+		IdempotentHint: true, OpenWorldHint: &openWorld,
 	}
 }
 
