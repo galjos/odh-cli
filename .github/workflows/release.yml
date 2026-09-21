@@ -52,6 +52,13 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - name: Verify version agreement
+        run: |
+          TAG="${RELEASE_TAG#v}"
+          grep -q "^## v$TAG " CHANGELOG.md || { echo "CHANGELOG top entry must be ## v$TAG"; exit 2; }
+          grep -q "Version = \"$TAG-dev\"" internal/version/version.go || { echo "version.go default must be $TAG-dev"; exit 2; }
+          grep -q "cmd/odh@v$TAG" skills/open-data-hub-cli/SKILL.md || { echo "skill pin must be v$TAG"; exit 2; }
+
       - name: Resolve version metadata
         run: |
           [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]] || exit 2

@@ -41,6 +41,9 @@ jobs:
       - name: Build
         run: go build ./cmd/odh
 
+      - name: Check scripts
+        run: bash -n scripts/install.sh && bash -n scripts/build-release.sh && bash -n scripts/build-deb.sh && bash -n scripts/build-checksums.sh && bash -n scripts/run-agent-evals.sh
+
   lint:
     name: Lint
     runs-on: ubuntu-latest
