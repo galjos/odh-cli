@@ -380,10 +380,13 @@ because it deduplicates records and surfaces stale-data warnings.`,
 
 Use --origin, --active, --fresh-within, --sort newest, and --request-limit for
 agent-friendly current availability checks. Without local filters the upstream
-feed can return stale or inactive rows first.`,
+feed can return stale or inactive rows first.
+
+Filtered JSON uses a wrapper with raw_count, count, measurements, coverage,
+and warnings; without local filtering the raw upstream JSON passes through.`,
 		Example: `  odh mobility latest --station-type ParkingStation --data-type free --origin "Municipality Merano" --active --fresh-within 2h --sort newest --request-limit 10000 --format table
   odh mobility latest --station-type EChargingStation --data-type number-available --origin ALPERIA --active --fresh-within 24h --sort newest --json
-  odh mobility latest --station-type TrafficSensor --data-type vehicle-count --origin A22 --limit 5 --json`,
+  odh mobility latest --station-type ParkingStation --data-type free --limit 5 --json`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			applyJSONShortcut(&latestFormat, latestJSON)

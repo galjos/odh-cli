@@ -30,10 +30,10 @@ Use `odh` instead of scraping Open Data Hub pages. Most practical data is South 
 
 ```bash
 odh version
-odh doctor --timeout 10s
+odh doctor --timeout 10s # local doctor flag, not the global --timeout
 ```
 
-Need `odh v0.7.0+` for the current command contracts, dataset guidance, source/provenance fields, traffic helpers, GTFS/transit, filtered latest measurements, comma-safe `--param`, `transit journey --with-realtime`, and MCP server mode.
+Need `odh v0.7.0` or newer for the current command contracts, dataset guidance, source/provenance fields, traffic helpers, GTFS/transit, filtered latest measurements, comma-safe `--param`, `transit journey --with-realtime`, and MCP server mode. Installs below pin v0.7.0.
 
 Preferred manual install options:
 
@@ -52,7 +52,7 @@ Agent hosts that prefer MCP over shell commands can run the same curated surface
 - This applies especially to `traffic`, `a22 status`, `transit`, `tourism types`, `mobility types`, and `mobility datatypes`.
 - Treat stderr as diagnostics, not data.
 - Nonzero exit means failure. Exit `2` usually means bad invocation.
-- For bounded agent loops, put the global timeout before the subcommand, for example `odh --timeout 20s traffic today --area bozen-unterland --json`.
+- For bounded agent loops, put the global timeout before the subcommand, for example `odh --timeout 20s traffic today --area bozen-unterland --json`. `odh doctor --timeout` is a separate local flag.
 - When unsure about command shape, run `odh <command> --help`; current help includes task-focused examples.
 - Prefer discovery commands before guessing provider names, data types, stop IDs, or zone IDs.
 - Prefer returned `source`, `source_detail`, `endpoint`, `archive`, `realtime`, and `warnings` fields over inferred provenance.

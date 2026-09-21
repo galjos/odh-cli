@@ -60,7 +60,7 @@ odh traffic today --source content --area ueberetsch-unterland --type roadworks 
 odh traffic search "road closed badia" --source content --today --json
 odh a22 status --limit 10
 odh transit stops search merano --limit 10
-odh transit journey --from merano --to ora --time 16:40 --max-transfers 3 --with-realtime --json
+odh transit journey --from-stop-id Parentit:22021:301 --to-stop-id it:22021:730:0:1150 --date 2026-05-21 --time 16:40 --max-transfers 3 --with-realtime --json
 ```
 
 Every command documents flags and examples in `odh <command> --help`.

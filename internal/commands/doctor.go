@@ -103,7 +103,7 @@ func (r *Runner) newDoctorCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&network, "network", true, "run network reachability checks")
-	cmd.Flags().DurationVar(&timeout, "timeout", 10*time.Second, "overall timeout for doctor checks")
+	cmd.Flags().DurationVar(&timeout, "timeout", 10*time.Second, "overall timeout for doctor checks; local to doctor, distinct from the global --timeout placed before the subcommand")
 	return cmd
 }
 

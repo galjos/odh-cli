@@ -14,13 +14,19 @@ import (
 	"time"
 
 	"github.com/galjos/odh-cli/internal/cache"
+	"github.com/galjos/odh-cli/internal/version"
 )
 
 const (
-	defaultUserAgent  = "odh-cli/0.2"
 	defaultMaxRetries = 3
 	defaultBaseDelay  = 1 * time.Second
 )
+
+// defaultUserAgent stamps requests with the current CLI version instead of a
+// hardcoded string that drifts from the released version.
+func defaultUserAgent() string {
+	return "odh-cli/" + version.Current().Version
+}
 
 // Client is a small context-aware HTTP client for Open Data Hub API calls.
 type Client struct {
@@ -61,7 +67,7 @@ func (e *HTTPError) Error() string {
 
 // New creates a client with the provided timeout and default retries.
 func New(timeout time.Duration) *Client {
-	return NewWithHTTPClient(&http.Client{Timeout: timeout}, defaultUserAgent)
+	return NewWithHTTPClient(&http.Client{Timeout: timeout}, defaultUserAgent())
 }
 
 // NewWithHTTPClient creates a client around an injected HTTP client.
@@ -70,7 +76,7 @@ func NewWithHTTPClient(httpClient *http.Client, userAgent string) *Client {
 		httpClient = &http.Client{Timeout: 20 * time.Second}
 	}
 	if strings.TrimSpace(userAgent) == "" {
-		userAgent = defaultUserAgent
+		userAgent = defaultUserAgent()
 	}
 	return &Client{
 		httpClient: httpClient,

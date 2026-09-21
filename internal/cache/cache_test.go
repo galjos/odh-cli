@@ -25,6 +25,20 @@ func TestStoreGetReturnsFreshEntry(t *testing.T) {
 	}
 }
 
+func TestStoreSetLeavesNoTempFiles(t *testing.T) {
+	store := New(t.TempDir())
+	if err := store.Set("https://example.test/a", []byte("payload")); err != nil {
+		t.Fatalf("Set returned error: %v", err)
+	}
+	entries, err := os.ReadDir(store.Dir)
+	if err != nil {
+		t.Fatalf("ReadDir returned error: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 cache file, found %d", len(entries))
+	}
+}
+
 func TestStoreGetRejectsExpiredEntry(t *testing.T) {
 	store := New(t.TempDir())
 	key := "https://example.test/a"

@@ -37,6 +37,10 @@ For bounded agent loops, put the global timeout before the subcommand:
 odh --timeout 20s mobility latest --station-type ParkingStation --data-type free --format json
 ```
 
+`odh doctor` is the exception: it owns a local `--timeout` (default 10s)
+placed after the subcommand, for example `odh doctor --timeout 5s`, which
+bounds only the doctor checks and is distinct from the global flag.
+
 The default is no global command timeout so cold GTFS archive downloads can use
 their documented longer download window. Use a timeout when the caller has its
 own latency budget.
@@ -45,7 +49,7 @@ own latency budget.
 
 ```bash
 odh version
-odh doctor --timeout 5s
+odh doctor --timeout 5s # local doctor flag, not the global --timeout
 odh apis
 odh datasets guide "ev charging availability" --format json
 odh datasets search parking

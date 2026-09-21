@@ -132,7 +132,7 @@ inference from historical zone coordinates, and --road is rejected.`,
 			if zonesJSON {
 				zonesFormat = "json"
 			}
-			normalizedFormat, err := normalizeTrafficFormat(zonesFormat)
+			normalizedFormat, err := normalizeOutputFormat(zonesFormat)
 			if err != nil {
 				return err
 			}
@@ -159,7 +159,7 @@ inference from historical zone coordinates, and --road is rejected.`,
 			if catsJSON {
 				catsFormat = "json"
 			}
-			normalizedFormat, err := normalizeTrafficFormat(catsFormat)
+			normalizedFormat, err := normalizeOutputFormat(catsFormat)
 			if err != nil {
 				return err
 			}
@@ -317,7 +317,7 @@ func finalizeTrafficFlags(query trafficQuery) (trafficQuery, error) {
 	if query.Limit < 1 {
 		return trafficQuery{}, fmt.Errorf("--limit must be greater than zero")
 	}
-	format, err := normalizeTrafficFormat(query.Format)
+	format, err := normalizeOutputFormat(query.Format)
 	if err != nil {
 		return trafficQuery{}, err
 	}
@@ -595,19 +595,6 @@ func writeTrafficCategoriesOutput(stdout io.Writer, result trafficCategoriesResu
 		return nil
 	default:
 		return fmt.Errorf("unsupported format %q", result.OutputFormat)
-	}
-}
-
-func normalizeTrafficFormat(value string) (string, error) {
-	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "", "json":
-		return "json", nil
-	case "table":
-		return "table", nil
-	case "markdown", "md":
-		return "markdown", nil
-	default:
-		return "", fmt.Errorf("unsupported format %q", value)
 	}
 }
 
@@ -1396,17 +1383,6 @@ func cleanTrafficText(value string) string {
 	return strings.TrimSpace(value)
 }
 
-func compactText(value string, max int) string {
-	value = cleanTrafficText(value)
-	if max <= 0 || len(value) <= max {
-		return value
-	}
-	if max <= 3 {
-		return value[:max]
-	}
-	return value[:max-3] + "..."
-}
-
 func compactRange(start, end string) string {
 	start = compactDate(start)
 	end = compactDate(end)
@@ -1432,31 +1408,7 @@ func normalizeDedupText(value string) string {
 	return strings.Join(strings.Fields(value), " ")
 }
 
-func firstNonEmpty(values ...string) string {
-	for _, value := range values {
-		if strings.TrimSpace(value) != "" {
-			return strings.TrimSpace(value)
-		}
-	}
-	return ""
-}
-
-func containsString(values []string, needle string) bool {
-	for _, value := range values {
-		if value == needle {
-			return true
-		}
-	}
-	return false
-}
-
 func textContainsPass(value string) bool {
 	value = strings.ToLower(value)
 	return strings.Contains(value, "pass") || strings.Contains(value, "joch")
-}
-
-func escapeMarkdown(value string) string {
-	value = strings.ReplaceAll(value, "|", "\\|")
-	value = strings.ReplaceAll(value, "\n", " ")
-	return value
 }
