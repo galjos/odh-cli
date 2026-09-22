@@ -317,7 +317,7 @@ func summarizeTourismEvents(records []map[string]any, day time.Time) []tourismEv
 	events := make([]tourismEventSummary, 0, len(records))
 	for _, record := range records {
 		events = append(events, tourismEventSummary{
-			ID:                  firstNonEmptyString(record["Id"], record["ID"], record["id"]),
+			ID:                  firstNonEmpty(asString(record["Id"]), asString(record["ID"]), asString(record["id"])),
 			Title:               tourismEventTitle(record),
 			StartDate:           asString(record["StartDate"]),
 			EndDate:             asString(record["EndDate"]),
@@ -383,7 +383,7 @@ func tourismEventTitle(record map[string]any) string {
 	if !ok {
 		return ""
 	}
-	return firstNonEmptyString(titleMap["en"], titleMap["de"], titleMap["it"], titleMap["nl"])
+	return firstNonEmpty(asString(titleMap["en"]), asString(titleMap["de"]), asString(titleMap["it"]), asString(titleMap["nl"]))
 }
 
 func tourismEventDateStatus(record map[string]any, day time.Time) string {
@@ -455,16 +455,6 @@ func recommendedMobilityLatestCommand(result mobilityLatestResult) string {
 		parts = append(parts, "--sort", shellQuote(result.Sort))
 	}
 	return strings.Join(parts, " ")
-}
-
-func firstNonEmptyString(values ...any) string {
-	for _, value := range values {
-		text := strings.TrimSpace(asString(value))
-		if text != "" {
-			return text
-		}
-	}
-	return ""
 }
 
 func shellQuote(value string) string {
