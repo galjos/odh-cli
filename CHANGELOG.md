@@ -8,6 +8,15 @@ SPDX-License-Identifier: CC0-1.0
 
 All notable changes to `odh-cli` are documented here.
 
+## v0.7.1 - 2026-09-22
+
+- Correct `mobility latest` help examples and the README transit journey to use
+  stop IDs, and clarify the local `doctor --timeout` flag versus the global one.
+- Cache writes are atomic; the HTTP user agent reports the build version.
+- Releases verify that tag, CHANGELOG, version default, and skill pin agree.
+- Split `traffic.go` into focused files; remove a duplicated text helper and
+  fix a misaligned Markdown table separator. No JSON contract changes.
+
 ## v0.7.0 - 2026-09-10
 
 - Add fetched, matched, returned, and truncation coverage to traffic and normalized
